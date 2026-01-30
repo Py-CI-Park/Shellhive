@@ -127,11 +127,11 @@ npm run tauri build
 ## 개발 로드맵
 
 - [x] **Phase 0**: 프로젝트 초기화 및 문서 작성
-- [ ] **Phase 1**: 기본 Tauri 구조 + xterm.js 통합
-- [ ] **Phase 2**: PTY 연동 (Rust portable-pty)
-- [ ] **Phase 3**: 프로젝트 관리 UI
-- [ ] **Phase 4**: 멀티 세션 탭 구현
-- [ ] **Phase 5**: 고급 기능 (단축키, 스니펫, 로그)
+- [x] **Phase 1**: 기본 Tauri 구조 + xterm.js 통합
+- [x] **Phase 2**: PTY 연동 (Rust portable-pty)
+- [x] **Phase 3**: 프로젝트 관리 UI
+- [x] **Phase 4**: 멀티 세션 탭 구현
+- [x] **Phase 5**: 고급 기능 (단축키, 스니펫, 로그)
 
 상세 개발 가이드는 [docs/dev-guide.md](docs/dev-guide.md)를 참조하세요.
 
