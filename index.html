@@ -31,6 +31,34 @@
       <div class="terminal-container" id="terminalContainer"></div>
     </main>
   </div>
+
+  <!-- Add Project Modal -->
+  <div class="modal" id="addProjectModal">
+    <div class="modal__content">
+      <div class="modal__header">
+        <h2 class="modal__title">프로젝트 추가</h2>
+        <button class="modal__close" id="closeAddProjectModal">×</button>
+      </div>
+      <div class="modal__body">
+        <div class="form-group">
+          <label for="projectName">프로젝트 이름</label>
+          <input type="text" id="projectName" placeholder="예: my-project">
+        </div>
+        <div class="form-group">
+          <label for="projectPath">경로</label>
+          <div class="input-with-button">
+            <input type="text" id="projectPath" placeholder="C:\Users\...">
+            <button id="browsePathBtn">찾아보기</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="cancelAddProject">취소</button>
+        <button class="btn btn--primary" id="confirmAddProject">추가</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="/src/app.js"></script>
 </body>
 </html>

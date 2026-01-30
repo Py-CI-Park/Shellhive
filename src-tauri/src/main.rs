@@ -17,6 +17,7 @@ fn get_home_dir() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(pty::PtyManager::new())
         .setup(|app| {
             #[cfg(debug_assertions)]

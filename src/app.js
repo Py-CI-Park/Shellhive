@@ -4,6 +4,7 @@ import { WebLinksAddon } from 'xterm-addon-web-links';
 import 'xterm/css/xterm.css';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
 
 // State
 const state = {
@@ -16,9 +17,91 @@ const state = {
 const tabsList = document.getElementById('tabsList');
 const terminalContainer = document.getElementById('terminalContainer');
 const newTabBtn = document.getElementById('newTabBtn');
+const projectList = document.getElementById('projectList');
+const addProjectBtn = document.getElementById('addProjectBtn');
+const addProjectModal = document.getElementById('addProjectModal');
+const closeAddProjectModal = document.getElementById('closeAddProjectModal');
+const cancelAddProject = document.getElementById('cancelAddProject');
+const confirmAddProject = document.getElementById('confirmAddProject');
+const projectNameInput = document.getElementById('projectName');
+const projectPathInput = document.getElementById('projectPath');
+const browsePathBtn = document.getElementById('browsePathBtn');
+
+// Project management functions
+async function loadProjects() {
+  try {
+    const projects = await invoke('list_projects');
+    renderProjectList(projects);
+  } catch (error) {
+    console.error('Failed to load projects:', error);
+  }
+}
+
+function renderProjectList(projects) {
+  projectList.innerHTML = projects.map(p => `
+    <li class="sidebar__item" data-project-id="${p.id}" data-path="${p.path}">
+      <span class="sidebar__item-icon">📁</span>
+      <span class="sidebar__item-name">${p.name}</span>
+      <button class="sidebar__item-delete" data-project-id="${p.id}">×</button>
+    </li>
+  `).join('');
+
+  // Add event listeners to project items
+  document.querySelectorAll('.sidebar__item').forEach(item => {
+    const projectId = item.dataset.projectId;
+    const projectPath = item.dataset.path;
+    const projectName = item.querySelector('.sidebar__item-name').textContent;
+
+    // Click on project to open terminal in that directory
+    item.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('sidebar__item-delete')) {
+        createSessionInDirectory(projectPath, projectName);
+      }
+    });
+
+    // Delete button
+    const deleteBtn = item.querySelector('.sidebar__item-delete');
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await removeProject(projectId);
+    });
+  });
+}
+
+async function addProject(name, path) {
+  try {
+    await invoke('add_project', { name, path, shell: null });
+    await loadProjects();
+  } catch (error) {
+    console.error('Failed to add project:', error);
+    alert(`프로젝트 추가 실패: ${error}`);
+  }
+}
+
+async function removeProject(id) {
+  try {
+    await invoke('remove_project', { id });
+    await loadProjects();
+  } catch (error) {
+    console.error('Failed to remove project:', error);
+    alert(`프로젝트 삭제 실패: ${error}`);
+  }
+}
+
+// Modal management
+function showAddProjectModal() {
+  addProjectModal.classList.add('modal--visible');
+  projectNameInput.value = '';
+  projectPathInput.value = '';
+  projectNameInput.focus();
+}
+
+function hideAddProjectModal() {
+  addProjectModal.classList.remove('modal--visible');
+}
 
 // Create terminal session
-async function createSession(name = null) {
+async function createSession(name = null, workingDir = null) {
   const id = `session-${++state.sessionCounter}`;
   const sessionName = name || `Terminal ${state.sessionCounter}`;
 
@@ -83,12 +166,12 @@ async function createSession(name = null) {
   let unlistenPtyData;
 
   try {
-    // Get user home directory as working directory
-    const homeDir = await invoke('get_home_dir');
+    // Use provided working directory or get user home directory
+    const dir = workingDir || await invoke('get_home_dir');
 
     // Create PTY with default shell
     ptySessionId = await invoke('create_pty', {
-      workingDir: homeDir,
+      workingDir: dir,
       shell: null,
     });
 
@@ -271,12 +354,84 @@ async function closeSession(id) {
   }
 }
 
+// Helper function to create session in specific directory
+async function createSessionInDirectory(path, projectName) {
+  await createSession(`${projectName}`, path);
+}
+
 // Event listeners
 newTabBtn.addEventListener('click', () => {
   createSession();
 });
 
+addProjectBtn.addEventListener('click', () => {
+  showAddProjectModal();
+});
+
+closeAddProjectModal.addEventListener('click', () => {
+  hideAddProjectModal();
+});
+
+cancelAddProject.addEventListener('click', () => {
+  hideAddProjectModal();
+});
+
+confirmAddProject.addEventListener('click', async () => {
+  const name = projectNameInput.value.trim();
+  const path = projectPathInput.value.trim();
+
+  if (!name) {
+    alert('프로젝트 이름을 입력해주세요.');
+    return;
+  }
+
+  if (!path) {
+    alert('프로젝트 경로를 입력해주세요.');
+    return;
+  }
+
+  await addProject(name, path);
+  hideAddProjectModal();
+});
+
+browsePathBtn.addEventListener('click', async () => {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: '프로젝트 폴더 선택',
+    });
+
+    if (selected) {
+      projectPathInput.value = selected;
+
+      // Auto-fill project name from folder name if empty
+      if (!projectNameInput.value.trim()) {
+        const folderName = selected.split(/[\\/]/).pop();
+        projectNameInput.value = folderName;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to open folder dialog:', error);
+  }
+});
+
+// Close modal when clicking outside
+addProjectModal.addEventListener('click', (e) => {
+  if (e.target === addProjectModal) {
+    hideAddProjectModal();
+  }
+});
+
+// Close modal with ESC key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && addProjectModal.classList.contains('modal--visible')) {
+    hideAddProjectModal();
+  }
+});
+
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadProjects();
   createSession('Terminal 1');
 });

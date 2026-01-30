@@ -368,3 +368,61 @@ html, body {
 .btn--secondary:hover {
   background: var(--bg-hover);
 }
+
+/* Input with button */
+.input-with-button {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-button input {
+  flex: 1;
+}
+
+.input-with-button button {
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.input-with-button button:hover {
+  background: var(--bg-hover);
+}
+
+/* Sidebar item delete button */
+.sidebar__item {
+  position: relative;
+}
+
+.sidebar__item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__item-delete {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.sidebar__item:hover .sidebar__item-delete {
+  display: block;
+}
+
+.sidebar__item-delete:hover {
+  color: #f14c4c;
+  background: var(--bg-tertiary);
+}
