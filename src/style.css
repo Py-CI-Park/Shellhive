@@ -155,7 +155,7 @@ html, body {
 .tab {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 0 12px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
@@ -163,6 +163,8 @@ html, body {
   min-width: 120px;
   max-width: 200px;
   height: 100%;
+  user-select: none;
+  transition: opacity 0.2s;
 }
 
 .tab:hover {
@@ -171,6 +173,31 @@ html, body {
 
 .tab--active {
   background: var(--bg-primary);
+}
+
+.tab--dragging {
+  opacity: 0.5;
+}
+
+.tab--drop-target {
+  border-left: 2px solid var(--accent);
+}
+
+.tab__status {
+  font-size: 8px;
+  line-height: 1;
+}
+
+.tab__status--connecting {
+  color: #e5e510;
+}
+
+.tab__status--running {
+  color: #0dbc79;
+}
+
+.tab__status--exited {
+  color: #666666;
 }
 
 .tab__title {
@@ -425,4 +452,33 @@ html, body {
 .sidebar__item-delete:hover {
   color: #f14c4c;
   background: var(--bg-tertiary);
+}
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  min-width: 180px;
+  padding: 4px 0;
+  z-index: 2000;
+  font-size: 13px;
+}
+
+.context-menu__item {
+  padding: 6px 16px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.context-menu__item:hover {
+  background: var(--bg-hover);
+}
+
+.context-menu__separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
 }

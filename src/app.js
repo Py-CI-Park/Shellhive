@@ -6,11 +6,20 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 
+// Session status constants
+const SESSION_STATUS = {
+  CONNECTING: 'connecting',
+  RUNNING: 'running',
+  EXITED: 'exited'
+};
+
 // State
 const state = {
   sessions: new Map(),
   activeSessionId: null,
   sessionCounter: 0,
+  draggedTab: null,
+  dropTarget: null,
 };
 
 // DOM Elements
@@ -208,8 +217,22 @@ async function createSession(name = null, workingDir = null) {
     wrapper,
     ptySessionId,
     unlistenPtyData,
+    status: SESSION_STATUS.CONNECTING,
+    projectName: name, // Store original project name for display
   };
   state.sessions.set(id, session);
+
+  // Update status to running after PTY connects
+  if (ptySessionId) {
+    session.status = SESSION_STATUS.RUNNING;
+    updateTabStatus(id, SESSION_STATUS.RUNNING);
+
+    // Listen for PTY exit
+    listen(`pty-exit:${ptySessionId}`, () => {
+      session.status = SESSION_STATUS.EXITED;
+      updateTabStatus(id, SESSION_STATUS.EXITED);
+    });
+  }
 
   // Create tab
   createTab(session);
@@ -261,24 +284,69 @@ function createTab(session) {
   const tab = document.createElement('div');
   tab.className = 'tab';
   tab.dataset.sessionId = session.id;
+  tab.draggable = true;
 
+  const statusIcon = getStatusIcon(session.status);
   tab.innerHTML = `
+    <span class="tab__status tab__status--${session.status}">${statusIcon}</span>
     <span class="tab__title">${session.name}</span>
     <button class="tab__close">×</button>
   `;
 
+  // Click to activate
   tab.addEventListener('click', (e) => {
     if (!e.target.classList.contains('tab__close')) {
       activateSession(session.id);
     }
   });
 
+  // Close button
   tab.querySelector('.tab__close').addEventListener('click', (e) => {
     e.stopPropagation();
     closeSession(session.id);
   });
 
+  // Drag and drop for tab reordering
+  tab.addEventListener('dragstart', handleTabDragStart);
+  tab.addEventListener('dragenter', handleTabDragEnter);
+  tab.addEventListener('dragover', handleTabDragOver);
+  tab.addEventListener('dragleave', handleTabDragLeave);
+  tab.addEventListener('drop', handleTabDrop);
+  tab.addEventListener('dragend', handleTabDragEnd);
+
+  // Context menu
+  tab.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showTabContextMenu(e, session.id);
+  });
+
   tabsList.appendChild(tab);
+}
+
+// Get status icon for session
+function getStatusIcon(status) {
+  switch (status) {
+    case SESSION_STATUS.CONNECTING:
+      return '⏳';
+    case SESSION_STATUS.RUNNING:
+      return '🟢';
+    case SESSION_STATUS.EXITED:
+      return '⚫';
+    default:
+      return '⚫';
+  }
+}
+
+// Update tab status
+function updateTabStatus(sessionId, status) {
+  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
+  if (!tab) return;
+
+  const statusElement = tab.querySelector('.tab__status');
+  if (statusElement) {
+    statusElement.textContent = getStatusIcon(status);
+    statusElement.className = `tab__status tab__status--${status}`;
+  }
 }
 
 // Activate session
@@ -359,6 +427,205 @@ async function createSessionInDirectory(path, projectName) {
   await createSession(`${projectName}`, path);
 }
 
+// Tab drag and drop handlers
+function handleTabDragStart(e) {
+  state.draggedTab = e.currentTarget;
+  e.currentTarget.classList.add('tab--dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleTabDragEnter(e) {
+  if (e.currentTarget !== state.draggedTab) {
+    e.currentTarget.classList.add('tab--drop-target');
+    state.dropTarget = e.currentTarget;
+  }
+}
+
+function handleTabDragOver(e) {
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+  e.dataTransfer.dropEffect = 'move';
+  return false;
+}
+
+function handleTabDragLeave(e) {
+  e.currentTarget.classList.remove('tab--drop-target');
+}
+
+function handleTabDrop(e) {
+  if (e.stopPropagation) {
+    e.stopPropagation();
+  }
+
+  if (state.draggedTab !== e.currentTarget) {
+    // Reorder tabs
+    const allTabs = Array.from(tabsList.children);
+    const draggedIndex = allTabs.indexOf(state.draggedTab);
+    const targetIndex = allTabs.indexOf(e.currentTarget);
+
+    if (draggedIndex < targetIndex) {
+      tabsList.insertBefore(state.draggedTab, e.currentTarget.nextSibling);
+    } else {
+      tabsList.insertBefore(state.draggedTab, e.currentTarget);
+    }
+  }
+
+  e.currentTarget.classList.remove('tab--drop-target');
+  return false;
+}
+
+function handleTabDragEnd(e) {
+  e.currentTarget.classList.remove('tab--dragging');
+  document.querySelectorAll('.tab--drop-target').forEach(tab => {
+    tab.classList.remove('tab--drop-target');
+  });
+  state.draggedTab = null;
+  state.dropTarget = null;
+}
+
+// Tab context menu
+function showTabContextMenu(e, sessionId) {
+  // Remove existing context menu
+  const existingMenu = document.getElementById('tabContextMenu');
+  if (existingMenu) {
+    existingMenu.remove();
+  }
+
+  const menu = document.createElement('div');
+  menu.id = 'tabContextMenu';
+  menu.className = 'context-menu';
+  menu.style.left = `${e.clientX}px`;
+  menu.style.top = `${e.clientY}px`;
+
+  menu.innerHTML = `
+    <div class="context-menu__item" data-action="duplicate">복제</div>
+    <div class="context-menu__item" data-action="close">닫기</div>
+    <div class="context-menu__separator"></div>
+    <div class="context-menu__item" data-action="close-others">다른 탭 모두 닫기</div>
+  `;
+
+  // Handle menu item clicks
+  menu.addEventListener('click', async (e) => {
+    const action = e.target.dataset.action;
+    if (!action) return;
+
+    switch (action) {
+      case 'duplicate':
+        await duplicateSession(sessionId);
+        break;
+      case 'close':
+        await closeSession(sessionId);
+        break;
+      case 'close-others':
+        await closeOtherSessions(sessionId);
+        break;
+    }
+
+    menu.remove();
+  });
+
+  document.body.appendChild(menu);
+
+  // Close menu when clicking outside
+  const closeMenu = (e) => {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+  };
+  setTimeout(() => {
+    document.addEventListener('click', closeMenu);
+  }, 0);
+}
+
+// Duplicate session
+async function duplicateSession(sessionId) {
+  const session = state.sessions.get(sessionId);
+  if (!session) return;
+
+  // Get working directory from original session
+  // For now, create a new session with the same project name
+  await createSession(session.projectName || `Terminal ${state.sessionCounter + 1}`);
+}
+
+// Close other sessions
+async function closeOtherSessions(keepSessionId) {
+  const sessionsToClose = Array.from(state.sessions.keys()).filter(id => id !== keepSessionId);
+  for (const id of sessionsToClose) {
+    await closeSession(id);
+  }
+}
+
+// Keyboard shortcuts
+function handleKeyboardShortcuts(e) {
+  // Ctrl+T: New tab
+  if (e.ctrlKey && e.key === 't') {
+    e.preventDefault();
+    createSession();
+    return;
+  }
+
+  // Ctrl+W: Close current tab
+  if (e.ctrlKey && e.key === 'w') {
+    e.preventDefault();
+    if (state.activeSessionId) {
+      closeSession(state.activeSessionId);
+    }
+    return;
+  }
+
+  // Ctrl+Tab: Next tab
+  if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
+    e.preventDefault();
+    switchToNextTab();
+    return;
+  }
+
+  // Ctrl+Shift+Tab: Previous tab
+  if (e.ctrlKey && e.key === 'Tab' && e.shiftKey) {
+    e.preventDefault();
+    switchToPreviousTab();
+    return;
+  }
+
+  // Ctrl+1-9: Switch to specific tab
+  if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+    e.preventDefault();
+    const tabIndex = parseInt(e.key) - 1;
+    switchToTabByIndex(tabIndex);
+    return;
+  }
+}
+
+// Switch to next tab
+function switchToNextTab() {
+  const sessionIds = Array.from(state.sessions.keys());
+  if (sessionIds.length === 0) return;
+
+  const currentIndex = sessionIds.indexOf(state.activeSessionId);
+  const nextIndex = (currentIndex + 1) % sessionIds.length;
+  activateSession(sessionIds[nextIndex]);
+}
+
+// Switch to previous tab
+function switchToPreviousTab() {
+  const sessionIds = Array.from(state.sessions.keys());
+  if (sessionIds.length === 0) return;
+
+  const currentIndex = sessionIds.indexOf(state.activeSessionId);
+  const prevIndex = currentIndex === 0 ? sessionIds.length - 1 : currentIndex - 1;
+  activateSession(sessionIds[prevIndex]);
+}
+
+// Switch to tab by index
+function switchToTabByIndex(index) {
+  const sessionIds = Array.from(state.sessions.keys());
+  if (index >= 0 && index < sessionIds.length) {
+    activateSession(sessionIds[index]);
+  }
+}
+
 // Event listeners
 newTabBtn.addEventListener('click', () => {
   createSession();
@@ -423,11 +690,21 @@ addProjectModal.addEventListener('click', (e) => {
   }
 });
 
-// Close modal with ESC key
+// Close modal with ESC key and handle keyboard shortcuts
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && addProjectModal.classList.contains('modal--visible')) {
     hideAddProjectModal();
+    return;
   }
+
+  // Don't handle shortcuts when modal is open or when typing in input
+  if (addProjectModal.classList.contains('modal--visible') ||
+      e.target.tagName === 'INPUT' ||
+      e.target.tagName === 'TEXTAREA') {
+    return;
+  }
+
+  handleKeyboardShortcuts(e);
 });
 
 // Initialize
