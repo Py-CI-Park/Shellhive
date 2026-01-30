@@ -13,6 +13,79 @@ const SESSION_STATUS = {
   EXITED: 'exited'
 };
 
+// Terminal themes
+const TERMINAL_THEMES = {
+  dark: {
+    background: '#1e1e1e',
+    foreground: '#cccccc',
+    cursor: '#ffffff',
+    cursorAccent: '#1e1e1e',
+    selectionBackground: '#264f78',
+    black: '#000000',
+    red: '#cd3131',
+    green: '#0dbc79',
+    yellow: '#e5e510',
+    blue: '#2472c8',
+    magenta: '#bc3fbc',
+    cyan: '#11a8cd',
+    white: '#e5e5e5',
+    brightBlack: '#666666',
+    brightRed: '#f14c4c',
+    brightGreen: '#23d18b',
+    brightYellow: '#f5f543',
+    brightBlue: '#3b8eea',
+    brightMagenta: '#d670d6',
+    brightCyan: '#29b8db',
+    brightWhite: '#ffffff',
+  },
+  light: {
+    background: '#ffffff',
+    foreground: '#1e1e1e',
+    cursor: '#000000',
+    cursorAccent: '#ffffff',
+    selectionBackground: '#add6ff',
+    black: '#000000',
+    red: '#cd3131',
+    green: '#008000',
+    yellow: '#795e25',
+    blue: '#0451a5',
+    magenta: '#bc05bc',
+    cyan: '#0598bc',
+    white: '#555555',
+    brightBlack: '#666666',
+    brightRed: '#cd3131',
+    brightGreen: '#14ce14',
+    brightYellow: '#b5ba00',
+    brightBlue: '#0451a5',
+    brightMagenta: '#bc05bc',
+    brightCyan: '#0598bc',
+    brightWhite: '#a5a5a5',
+  },
+  monokai: {
+    background: '#272822',
+    foreground: '#f8f8f2',
+    cursor: '#f8f8f0',
+    cursorAccent: '#272822',
+    selectionBackground: '#49483e',
+    black: '#272822',
+    red: '#f92672',
+    green: '#a6e22e',
+    yellow: '#f4bf75',
+    blue: '#66d9ef',
+    magenta: '#ae81ff',
+    cyan: '#a1efe4',
+    white: '#f8f8f2',
+    brightBlack: '#75715e',
+    brightRed: '#f92672',
+    brightGreen: '#a6e22e',
+    brightYellow: '#f4bf75',
+    brightBlue: '#66d9ef',
+    brightMagenta: '#ae81ff',
+    brightCyan: '#a1efe4',
+    brightWhite: '#f9f8f5',
+  },
+};
+
 // State
 const state = {
   sessions: new Map(),
@@ -20,6 +93,13 @@ const state = {
   sessionCounter: 0,
   draggedTab: null,
   dropTarget: null,
+  settings: {
+    theme: 'dark',
+    fontSize: 14,
+    fontFamily: 'Consolas',
+    enableLogging: true,
+  },
+  snippets: [],
 };
 
 // DOM Elements
@@ -36,7 +116,199 @@ const projectNameInput = document.getElementById('projectName');
 const projectPathInput = document.getElementById('projectPath');
 const browsePathBtn = document.getElementById('browsePathBtn');
 
-// Project management functions
+// Snippet elements
+const snippetList = document.getElementById('snippetList');
+const addSnippetBtn = document.getElementById('addSnippetBtn');
+const addSnippetModal = document.getElementById('addSnippetModal');
+const closeAddSnippetModal = document.getElementById('closeAddSnippetModal');
+const cancelAddSnippet = document.getElementById('cancelAddSnippet');
+const confirmAddSnippet = document.getElementById('confirmAddSnippet');
+const snippetNameInput = document.getElementById('snippetName');
+const snippetCommandInput = document.getElementById('snippetCommand');
+
+// Settings elements
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsModal = document.getElementById('settingsModal');
+const closeSettingsModal = document.getElementById('closeSettingsModal');
+const cancelSettings = document.getElementById('cancelSettings');
+const saveSettingsBtn = document.getElementById('saveSettings');
+const settingsTheme = document.getElementById('settingsTheme');
+const settingsFontSize = document.getElementById('settingsFontSize');
+const fontSizeValue = document.getElementById('fontSizeValue');
+const settingsFontFamily = document.getElementById('settingsFontFamily');
+const settingsEnableLogging = document.getElementById('settingsEnableLogging');
+const clearLogsBtn = document.getElementById('clearLogsBtn');
+
+// ===== Settings Functions =====
+
+async function loadSettings() {
+  try {
+    const settings = await invoke('get_settings');
+    state.settings = settings;
+    applyTheme(settings.theme);
+    return settings;
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+    return state.settings;
+  }
+}
+
+async function saveSettings(settings) {
+  try {
+    await invoke('save_settings', { settings });
+    state.settings = settings;
+    applyTheme(settings.theme);
+
+    // Update all existing terminals
+    state.sessions.forEach((session) => {
+      updateTerminalSettings(session.terminal, settings);
+    });
+  } catch (error) {
+    console.error('Failed to save settings:', error);
+    alert(`Failed to save settings: ${error}`);
+  }
+}
+
+function applyTheme(theme) {
+  // Remove existing theme classes
+  document.documentElement.classList.remove('theme-light', 'theme-monokai');
+
+  // Apply new theme class
+  if (theme === 'light') {
+    document.documentElement.classList.add('theme-light');
+  } else if (theme === 'monokai') {
+    document.documentElement.classList.add('theme-monokai');
+  }
+  // 'dark' is default, no class needed
+}
+
+function updateTerminalSettings(terminal, settings) {
+  const theme = TERMINAL_THEMES[settings.theme] || TERMINAL_THEMES.dark;
+  terminal.options.theme = theme;
+  terminal.options.fontSize = settings.fontSize;
+  terminal.options.fontFamily = `${settings.fontFamily}, "Courier New", monospace`;
+}
+
+function showSettingsModal() {
+  settingsModal.classList.add('modal--visible');
+
+  // Populate current settings
+  settingsTheme.value = state.settings.theme;
+  settingsFontSize.value = state.settings.fontSize;
+  fontSizeValue.textContent = `${state.settings.fontSize}px`;
+  settingsFontFamily.value = state.settings.fontFamily;
+  settingsEnableLogging.checked = state.settings.enableLogging;
+}
+
+function hideSettingsModal() {
+  settingsModal.classList.remove('modal--visible');
+}
+
+// ===== Snippet Functions =====
+
+async function loadSnippets() {
+  try {
+    const snippets = await invoke('list_snippets');
+    state.snippets = snippets;
+    renderSnippetList(snippets);
+  } catch (error) {
+    console.error('Failed to load snippets:', error);
+  }
+}
+
+function renderSnippetList(snippets) {
+  snippetList.innerHTML = snippets.map(s => `
+    <li class="sidebar__item" data-snippet-id="${s.id}" data-command="${escapeHtml(s.command)}" data-tooltip="${escapeHtml(s.command)}">
+      <span class="sidebar__item-icon">></span>
+      <span class="sidebar__item-name">${escapeHtml(s.name)}</span>
+      <button class="sidebar__item-delete" data-snippet-id="${s.id}">&times;</button>
+    </li>
+  `).join('');
+
+  // Add event listeners to snippet items
+  document.querySelectorAll('#snippetList .sidebar__item').forEach(item => {
+    const snippetId = item.dataset.snippetId;
+    const command = item.dataset.command;
+
+    // Click on snippet to execute in current terminal
+    item.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('sidebar__item-delete')) {
+        executeSnippet(command);
+      }
+    });
+
+    // Delete button
+    const deleteBtn = item.querySelector('.sidebar__item-delete');
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await removeSnippet(snippetId);
+    });
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function addSnippet(name, command) {
+  try {
+    await invoke('add_snippet', { name, command });
+    await loadSnippets();
+  } catch (error) {
+    console.error('Failed to add snippet:', error);
+    alert(`Failed to add snippet: ${error}`);
+  }
+}
+
+async function removeSnippet(id) {
+  try {
+    await invoke('remove_snippet', { id });
+    await loadSnippets();
+  } catch (error) {
+    console.error('Failed to remove snippet:', error);
+    alert(`Failed to remove snippet: ${error}`);
+  }
+}
+
+async function executeSnippet(command) {
+  if (!state.activeSessionId) {
+    alert('No active terminal session');
+    return;
+  }
+
+  const session = state.sessions.get(state.activeSessionId);
+  if (!session || !session.ptySessionId) {
+    alert('Terminal session is not connected');
+    return;
+  }
+
+  try {
+    // Write the command followed by Enter
+    await invoke('write_pty', {
+      sessionId: session.ptySessionId,
+      data: command + '\r'
+    });
+  } catch (error) {
+    console.error('Failed to execute snippet:', error);
+    alert(`Failed to execute snippet: ${error}`);
+  }
+}
+
+function showAddSnippetModal() {
+  addSnippetModal.classList.add('modal--visible');
+  snippetNameInput.value = '';
+  snippetCommandInput.value = '';
+  snippetNameInput.focus();
+}
+
+function hideAddSnippetModal() {
+  addSnippetModal.classList.remove('modal--visible');
+}
+
+// ===== Project Functions =====
+
 async function loadProjects() {
   try {
     const projects = await invoke('list_projects');
@@ -48,15 +320,15 @@ async function loadProjects() {
 
 function renderProjectList(projects) {
   projectList.innerHTML = projects.map(p => `
-    <li class="sidebar__item" data-project-id="${p.id}" data-path="${p.path}">
-      <span class="sidebar__item-icon">📁</span>
-      <span class="sidebar__item-name">${p.name}</span>
-      <button class="sidebar__item-delete" data-project-id="${p.id}">×</button>
+    <li class="sidebar__item" data-project-id="${p.id}" data-path="${escapeHtml(p.path)}">
+      <span class="sidebar__item-icon">folder</span>
+      <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
+      <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
     </li>
   `).join('');
 
   // Add event listeners to project items
-  document.querySelectorAll('.sidebar__item').forEach(item => {
+  document.querySelectorAll('#projectList .sidebar__item').forEach(item => {
     const projectId = item.dataset.projectId;
     const projectPath = item.dataset.path;
     const projectName = item.querySelector('.sidebar__item-name').textContent;
@@ -83,7 +355,7 @@ async function addProject(name, path) {
     await loadProjects();
   } catch (error) {
     console.error('Failed to add project:', error);
-    alert(`프로젝트 추가 실패: ${error}`);
+    alert(`Failed to add project: ${error}`);
   }
 }
 
@@ -93,7 +365,7 @@ async function removeProject(id) {
     await loadProjects();
   } catch (error) {
     console.error('Failed to remove project:', error);
-    alert(`프로젝트 삭제 실패: ${error}`);
+    alert(`Failed to remove project: ${error}`);
   }
 }
 
@@ -109,6 +381,8 @@ function hideAddProjectModal() {
   addProjectModal.classList.remove('modal--visible');
 }
 
+// ===== Session Functions =====
+
 // Create terminal session
 async function createSession(name = null, workingDir = null) {
   const id = `session-${++state.sessionCounter}`;
@@ -120,35 +394,16 @@ async function createSession(name = null, workingDir = null) {
   wrapper.id = `terminal-${id}`;
   terminalContainer.appendChild(wrapper);
 
+  // Get theme for terminal
+  const theme = TERMINAL_THEMES[state.settings.theme] || TERMINAL_THEMES.dark;
+
   // Initialize xterm.js
   const terminal = new Terminal({
     cursorBlink: true,
     cursorStyle: 'block',
-    fontSize: 14,
-    fontFamily: 'Consolas, "Courier New", monospace',
-    theme: {
-      background: '#1e1e1e',
-      foreground: '#cccccc',
-      cursor: '#ffffff',
-      cursorAccent: '#1e1e1e',
-      selectionBackground: '#264f78',
-      black: '#000000',
-      red: '#cd3131',
-      green: '#0dbc79',
-      yellow: '#e5e510',
-      blue: '#2472c8',
-      magenta: '#bc3fbc',
-      cyan: '#11a8cd',
-      white: '#e5e5e5',
-      brightBlack: '#666666',
-      brightRed: '#f14c4c',
-      brightGreen: '#23d18b',
-      brightYellow: '#f5f543',
-      brightBlue: '#3b8eea',
-      brightMagenta: '#d670d6',
-      brightCyan: '#29b8db',
-      brightWhite: '#ffffff',
-    },
+    fontSize: state.settings.fontSize,
+    fontFamily: `${state.settings.fontFamily}, "Courier New", monospace`,
+    theme: theme,
     allowTransparency: false,
     scrollback: 5000,
   });
@@ -163,9 +418,9 @@ async function createSession(name = null, workingDir = null) {
   fitAddon.fit();
 
   // Welcome message
-  terminal.writeln('\x1b[1;36m╔═══════════════════════════════════════╗\x1b[0m');
-  terminal.writeln('\x1b[1;36m║        Welcome to Shellhive!          ║\x1b[0m');
-  terminal.writeln('\x1b[1;36m╚═══════════════════════════════════════╝\x1b[0m');
+  terminal.writeln('\x1b[1;36m========================================\x1b[0m');
+  terminal.writeln('\x1b[1;36m       Welcome to Shellhive!           \x1b[0m');
+  terminal.writeln('\x1b[1;36m========================================\x1b[0m');
   terminal.writeln('');
   terminal.writeln('\x1b[90mConnecting to PTY...\x1b[0m');
   terminal.writeln('');
@@ -184,12 +439,17 @@ async function createSession(name = null, workingDir = null) {
       shell: null,
     });
 
-    terminal.writeln('\x1b[32m✓ PTY connected\x1b[0m');
+    terminal.writeln('\x1b[32mPTY connected\x1b[0m');
     terminal.writeln('');
 
     // Listen for PTY output
     unlistenPtyData = await listen(`pty-data:${ptySessionId}`, (event) => {
       terminal.write(event.payload);
+
+      // Log output if enabled
+      if (state.settings.enableLogging) {
+        logSessionOutput(ptySessionId, event.payload);
+      }
     });
 
     // Handle terminal input - send to PTY
@@ -202,7 +462,7 @@ async function createSession(name = null, workingDir = null) {
     });
 
   } catch (error) {
-    terminal.writeln('\x1b[31m✗ Failed to connect to PTY\x1b[0m');
+    terminal.writeln('\x1b[31mFailed to connect to PTY\x1b[0m');
     terminal.writeln(`\x1b[31m  ${error}\x1b[0m`);
     terminal.writeln('');
     console.error('PTY creation failed:', error);
@@ -279,6 +539,34 @@ async function createSession(name = null, workingDir = null) {
   return session;
 }
 
+// Log session output (debounced)
+let logBuffer = {};
+let logTimeouts = {};
+
+function logSessionOutput(sessionId, data) {
+  if (!logBuffer[sessionId]) {
+    logBuffer[sessionId] = '';
+  }
+  logBuffer[sessionId] += data;
+
+  // Clear existing timeout
+  if (logTimeouts[sessionId]) {
+    clearTimeout(logTimeouts[sessionId]);
+  }
+
+  // Debounce: write to file after 500ms of no new data
+  logTimeouts[sessionId] = setTimeout(async () => {
+    const buffer = logBuffer[sessionId];
+    logBuffer[sessionId] = '';
+
+    try {
+      await invoke('log_session_output', { sessionId, data: buffer });
+    } catch (error) {
+      console.error('Failed to log session output:', error);
+    }
+  }, 500);
+}
+
 // Create tab element
 function createTab(session) {
   const tab = document.createElement('div');
@@ -289,8 +577,8 @@ function createTab(session) {
   const statusIcon = getStatusIcon(session.status);
   tab.innerHTML = `
     <span class="tab__status tab__status--${session.status}">${statusIcon}</span>
-    <span class="tab__title">${session.name}</span>
-    <button class="tab__close">×</button>
+    <span class="tab__title">${escapeHtml(session.name)}</span>
+    <button class="tab__close">&times;</button>
   `;
 
   // Click to activate
@@ -327,13 +615,13 @@ function createTab(session) {
 function getStatusIcon(status) {
   switch (status) {
     case SESSION_STATUS.CONNECTING:
-      return '⏳';
+      return '*';
     case SESSION_STATUS.RUNNING:
-      return '🟢';
+      return 'o';
     case SESSION_STATUS.EXITED:
-      return '⚫';
+      return '-';
     default:
-      return '⚫';
+      return '-';
   }
 }
 
@@ -499,10 +787,10 @@ function showTabContextMenu(e, sessionId) {
   menu.style.top = `${e.clientY}px`;
 
   menu.innerHTML = `
-    <div class="context-menu__item" data-action="duplicate">복제</div>
-    <div class="context-menu__item" data-action="close">닫기</div>
+    <div class="context-menu__item" data-action="duplicate">Duplicate</div>
+    <div class="context-menu__item" data-action="close">Close</div>
     <div class="context-menu__separator"></div>
-    <div class="context-menu__item" data-action="close-others">다른 탭 모두 닫기</div>
+    <div class="context-menu__item" data-action="close-others">Close Other Tabs</div>
   `;
 
   // Handle menu item clicks
@@ -596,6 +884,13 @@ function handleKeyboardShortcuts(e) {
     switchToTabByIndex(tabIndex);
     return;
   }
+
+  // Ctrl+,: Open settings
+  if (e.ctrlKey && e.key === ',') {
+    e.preventDefault();
+    showSettingsModal();
+    return;
+  }
 }
 
 // Switch to next tab
@@ -626,11 +921,13 @@ function switchToTabByIndex(index) {
   }
 }
 
-// Event listeners
+// ===== Event Listeners =====
+
 newTabBtn.addEventListener('click', () => {
   createSession();
 });
 
+// Project modal events
 addProjectBtn.addEventListener('click', () => {
   showAddProjectModal();
 });
@@ -648,12 +945,12 @@ confirmAddProject.addEventListener('click', async () => {
   const path = projectPathInput.value.trim();
 
   if (!name) {
-    alert('프로젝트 이름을 입력해주세요.');
+    alert('Please enter a project name.');
     return;
   }
 
   if (!path) {
-    alert('프로젝트 경로를 입력해주세요.');
+    alert('Please enter a project path.');
     return;
   }
 
@@ -666,7 +963,7 @@ browsePathBtn.addEventListener('click', async () => {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: '프로젝트 폴더 선택',
+      title: 'Select Project Folder',
     });
 
     if (selected) {
@@ -683,32 +980,139 @@ browsePathBtn.addEventListener('click', async () => {
   }
 });
 
-// Close modal when clicking outside
+// Snippet modal events
+addSnippetBtn.addEventListener('click', () => {
+  showAddSnippetModal();
+});
+
+closeAddSnippetModal.addEventListener('click', () => {
+  hideAddSnippetModal();
+});
+
+cancelAddSnippet.addEventListener('click', () => {
+  hideAddSnippetModal();
+});
+
+confirmAddSnippet.addEventListener('click', async () => {
+  const name = snippetNameInput.value.trim();
+  const command = snippetCommandInput.value.trim();
+
+  if (!name) {
+    alert('Please enter a snippet name.');
+    return;
+  }
+
+  if (!command) {
+    alert('Please enter a command.');
+    return;
+  }
+
+  await addSnippet(name, command);
+  hideAddSnippetModal();
+});
+
+// Settings modal events
+settingsBtn.addEventListener('click', () => {
+  showSettingsModal();
+});
+
+closeSettingsModal.addEventListener('click', () => {
+  hideSettingsModal();
+});
+
+cancelSettings.addEventListener('click', () => {
+  hideSettingsModal();
+});
+
+settingsFontSize.addEventListener('input', (e) => {
+  fontSizeValue.textContent = `${e.target.value}px`;
+});
+
+saveSettingsBtn.addEventListener('click', async () => {
+  const settings = {
+    theme: settingsTheme.value,
+    font_size: parseInt(settingsFontSize.value),
+    font_family: settingsFontFamily.value,
+    enable_logging: settingsEnableLogging.checked,
+  };
+
+  await saveSettings(settings);
+  hideSettingsModal();
+});
+
+clearLogsBtn.addEventListener('click', async () => {
+  if (confirm('Are you sure you want to delete all session logs?')) {
+    try {
+      const count = await invoke('clear_all_logs');
+      alert(`Deleted ${count} log files.`);
+    } catch (error) {
+      console.error('Failed to clear logs:', error);
+      alert(`Failed to clear logs: ${error}`);
+    }
+  }
+});
+
+// Close modals when clicking outside
 addProjectModal.addEventListener('click', (e) => {
   if (e.target === addProjectModal) {
     hideAddProjectModal();
   }
 });
 
-// Close modal with ESC key and handle keyboard shortcuts
+addSnippetModal.addEventListener('click', (e) => {
+  if (e.target === addSnippetModal) {
+    hideAddSnippetModal();
+  }
+});
+
+settingsModal.addEventListener('click', (e) => {
+  if (e.target === settingsModal) {
+    hideSettingsModal();
+  }
+});
+
+// Close modals with ESC key and handle keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && addProjectModal.classList.contains('modal--visible')) {
-    hideAddProjectModal();
-    return;
+  // Close modals with ESC
+  if (e.key === 'Escape') {
+    if (addProjectModal.classList.contains('modal--visible')) {
+      hideAddProjectModal();
+      return;
+    }
+    if (addSnippetModal.classList.contains('modal--visible')) {
+      hideAddSnippetModal();
+      return;
+    }
+    if (settingsModal.classList.contains('modal--visible')) {
+      hideSettingsModal();
+      return;
+    }
   }
 
   // Don't handle shortcuts when modal is open or when typing in input
-  if (addProjectModal.classList.contains('modal--visible') ||
-      e.target.tagName === 'INPUT' ||
-      e.target.tagName === 'TEXTAREA') {
+  if (
+    addProjectModal.classList.contains('modal--visible') ||
+    addSnippetModal.classList.contains('modal--visible') ||
+    settingsModal.classList.contains('modal--visible') ||
+    e.target.tagName === 'INPUT' ||
+    e.target.tagName === 'TEXTAREA' ||
+    e.target.tagName === 'SELECT'
+  ) {
     return;
   }
 
   handleKeyboardShortcuts(e);
 });
 
-// Initialize
+// ===== Initialize =====
 document.addEventListener('DOMContentLoaded', async () => {
+  // Load settings first
+  await loadSettings();
+
+  // Load projects and snippets
   await loadProjects();
+  await loadSnippets();
+
+  // Create initial terminal session
   createSession('Terminal 1');
 });

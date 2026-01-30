@@ -19,6 +19,32 @@
   --tabs-height: 35px;
 }
 
+/* Light theme */
+:root.theme-light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f3f3;
+  --bg-tertiary: #e8e8e8;
+  --bg-hover: #d4d4d4;
+  --text-primary: #1e1e1e;
+  --text-secondary: #6e6e6e;
+  --accent: #0e639c;
+  --accent-hover: #1177bb;
+  --border: #d4d4d4;
+}
+
+/* Monokai theme */
+:root.theme-monokai {
+  --bg-primary: #272822;
+  --bg-secondary: #1e1f1c;
+  --bg-tertiary: #3e3d32;
+  --bg-hover: #49483e;
+  --text-primary: #f8f8f2;
+  --text-secondary: #75715e;
+  --accent: #a6e22e;
+  --accent-hover: #b8e95a;
+  --border: #49483e;
+}
+
 html, body {
   height: 100%;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -56,6 +82,14 @@ html, body {
 .sidebar__projects {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
+}
+
+.sidebar__snippets {
+  flex: 0 0 auto;
+  max-height: 200px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
 }
 
 .sidebar__section-header {
@@ -83,6 +117,14 @@ html, body {
 
 .sidebar__list {
   list-style: none;
+}
+
+.sidebar__list--snippets .sidebar__item {
+  font-size: 12px;
+}
+
+.sidebar__list--snippets .sidebar__item-icon {
+  font-size: 12px;
 }
 
 .sidebar__item {
@@ -309,6 +351,11 @@ html, body {
   max-width: 500px;
 }
 
+.modal__content--wide {
+  min-width: 500px;
+  max-width: 600px;
+}
+
 .modal__header {
   display: flex;
   justify-content: space-between;
@@ -348,7 +395,8 @@ html, body {
   color: var(--text-secondary);
 }
 
-.form-group input {
+.form-group input[type="text"],
+.form-group input[type="number"] {
   width: 100%;
   padding: 8px 12px;
   background: var(--bg-primary);
@@ -361,6 +409,58 @@ html, body {
 .form-group input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.form-group--checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-group--checkbox label {
+  margin-bottom: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.form-group--checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.form-select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input-with-value {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.input-with-value input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.input-with-value span {
+  min-width: 40px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .modal__footer {
@@ -396,6 +496,21 @@ html, body {
   background: var(--bg-hover);
 }
 
+.btn--small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.btn--danger {
+  background: #dc3545;
+  border: none;
+  color: white;
+}
+
+.btn--danger:hover {
+  background: #c82333;
+}
+
 /* Input with button */
 .input-with-button {
   display: flex;
@@ -421,6 +536,32 @@ html, body {
   background: var(--bg-hover);
 }
 
+/* Settings section */
+.settings-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.settings-section__title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.settings-help {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
 /* Sidebar item delete button */
 .sidebar__item {
   position: relative;
@@ -431,6 +572,15 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sidebar__item-command {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
 }
 
 .sidebar__item-delete {
@@ -481,4 +631,22 @@ html, body {
   height: 1px;
   background: var(--border);
   margin: 4px 0;
+}
+
+/* Snippet hover tooltip */
+.sidebar__item[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-left: 8px;
+  font-family: 'Consolas', 'Courier New', monospace;
 }

@@ -3,6 +3,8 @@
 
 mod pty;
 mod project;
+mod snippet;
+mod settings;
 
 use tauri::Manager;
 use std::env;
@@ -37,6 +39,18 @@ fn main() {
             project::add_project,
             project::remove_project,
             project::update_project,
+            snippet::list_snippets,
+            snippet::add_snippet,
+            snippet::remove_snippet,
+            snippet::get_snippet,
+            snippet::update_snippet,
+            settings::get_settings,
+            settings::save_settings,
+            settings::log_session_output,
+            settings::get_session_log,
+            settings::list_session_logs,
+            settings::delete_session_log,
+            settings::clear_all_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
