@@ -2,6 +2,8 @@ import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import 'xterm/css/xterm.css';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 // State
 const state = {
@@ -16,7 +18,7 @@ const terminalContainer = document.getElementById('terminalContainer');
 const newTabBtn = document.getElementById('newTabBtn');
 
 // Create terminal session
-function createSession(name = null) {
+async function createSession(name = null) {
   const id = `session-${++state.sessionCounter}`;
   const sessionName = name || `Terminal ${state.sessionCounter}`;
 
@@ -76,11 +78,43 @@ function createSession(name = null) {
   terminal.writeln('\x1b[90mConnecting to PTY...\x1b[0m');
   terminal.writeln('');
 
-  // Handle input (will be connected to PTY later)
-  terminal.onData((data) => {
-    // Echo for now (will be replaced with PTY communication)
-    terminal.write(data);
-  });
+  // Create PTY session
+  let ptySessionId;
+  let unlistenPtyData;
+
+  try {
+    // Get user home directory as working directory
+    const homeDir = await invoke('get_home_dir');
+
+    // Create PTY with default shell
+    ptySessionId = await invoke('create_pty', {
+      workingDir: homeDir,
+      shell: null,
+    });
+
+    terminal.writeln('\x1b[32m✓ PTY connected\x1b[0m');
+    terminal.writeln('');
+
+    // Listen for PTY output
+    unlistenPtyData = await listen(`pty-data:${ptySessionId}`, (event) => {
+      terminal.write(event.payload);
+    });
+
+    // Handle terminal input - send to PTY
+    terminal.onData(async (data) => {
+      try {
+        await invoke('write_pty', { sessionId: ptySessionId, data });
+      } catch (error) {
+        console.error('Failed to write to PTY:', error);
+      }
+    });
+
+  } catch (error) {
+    terminal.writeln('\x1b[31m✗ Failed to connect to PTY\x1b[0m');
+    terminal.writeln(`\x1b[31m  ${error}\x1b[0m`);
+    terminal.writeln('');
+    console.error('PTY creation failed:', error);
+  }
 
   // Store session
   const session = {
@@ -89,6 +123,8 @@ function createSession(name = null) {
     terminal,
     fitAddon,
     wrapper,
+    ptySessionId,
+    unlistenPtyData,
   };
   state.sessions.set(id, session);
 
@@ -99,11 +135,40 @@ function createSession(name = null) {
   activateSession(id);
 
   // Handle resize
-  window.addEventListener('resize', () => {
+  const resizeHandler = async () => {
     if (state.activeSessionId === id) {
       fitAddon.fit();
+
+      // Update PTY size
+      if (ptySessionId) {
+        try {
+          await invoke('resize_pty', {
+            sessionId: ptySessionId,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          });
+        } catch (error) {
+          console.error('Failed to resize PTY:', error);
+        }
+      }
     }
-  });
+  };
+
+  window.addEventListener('resize', resizeHandler);
+  session.resizeHandler = resizeHandler;
+
+  // Initial resize notification to PTY
+  if (ptySessionId) {
+    try {
+      await invoke('resize_pty', {
+        sessionId: ptySessionId,
+        cols: terminal.cols,
+        rows: terminal.rows,
+      });
+    } catch (error) {
+      console.error('Failed to set initial PTY size:', error);
+    }
+  }
 
   return session;
 }
@@ -159,9 +224,28 @@ function activateSession(id) {
 }
 
 // Close session
-function closeSession(id) {
+async function closeSession(id) {
   const session = state.sessions.get(id);
   if (!session) return;
+
+  // Kill PTY if exists
+  if (session.ptySessionId) {
+    try {
+      await invoke('kill_pty', { sessionId: session.ptySessionId });
+    } catch (error) {
+      console.error('Failed to kill PTY:', error);
+    }
+  }
+
+  // Unlisten from PTY events
+  if (session.unlistenPtyData) {
+    session.unlistenPtyData();
+  }
+
+  // Remove resize handler
+  if (session.resizeHandler) {
+    window.removeEventListener('resize', session.resizeHandler);
+  }
 
   // Dispose terminal
   session.terminal.dispose();

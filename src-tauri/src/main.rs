@@ -5,10 +5,19 @@ mod pty;
 mod project;
 
 use tauri::Manager;
+use std::env;
+
+#[tauri::command]
+fn get_home_dir() -> Result<String, String> {
+    env::var("USERPROFILE")
+        .or_else(|_| env::var("HOME"))
+        .map_err(|e| format!("Failed to get home directory: {}", e))
+}
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .manage(pty::PtyManager::new())
         .setup(|app| {
             #[cfg(debug_assertions)]
             {
@@ -18,6 +27,7 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_home_dir,
             pty::create_pty,
             pty::write_pty,
             pty::resize_pty,
