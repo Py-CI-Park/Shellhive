@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shellhive</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="sidebar__header">
+        <h1 class="sidebar__title">Shellhive</h1>
+      </div>
+      <div class="sidebar__projects">
+        <div class="sidebar__section-header">
+          <span>Projects</span>
+          <button class="sidebar__add-btn" id="addProjectBtn">+</button>
+        </div>
+        <ul class="sidebar__list" id="projectList"></ul>
+      </div>
+      <div class="sidebar__footer">
+        <button class="sidebar__settings-btn" id="settingsBtn">Settings</button>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="tabs" id="tabsContainer">
+        <div class="tabs__list" id="tabsList"></div>
+        <button class="tabs__new-btn" id="newTabBtn">+</button>
+      </div>
+      <div class="terminal-container" id="terminalContainer"></div>
+    </main>
+  </div>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>

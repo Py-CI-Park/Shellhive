@@ -1,0 +1,32 @@
+// Prevents additional console window on Windows in release
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod pty;
+mod project;
+
+use tauri::Manager;
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_webview_window("main").unwrap();
+                window.open_devtools();
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            pty::create_pty,
+            pty::write_pty,
+            pty::resize_pty,
+            pty::kill_pty,
+            project::list_projects,
+            project::add_project,
+            project::remove_project,
+            project::update_project,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
