@@ -2,8 +2,9 @@ use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{Read, Write};
 use std::sync::Arc;
+use std::thread;
 use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,9 +15,8 @@ pub struct PtySession {
 }
 
 struct PtySessionData {
-    session: PtySession,
     master: Box<dyn MasterPty + Send>,
-    _child: Box<dyn Child + Send>,
+    _child: Box<dyn Child + Send + Sync>,
 }
 
 pub struct PtyManager {
@@ -45,7 +45,14 @@ pub async fn create_pty(
     shell: Option<String>,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
-    let shell_cmd = shell.unwrap_or_else(|| "cmd.exe".to_string());
+    let shell_cmd = shell.unwrap_or_else(|| {
+        // Try PowerShell first, fall back to cmd
+        if std::path::Path::new("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe").exists() {
+            "powershell.exe".to_string()
+        } else {
+            "cmd.exe".to_string()
+        }
+    });
 
     // Create PTY system
     let pty_system = NativePtySystem::default();
@@ -64,55 +71,54 @@ pub async fn create_pty(
     let mut cmd = CommandBuilder::new(&shell_cmd);
     cmd.cwd(&working_dir);
 
+    // Set environment for better terminal experience
+    cmd.env("TERM", "xterm-256color");
+
+    // For PowerShell, disable the banner
+    if shell_cmd.to_lowercase().contains("powershell") {
+        cmd.args(&["-NoLogo"]);
+    }
+
     // Spawn command
     let child = pty_pair
         .slave
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to spawn command: {}", e))?;
 
-    // Get reader for output
-    let mut reader = pty_pair.master.try_clone_reader()
+    // Get reader for output - this needs to be done before storing master
+    let mut reader = pty_pair
+        .master
+        .try_clone_reader()
         .map_err(|e| format!("Failed to clone reader: {}", e))?;
 
     // Store session
-    let session = PtySession {
-        id: id.clone(),
-        working_dir: working_dir.clone(),
-        shell: shell_cmd.clone(),
-    };
-
     let session_data = PtySessionData {
-        session: session.clone(),
         master: pty_pair.master,
         _child: child,
     };
 
     state.sessions.lock().insert(id.clone(), session_data);
 
-    // Spawn background task to read PTY output
+    // Spawn background thread to read PTY output (byte-by-byte for real-time)
     let session_id = id.clone();
     let app_handle = app.clone();
-    tokio::spawn(async move {
-        let mut buf_reader = BufReader::new(reader);
-        let mut line = Vec::new();
+
+    thread::spawn(move || {
+        let mut buffer = [0u8; 4096]; // Read in chunks for efficiency
 
         loop {
-            line.clear();
-            match buf_reader.read_until(b'\n', &mut line) {
+            match reader.read(&mut buffer) {
                 Ok(0) => {
                     // EOF reached, PTY closed
                     let _ = app_handle.emit(&format!("pty-exit:{}", session_id), ());
                     break;
                 }
-                Ok(_) => {
+                Ok(n) => {
                     // Convert bytes to string (lossy conversion for invalid UTF-8)
-                    let output = String::from_utf8_lossy(&line).to_string();
+                    let output = String::from_utf8_lossy(&buffer[..n]).to_string();
 
                     // Emit to frontend
-                    let _ = app_handle.emit(
-                        &format!("pty-data:{}", session_id),
-                        output
-                    );
+                    let _ = app_handle.emit(&format!("pty-data:{}", session_id), output);
                 }
                 Err(e) => {
                     eprintln!("PTY read error: {}", e);
@@ -135,13 +141,17 @@ pub async fn write_pty(
     let mut sessions = state.sessions.lock();
 
     if let Some(session_data) = sessions.get_mut(&session_id) {
-        let mut writer = session_data.master.take_writer()
+        let mut writer = session_data
+            .master
+            .take_writer()
             .map_err(|e| format!("Failed to get writer: {}", e))?;
 
-        writer.write_all(data.as_bytes())
+        writer
+            .write_all(data.as_bytes())
             .map_err(|e| format!("Failed to write to PTY: {}", e))?;
 
-        writer.flush()
+        writer
+            .flush()
             .map_err(|e| format!("Failed to flush PTY: {}", e))?;
 
         Ok(())
@@ -160,13 +170,15 @@ pub async fn resize_pty(
     let sessions = state.sessions.lock();
 
     if let Some(session_data) = sessions.get(&session_id) {
-        session_data.master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| format!("Failed to resize PTY: {}", e))?;
+        session_data
+            .master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| format!("Failed to resize PTY: {}", e))?;
 
         Ok(())
     } else {

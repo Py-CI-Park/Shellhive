@@ -102,42 +102,15 @@ const state = {
   snippets: [],
 };
 
-// DOM Elements
-const tabsList = document.getElementById('tabsList');
-const terminalContainer = document.getElementById('terminalContainer');
-const newTabBtn = document.getElementById('newTabBtn');
-const projectList = document.getElementById('projectList');
-const addProjectBtn = document.getElementById('addProjectBtn');
-const addProjectModal = document.getElementById('addProjectModal');
-const closeAddProjectModal = document.getElementById('closeAddProjectModal');
-const cancelAddProject = document.getElementById('cancelAddProject');
-const confirmAddProject = document.getElementById('confirmAddProject');
-const projectNameInput = document.getElementById('projectName');
-const projectPathInput = document.getElementById('projectPath');
-const browsePathBtn = document.getElementById('browsePathBtn');
-
-// Snippet elements
-const snippetList = document.getElementById('snippetList');
-const addSnippetBtn = document.getElementById('addSnippetBtn');
-const addSnippetModal = document.getElementById('addSnippetModal');
-const closeAddSnippetModal = document.getElementById('closeAddSnippetModal');
-const cancelAddSnippet = document.getElementById('cancelAddSnippet');
-const confirmAddSnippet = document.getElementById('confirmAddSnippet');
-const snippetNameInput = document.getElementById('snippetName');
-const snippetCommandInput = document.getElementById('snippetCommand');
-
-// Settings elements
-const settingsBtn = document.getElementById('settingsBtn');
-const settingsModal = document.getElementById('settingsModal');
-const closeSettingsModal = document.getElementById('closeSettingsModal');
-const cancelSettings = document.getElementById('cancelSettings');
-const saveSettingsBtn = document.getElementById('saveSettings');
-const settingsTheme = document.getElementById('settingsTheme');
-const settingsFontSize = document.getElementById('settingsFontSize');
-const fontSizeValue = document.getElementById('fontSizeValue');
-const settingsFontFamily = document.getElementById('settingsFontFamily');
-const settingsEnableLogging = document.getElementById('settingsEnableLogging');
-const clearLogsBtn = document.getElementById('clearLogsBtn');
+// DOM Elements - will be initialized after DOM loads
+let tabsList, terminalContainer, newTabBtn, projectList, addProjectBtn;
+let addProjectModal, closeAddProjectModal, cancelAddProject, confirmAddProject;
+let projectNameInput, projectPathInput, browsePathBtn;
+let snippetList, addSnippetBtn, addSnippetModal, closeAddSnippetModal;
+let cancelAddSnippet, confirmAddSnippet, snippetNameInput, snippetCommandInput;
+let settingsBtn, settingsModal, closeSettingsModal, cancelSettings, saveSettingsBtn;
+let settingsTheme, settingsFontSize, fontSizeValue, settingsFontFamily;
+let settingsEnableLogging, clearLogsBtn;
 
 // ===== Settings Functions =====
 
@@ -185,19 +158,20 @@ function applyTheme(theme) {
 function updateTerminalSettings(terminal, settings) {
   const theme = TERMINAL_THEMES[settings.theme] || TERMINAL_THEMES.dark;
   terminal.options.theme = theme;
-  terminal.options.fontSize = settings.fontSize;
-  terminal.options.fontFamily = `${settings.fontFamily}, "Courier New", monospace`;
+  terminal.options.fontSize = settings.fontSize || settings.font_size;
+  terminal.options.fontFamily = `${settings.fontFamily || settings.font_family}, "Courier New", monospace`;
 }
 
 function showSettingsModal() {
+  console.log('Opening settings modal');
   settingsModal.classList.add('modal--visible');
 
   // Populate current settings
   settingsTheme.value = state.settings.theme;
-  settingsFontSize.value = state.settings.fontSize;
-  fontSizeValue.textContent = `${state.settings.fontSize}px`;
-  settingsFontFamily.value = state.settings.fontFamily;
-  settingsEnableLogging.checked = state.settings.enableLogging;
+  settingsFontSize.value = state.settings.fontSize || state.settings.font_size || 14;
+  fontSizeValue.textContent = `${settingsFontSize.value}px`;
+  settingsFontFamily.value = state.settings.fontFamily || state.settings.font_family || 'Consolas';
+  settingsEnableLogging.checked = state.settings.enableLogging ?? state.settings.enable_logging ?? true;
 }
 
 function hideSettingsModal() {
@@ -227,7 +201,6 @@ function renderSnippetList(snippets) {
 
   // Add event listeners to snippet items
   document.querySelectorAll('#snippetList .sidebar__item').forEach(item => {
-    const snippetId = item.dataset.snippetId;
     const command = item.dataset.command;
 
     // Click on snippet to execute in current terminal
@@ -241,6 +214,7 @@ function renderSnippetList(snippets) {
     const deleteBtn = item.querySelector('.sidebar__item-delete');
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      const snippetId = deleteBtn.dataset.snippetId;
       await removeSnippet(snippetId);
     });
   });
@@ -297,6 +271,7 @@ async function executeSnippet(command) {
 }
 
 function showAddSnippetModal() {
+  console.log('Opening add snippet modal');
   addSnippetModal.classList.add('modal--visible');
   snippetNameInput.value = '';
   snippetCommandInput.value = '';
@@ -321,7 +296,7 @@ async function loadProjects() {
 function renderProjectList(projects) {
   projectList.innerHTML = projects.map(p => `
     <li class="sidebar__item" data-project-id="${p.id}" data-path="${escapeHtml(p.path)}">
-      <span class="sidebar__item-icon">folder</span>
+      <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
       <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
     </li>
@@ -329,7 +304,6 @@ function renderProjectList(projects) {
 
   // Add event listeners to project items
   document.querySelectorAll('#projectList .sidebar__item').forEach(item => {
-    const projectId = item.dataset.projectId;
     const projectPath = item.dataset.path;
     const projectName = item.querySelector('.sidebar__item-name').textContent;
 
@@ -344,6 +318,7 @@ function renderProjectList(projects) {
     const deleteBtn = item.querySelector('.sidebar__item-delete');
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      const projectId = deleteBtn.dataset.projectId;
       await removeProject(projectId);
     });
   });
@@ -371,6 +346,7 @@ async function removeProject(id) {
 
 // Modal management
 function showAddProjectModal() {
+  console.log('Opening add project modal');
   addProjectModal.classList.add('modal--visible');
   projectNameInput.value = '';
   projectPathInput.value = '';
@@ -396,16 +372,19 @@ async function createSession(name = null, workingDir = null) {
 
   // Get theme for terminal
   const theme = TERMINAL_THEMES[state.settings.theme] || TERMINAL_THEMES.dark;
+  const fontSize = state.settings.fontSize || state.settings.font_size || 14;
+  const fontFamily = state.settings.fontFamily || state.settings.font_family || 'Consolas';
 
   // Initialize xterm.js
   const terminal = new Terminal({
     cursorBlink: true,
     cursorStyle: 'block',
-    fontSize: state.settings.fontSize,
-    fontFamily: `${state.settings.fontFamily}, "Courier New", monospace`,
+    fontSize: fontSize,
+    fontFamily: `${fontFamily}, "Courier New", monospace`,
     theme: theme,
     allowTransparency: false,
     scrollback: 5000,
+    convertEol: true,
   });
 
   const fitAddon = new FitAddon();
@@ -447,7 +426,7 @@ async function createSession(name = null, workingDir = null) {
       terminal.write(event.payload);
 
       // Log output if enabled
-      if (state.settings.enableLogging) {
+      if (state.settings.enableLogging || state.settings.enable_logging) {
         logSessionOutput(ptySessionId, event.payload);
       }
     });
@@ -615,13 +594,13 @@ function createTab(session) {
 function getStatusIcon(status) {
   switch (status) {
     case SESSION_STATUS.CONNECTING:
-      return '*';
+      return '●';
     case SESSION_STATUS.RUNNING:
-      return 'o';
+      return '●';
     case SESSION_STATUS.EXITED:
-      return '-';
+      return '○';
     default:
-      return '-';
+      return '○';
   }
 }
 
@@ -921,191 +900,253 @@ function switchToTabByIndex(index) {
   }
 }
 
-// ===== Event Listeners =====
+// ===== Initialize DOM Elements =====
+function initializeDOMElements() {
+  tabsList = document.getElementById('tabsList');
+  terminalContainer = document.getElementById('terminalContainer');
+  newTabBtn = document.getElementById('newTabBtn');
+  projectList = document.getElementById('projectList');
+  addProjectBtn = document.getElementById('addProjectBtn');
+  addProjectModal = document.getElementById('addProjectModal');
+  closeAddProjectModal = document.getElementById('closeAddProjectModal');
+  cancelAddProject = document.getElementById('cancelAddProject');
+  confirmAddProject = document.getElementById('confirmAddProject');
+  projectNameInput = document.getElementById('projectName');
+  projectPathInput = document.getElementById('projectPath');
+  browsePathBtn = document.getElementById('browsePathBtn');
+  snippetList = document.getElementById('snippetList');
+  addSnippetBtn = document.getElementById('addSnippetBtn');
+  addSnippetModal = document.getElementById('addSnippetModal');
+  closeAddSnippetModal = document.getElementById('closeAddSnippetModal');
+  cancelAddSnippet = document.getElementById('cancelAddSnippet');
+  confirmAddSnippet = document.getElementById('confirmAddSnippet');
+  snippetNameInput = document.getElementById('snippetName');
+  snippetCommandInput = document.getElementById('snippetCommand');
+  settingsBtn = document.getElementById('settingsBtn');
+  settingsModal = document.getElementById('settingsModal');
+  closeSettingsModal = document.getElementById('closeSettingsModal');
+  cancelSettings = document.getElementById('cancelSettings');
+  saveSettingsBtn = document.getElementById('saveSettings');
+  settingsTheme = document.getElementById('settingsTheme');
+  settingsFontSize = document.getElementById('settingsFontSize');
+  fontSizeValue = document.getElementById('fontSizeValue');
+  settingsFontFamily = document.getElementById('settingsFontFamily');
+  settingsEnableLogging = document.getElementById('settingsEnableLogging');
+  clearLogsBtn = document.getElementById('clearLogsBtn');
 
-newTabBtn.addEventListener('click', () => {
-  createSession();
-});
+  console.log('DOM elements initialized:', {
+    addProjectBtn: !!addProjectBtn,
+    settingsBtn: !!settingsBtn,
+    addSnippetBtn: !!addSnippetBtn,
+    browsePathBtn: !!browsePathBtn
+  });
+}
 
-// Project modal events
-addProjectBtn.addEventListener('click', () => {
-  showAddProjectModal();
-});
+// ===== Setup Event Listeners =====
+function setupEventListeners() {
+  // New tab button
+  newTabBtn.addEventListener('click', () => {
+    console.log('New tab button clicked');
+    createSession();
+  });
 
-closeAddProjectModal.addEventListener('click', () => {
-  hideAddProjectModal();
-});
+  // Project modal events
+  addProjectBtn.addEventListener('click', () => {
+    console.log('Add project button clicked');
+    showAddProjectModal();
+  });
 
-cancelAddProject.addEventListener('click', () => {
-  hideAddProjectModal();
-});
+  closeAddProjectModal.addEventListener('click', () => {
+    hideAddProjectModal();
+  });
 
-confirmAddProject.addEventListener('click', async () => {
-  const name = projectNameInput.value.trim();
-  const path = projectPathInput.value.trim();
+  cancelAddProject.addEventListener('click', () => {
+    hideAddProjectModal();
+  });
 
-  if (!name) {
-    alert('Please enter a project name.');
-    return;
-  }
+  confirmAddProject.addEventListener('click', async () => {
+    const name = projectNameInput.value.trim();
+    const path = projectPathInput.value.trim();
 
-  if (!path) {
-    alert('Please enter a project path.');
-    return;
-  }
+    if (!name) {
+      alert('Please enter a project name.');
+      return;
+    }
 
-  await addProject(name, path);
-  hideAddProjectModal();
-});
+    if (!path) {
+      alert('Please enter a project path.');
+      return;
+    }
 
-browsePathBtn.addEventListener('click', async () => {
-  try {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: 'Select Project Folder',
-    });
+    await addProject(name, path);
+    hideAddProjectModal();
+  });
 
-    if (selected) {
-      projectPathInput.value = selected;
+  browsePathBtn.addEventListener('click', async () => {
+    console.log('Browse button clicked');
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select Project Folder',
+      });
 
-      // Auto-fill project name from folder name if empty
-      if (!projectNameInput.value.trim()) {
-        const folderName = selected.split(/[\\/]/).pop();
-        projectNameInput.value = folderName;
+      console.log('Selected folder:', selected);
+
+      if (selected) {
+        projectPathInput.value = selected;
+
+        // Auto-fill project name from folder name if empty
+        if (!projectNameInput.value.trim()) {
+          const folderName = selected.split(/[\\/]/).pop();
+          projectNameInput.value = folderName;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to open folder dialog:', error);
+      alert(`Failed to open folder dialog: ${error}`);
+    }
+  });
+
+  // Snippet modal events
+  addSnippetBtn.addEventListener('click', () => {
+    console.log('Add snippet button clicked');
+    showAddSnippetModal();
+  });
+
+  closeAddSnippetModal.addEventListener('click', () => {
+    hideAddSnippetModal();
+  });
+
+  cancelAddSnippet.addEventListener('click', () => {
+    hideAddSnippetModal();
+  });
+
+  confirmAddSnippet.addEventListener('click', async () => {
+    const name = snippetNameInput.value.trim();
+    const command = snippetCommandInput.value.trim();
+
+    if (!name) {
+      alert('Please enter a snippet name.');
+      return;
+    }
+
+    if (!command) {
+      alert('Please enter a command.');
+      return;
+    }
+
+    await addSnippet(name, command);
+    hideAddSnippetModal();
+  });
+
+  // Settings modal events
+  settingsBtn.addEventListener('click', () => {
+    console.log('Settings button clicked');
+    showSettingsModal();
+  });
+
+  closeSettingsModal.addEventListener('click', () => {
+    hideSettingsModal();
+  });
+
+  cancelSettings.addEventListener('click', () => {
+    hideSettingsModal();
+  });
+
+  settingsFontSize.addEventListener('input', (e) => {
+    fontSizeValue.textContent = `${e.target.value}px`;
+  });
+
+  saveSettingsBtn.addEventListener('click', async () => {
+    const settings = {
+      theme: settingsTheme.value,
+      font_size: parseInt(settingsFontSize.value),
+      font_family: settingsFontFamily.value,
+      enable_logging: settingsEnableLogging.checked,
+    };
+
+    await saveSettings(settings);
+    hideSettingsModal();
+  });
+
+  clearLogsBtn.addEventListener('click', async () => {
+    if (confirm('Are you sure you want to delete all session logs?')) {
+      try {
+        const count = await invoke('clear_all_logs');
+        alert(`Deleted ${count} log files.`);
+      } catch (error) {
+        console.error('Failed to clear logs:', error);
+        alert(`Failed to clear logs: ${error}`);
       }
     }
-  } catch (error) {
-    console.error('Failed to open folder dialog:', error);
-  }
-});
+  });
 
-// Snippet modal events
-addSnippetBtn.addEventListener('click', () => {
-  showAddSnippetModal();
-});
-
-closeAddSnippetModal.addEventListener('click', () => {
-  hideAddSnippetModal();
-});
-
-cancelAddSnippet.addEventListener('click', () => {
-  hideAddSnippetModal();
-});
-
-confirmAddSnippet.addEventListener('click', async () => {
-  const name = snippetNameInput.value.trim();
-  const command = snippetCommandInput.value.trim();
-
-  if (!name) {
-    alert('Please enter a snippet name.');
-    return;
-  }
-
-  if (!command) {
-    alert('Please enter a command.');
-    return;
-  }
-
-  await addSnippet(name, command);
-  hideAddSnippetModal();
-});
-
-// Settings modal events
-settingsBtn.addEventListener('click', () => {
-  showSettingsModal();
-});
-
-closeSettingsModal.addEventListener('click', () => {
-  hideSettingsModal();
-});
-
-cancelSettings.addEventListener('click', () => {
-  hideSettingsModal();
-});
-
-settingsFontSize.addEventListener('input', (e) => {
-  fontSizeValue.textContent = `${e.target.value}px`;
-});
-
-saveSettingsBtn.addEventListener('click', async () => {
-  const settings = {
-    theme: settingsTheme.value,
-    font_size: parseInt(settingsFontSize.value),
-    font_family: settingsFontFamily.value,
-    enable_logging: settingsEnableLogging.checked,
-  };
-
-  await saveSettings(settings);
-  hideSettingsModal();
-});
-
-clearLogsBtn.addEventListener('click', async () => {
-  if (confirm('Are you sure you want to delete all session logs?')) {
-    try {
-      const count = await invoke('clear_all_logs');
-      alert(`Deleted ${count} log files.`);
-    } catch (error) {
-      console.error('Failed to clear logs:', error);
-      alert(`Failed to clear logs: ${error}`);
-    }
-  }
-});
-
-// Close modals when clicking outside
-addProjectModal.addEventListener('click', (e) => {
-  if (e.target === addProjectModal) {
-    hideAddProjectModal();
-  }
-});
-
-addSnippetModal.addEventListener('click', (e) => {
-  if (e.target === addSnippetModal) {
-    hideAddSnippetModal();
-  }
-});
-
-settingsModal.addEventListener('click', (e) => {
-  if (e.target === settingsModal) {
-    hideSettingsModal();
-  }
-});
-
-// Close modals with ESC key and handle keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-  // Close modals with ESC
-  if (e.key === 'Escape') {
-    if (addProjectModal.classList.contains('modal--visible')) {
+  // Close modals when clicking outside
+  addProjectModal.addEventListener('click', (e) => {
+    if (e.target === addProjectModal) {
       hideAddProjectModal();
-      return;
     }
-    if (addSnippetModal.classList.contains('modal--visible')) {
+  });
+
+  addSnippetModal.addEventListener('click', (e) => {
+    if (e.target === addSnippetModal) {
       hideAddSnippetModal();
-      return;
     }
-    if (settingsModal.classList.contains('modal--visible')) {
+  });
+
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
       hideSettingsModal();
+    }
+  });
+
+  // Close modals with ESC key and handle keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Close modals with ESC
+    if (e.key === 'Escape') {
+      if (addProjectModal.classList.contains('modal--visible')) {
+        hideAddProjectModal();
+        return;
+      }
+      if (addSnippetModal.classList.contains('modal--visible')) {
+        hideAddSnippetModal();
+        return;
+      }
+      if (settingsModal.classList.contains('modal--visible')) {
+        hideSettingsModal();
+        return;
+      }
+    }
+
+    // Don't handle shortcuts when modal is open or when typing in input
+    if (
+      addProjectModal.classList.contains('modal--visible') ||
+      addSnippetModal.classList.contains('modal--visible') ||
+      settingsModal.classList.contains('modal--visible') ||
+      e.target.tagName === 'INPUT' ||
+      e.target.tagName === 'TEXTAREA' ||
+      e.target.tagName === 'SELECT'
+    ) {
       return;
     }
-  }
 
-  // Don't handle shortcuts when modal is open or when typing in input
-  if (
-    addProjectModal.classList.contains('modal--visible') ||
-    addSnippetModal.classList.contains('modal--visible') ||
-    settingsModal.classList.contains('modal--visible') ||
-    e.target.tagName === 'INPUT' ||
-    e.target.tagName === 'TEXTAREA' ||
-    e.target.tagName === 'SELECT'
-  ) {
-    return;
-  }
+    handleKeyboardShortcuts(e);
+  });
 
-  handleKeyboardShortcuts(e);
-});
+  console.log('Event listeners setup complete');
+}
 
 // ===== Initialize =====
-document.addEventListener('DOMContentLoaded', async () => {
+async function initialize() {
+  console.log('Initializing Shellhive...');
+
+  // Initialize DOM elements
+  initializeDOMElements();
+
+  // Setup event listeners
+  setupEventListeners();
+
   // Load settings first
   await loadSettings();
 
@@ -1115,4 +1156,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Create initial terminal session
   createSession('Terminal 1');
-});
+
+  console.log('Shellhive initialized successfully');
+}
+
+// Wait for DOM to be ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initialize);
+} else {
+  initialize();
+}

@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Shellhive default capabilities","local":true,"windows":["main"],"permissions":["core:default","core:event:default","core:event:allow-listen","core:event:allow-emit","shell:allow-open","dialog:default","dialog:allow-open",{"identifier":"core:app:allow-app-show","allow":[]},{"identifier":"core:window:allow-close","allow":[]},{"identifier":"core:window:allow-set-focus","allow":[]}]}}
