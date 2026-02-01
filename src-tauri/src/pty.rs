@@ -18,7 +18,8 @@ pub struct PtySession {
 struct PtySessionData {
     #[allow(dead_code)]
     master: Box<dyn MasterPty + Send>,  // Keep master alive!
-    writer: Box<dyn Write + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,  // Per-session lock for writer
+    child: Arc<Mutex<Option<Box<dyn portable_pty::Child + Send>>>>,
 }
 
 pub struct PtyManager {
@@ -77,7 +78,7 @@ pub async fn create_pty(
     cmd.cwd(&working_dir);
 
     // Spawn command
-    let mut child = pty_pair
+    let child = pty_pair
         .slave
         .spawn_command(cmd)
         .map_err(|e| {
@@ -86,6 +87,11 @@ pub async fn create_pty(
         })?;
 
     println!("[PTY] Command spawned successfully");
+
+    // Wrap child in Arc<Mutex> for shared ownership
+    let child_handle: Arc<Mutex<Option<Box<dyn portable_pty::Child + Send>>>> =
+        Arc::new(Mutex::new(Some(child)));
+    let child_for_monitor = Arc::clone(&child_handle);
 
     // Get reader for output
     let mut reader = pty_pair
@@ -109,10 +115,14 @@ pub async fn create_pty(
 
     println!("[PTY] Writer taken successfully");
 
+    // Wrap writer in Arc<Mutex> for per-session locking
+    let writer = Arc::new(Mutex::new(writer));
+
     // Store session data - IMPORTANT: master must be kept alive!
     let session_data = PtySessionData {
         master: pty_pair.master,
         writer,
+        child: child_handle,
     };
 
     state.sessions.lock().insert(id.clone(), session_data);
@@ -155,8 +165,11 @@ pub async fn create_pty(
     let app_handle_exit = app.clone();
     thread::spawn(move || {
         println!("[PTY] Child monitor thread started for session {}", session_id_exit);
-        let exit_status = child.wait();
-        println!("[PTY] Child exited for session {}: {:?}", session_id_exit, exit_status);
+        // Take ownership of child from Arc<Mutex>
+        if let Some(mut child) = child_for_monitor.lock().take() {
+            let exit_status = child.wait();
+            println!("[PTY] Child exited for session {}: {:?}", session_id_exit, exit_status);
+        }
         let _ = app_handle_exit.emit(&format!("pty-exit:{}", session_id_exit), ());
     });
 
@@ -170,28 +183,32 @@ pub async fn write_pty(
     session_id: String,
     data: String,
 ) -> Result<(), String> {
-    let mut sessions = state.sessions.lock();
+    // Get writer Arc with minimal global lock time
+    let writer = {
+        let sessions = state.sessions.lock();
+        sessions.get(&session_id)
+            .map(|s| Arc::clone(&s.writer))
+            .ok_or_else(|| format!("Session not found: {}", session_id))?
+    };
+    // Global sessions lock released here
 
-    if let Some(session_data) = sessions.get_mut(&session_id) {
-        session_data.writer
-            .write_all(data.as_bytes())
-            .map_err(|e| {
-                println!("[PTY] Write error for session {}: {}", session_id, e);
-                format!("Failed to write to PTY: {}", e)
-            })?;
+    // Perform I/O with per-session lock only
+    let mut writer_guard = writer.lock();
+    writer_guard
+        .write_all(data.as_bytes())
+        .map_err(|e| {
+            println!("[PTY] Write error for session {}: {}", session_id, e);
+            format!("Failed to write to PTY: {}", e)
+        })?;
 
-        session_data.writer
-            .flush()
-            .map_err(|e| {
-                println!("[PTY] Flush error for session {}: {}", session_id, e);
-                format!("Failed to flush PTY: {}", e)
-            })?;
+    writer_guard
+        .flush()
+        .map_err(|e| {
+            println!("[PTY] Flush error for session {}: {}", session_id, e);
+            format!("Failed to flush PTY: {}", e)
+        })?;
 
-        Ok(())
-    } else {
-        println!("[PTY] Session not found: {}", session_id);
-        Err(format!("Session not found: {}", session_id))
-    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -201,23 +218,26 @@ pub async fn resize_pty(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock();
+    // Perform resize while holding lock for minimal time
+    let resize_result = {
+        let sessions = state.sessions.lock();
 
-    if let Some(session_data) = sessions.get(&session_id) {
-        session_data
-            .master
-            .resize(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| format!("Failed to resize PTY: {}", e))?;
+        if let Some(session_data) = sessions.get(&session_id) {
+            session_data
+                .master
+                .resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|e| format!("Failed to resize PTY: {}", e))
+        } else {
+            Err(format!("Session not found: {}", session_id))
+        }
+    }; // Lock is released here
 
-        Ok(())
-    } else {
-        Err(format!("Session not found: {}", session_id))
-    }
+    resize_result
 }
 
 #[tauri::command]
@@ -227,10 +247,33 @@ pub async fn kill_pty(
 ) -> Result<(), String> {
     let mut sessions = state.sessions.lock();
 
-    if sessions.remove(&session_id).is_some() {
+    if let Some(session_data) = sessions.remove(&session_id) {
+        // Explicitly kill the child process if it still exists
+        if let Some(mut child) = session_data.child.lock().take() {
+            if let Err(e) = child.kill() {
+                println!("[PTY] Warning: Failed to kill child process: {}", e);
+            }
+        }
         println!("[PTY] Session {} killed", session_id);
         Ok(())
     } else {
         Err(format!("Session not found: {}", session_id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pty_manager_creation() {
+        let manager = PtyManager::new();
+        assert!(manager.sessions.lock().is_empty());
+    }
+
+    #[test]
+    fn test_pty_manager_default() {
+        let manager = PtyManager::default();
+        assert!(manager.sessions.lock().is_empty());
     }
 }

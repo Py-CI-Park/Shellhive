@@ -193,7 +193,7 @@ async function loadSnippets() {
 
 function renderSnippetList(snippets) {
   snippetList.innerHTML = snippets.map(s => `
-    <li class="sidebar__item" data-snippet-id="${s.id}" data-command="${escapeHtml(s.command)}" data-tooltip="${escapeHtml(s.command)}">
+    <li class="sidebar__item" data-snippet-id="${s.id}" data-command='${JSON.stringify(s.command)}' data-tooltip="${escapeHtml(s.command)}">
       <span class="sidebar__item-icon">></span>
       <span class="sidebar__item-name">${escapeHtml(s.name)}</span>
       <button class="sidebar__item-delete" data-snippet-id="${s.id}">&times;</button>
@@ -201,7 +201,7 @@ function renderSnippetList(snippets) {
   `).join('');
 
   document.querySelectorAll('#snippetList .sidebar__item').forEach(item => {
-    const command = item.dataset.command;
+    const command = JSON.parse(item.dataset.command);
     item.addEventListener('click', (e) => {
       if (!e.target.classList.contains('sidebar__item-delete')) {
         executeSnippet(command);
@@ -286,7 +286,7 @@ async function loadProjects() {
 
 function renderProjectList(projects) {
   projectList.innerHTML = projects.map(p => `
-    <li class="sidebar__item" data-project-id="${p.id}" data-path="${escapeHtml(p.path)}">
+    <li class="sidebar__item" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
       <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
@@ -294,7 +294,7 @@ function renderProjectList(projects) {
   `).join('');
 
   document.querySelectorAll('#projectList .sidebar__item').forEach(item => {
-    const projectPath = item.dataset.path;
+    const projectPath = JSON.parse(item.dataset.path);
     const projectName = item.querySelector('.sidebar__item-name').textContent;
     item.addEventListener('click', (e) => {
       if (!e.target.classList.contains('sidebar__item-delete')) {
@@ -392,6 +392,7 @@ async function createSession(name = null, workingDir = null) {
   let ptySessionId = null;
   let unlistenPtyData = null;
   let unlistenPtyExit = null;
+  let unlistenPtyError = null;
 
   try {
     // Use provided working directory or get user home directory
@@ -418,6 +419,22 @@ async function createSession(name = null, workingDir = null) {
     terminal.writeln('\x1b[32mPTY connected!\x1b[0m');
     terminal.writeln('');
 
+    // Send initial size to PTY
+    setTimeout(async () => {
+      fitAddon.fit();
+      const { cols, rows } = terminal;
+      try {
+        await invoke('resize_pty', {
+          sessionId: ptySessionId,
+          cols,
+          rows
+        });
+        debug('Initial PTY size set to', cols, 'x', rows);
+      } catch (error) {
+        debug('Failed to set initial PTY size:', error);
+      }
+    }, 150);
+
     // Listen for PTY output
     unlistenPtyData = await listen(`pty-data:${ptySessionId}`, (event) => {
       terminal.write(event.payload);
@@ -437,6 +454,20 @@ async function createSession(name = null, workingDir = null) {
         terminal.writeln('\r\n\x1b[33mProcess exited.\x1b[0m');
       }
     });
+
+    // Listen for PTY errors
+    unlistenPtyError = await listen(`pty-error:${ptySessionId}`, (event) => {
+      debug('PTY error received:', event.payload);
+      terminal.writeln(`\r\n\x1b[31m[PTY Error] ${event.payload}\x1b[0m`);
+
+      // Update session status
+      const session = state.sessions.get(id);
+      if (session) {
+        session.status = SESSION_STATUS.EXITED;
+        updateTabStatus(id, SESSION_STATUS.EXITED);
+      }
+    });
+    debug('PTY error listener registered');
 
     // Handle terminal input - send to PTY
     terminal.onData(async (data) => {
@@ -468,6 +499,7 @@ async function createSession(name = null, workingDir = null) {
     ptySessionId,
     unlistenPtyData,
     unlistenPtyExit,
+    unlistenPtyError,
     status: ptySessionId ? SESSION_STATUS.RUNNING : SESSION_STATUS.EXITED,
     projectName: name,
   };
@@ -479,10 +511,32 @@ async function createSession(name = null, workingDir = null) {
   // Activate session
   activateSession(id);
 
-  // Handle resize
+  // Handle resize with debouncing
+  let resizeTimeout = null;
   const resizeHandler = () => {
     if (state.activeSessionId === id) {
       fitAddon.fit();
+
+      // Debounce PTY resize calls
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+      resizeTimeout = setTimeout(async () => {
+        const session = state.sessions.get(id);
+        if (session && session.ptySessionId && session.status === SESSION_STATUS.RUNNING) {
+          const { cols, rows } = terminal;
+          try {
+            await invoke('resize_pty', {
+              sessionId: session.ptySessionId,
+              cols,
+              rows
+            });
+            debug('PTY resized to', cols, 'x', rows);
+          } catch (error) {
+            debug('Failed to resize PTY:', error);
+          }
+        }
+      }, 100);  // 100ms debounce
     }
   };
   window.addEventListener('resize', resizeHandler);
@@ -611,6 +665,7 @@ async function closeSession(id) {
 
   if (session.unlistenPtyData) session.unlistenPtyData();
   if (session.unlistenPtyExit) session.unlistenPtyExit();
+  if (session.unlistenPtyError) session.unlistenPtyError();
   if (session.resizeHandler) window.removeEventListener('resize', session.resizeHandler);
 
   session.terminal.dispose();
