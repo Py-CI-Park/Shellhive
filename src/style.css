@@ -650,3 +650,263 @@ html, body {
   margin-left: 8px;
   font-family: 'Consolas', 'Courier New', monospace;
 }
+
+/* Tab Filter Indicator */
+.tabs__filter-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  height: 100%;
+}
+
+.tabs__filter-text strong {
+  font-weight: 600;
+}
+
+.tabs__filter-clear {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  opacity: 0.8;
+}
+
+.tabs__filter-clear:hover {
+  opacity: 1;
+}
+
+/* Project Tab Count Badge */
+.sidebar__item-tab-count {
+  background: var(--accent);
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+/* Project Filter Button */
+.sidebar__item-filter {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  border-radius: 3px;
+}
+
+.sidebar__item:hover .sidebar__item-filter {
+  display: block;
+}
+
+.sidebar__item-filter:hover {
+  color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.sidebar__item-filter--active {
+  display: block !important;
+  color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+/* Tab Groups */
+.tab-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-group__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.tab-group__header:hover {
+  background: var(--bg-hover);
+}
+
+.tab-group__collapse {
+  font-size: 8px;
+  width: 12px;
+}
+
+.tab-group__name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-group__count {
+  background: var(--bg-tertiary);
+  padding: 1px 5px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.tab-group__tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-group--collapsed .tab-group__tabs {
+  display: none;
+}
+
+.tab--grouped {
+  border-left: 2px solid transparent;
+  padding-left: 10px;
+}
+
+/* Tab Color Indicator */
+.tab--colored {
+  border-top: 3px solid;
+}
+
+/* Phase 3: Tab Pinned State */
+.tab--pinned {
+  background: var(--bg-tertiary);
+}
+
+.tab--pinned::before {
+  content: '📌';
+  font-size: 10px;
+  margin-right: 4px;
+}
+
+.tab--pinned .tab__close {
+  display: none;
+}
+
+.tab--pinned:hover .tab__close {
+  display: block;
+}
+
+/* Phase 3: Tab Search Overlay */
+.tab-search {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tab-search--visible {
+  display: block;
+}
+
+.tab-search__input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.tab-search__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tab-search__results {
+  margin-top: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.tab-search__result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.tab-search__result:hover,
+.tab-search__result:focus {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.tab-search__result-status {
+  font-size: 8px;
+}
+
+.tab-search__result-name {
+  flex: 1;
+}
+
+.tab-search__result-pin {
+  font-size: 12px;
+}
+
+.tab-search__result-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+
+/* Phase 3: Color picker in context menu */
+.context-menu--submenu {
+  min-width: 140px;
+}
+
+.context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.context-menu__color-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+}
+
+.context-menu__item:hover .context-menu__color-swatch {
+  border-color: var(--text-primary);
+}
+
+.context-menu__color-swatch--none {
+  background: var(--bg-tertiary);
+  position: relative;
+}
+
+.context-menu__color-swatch--none::after {
+  content: '×';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: bold;
+}

@@ -18,6 +18,35 @@ const SESSION_STATUS = {
   EXITED: 'exited'
 };
 
+// TabGroup class for organizing tabs
+class TabGroup {
+  constructor(id, name, options = {}) {
+    this.id = id;
+    this.name = name;
+    this.color = options.color || '#0e639c';
+    this.collapsed = false;
+    this.tabIds = new Set();
+    this.projectId = options.projectId || null;
+    this.isAutoGroup = options.isAutoGroup || false;
+  }
+
+  addTab(sessionId) {
+    this.tabIds.add(sessionId);
+  }
+
+  removeTab(sessionId) {
+    this.tabIds.delete(sessionId);
+  }
+
+  get size() {
+    return this.tabIds.size;
+  }
+
+  isEmpty() {
+    return this.tabIds.size === 0;
+  }
+}
+
 // Terminal themes
 const TERMINAL_THEMES = {
   dark: {
@@ -91,6 +120,17 @@ const TERMINAL_THEMES = {
   },
 };
 
+// Available tab colors
+const TAB_COLORS = [
+  { name: 'Red', value: '#f14c4c' },
+  { name: 'Orange', value: '#cca700' },
+  { name: 'Yellow', value: '#e5e510' },
+  { name: 'Green', value: '#0dbc79' },
+  { name: 'Blue', value: '#2472c8' },
+  { name: 'Purple', value: '#bc3fbc' },
+  { name: 'None', value: null }
+];
+
 // State
 const state = {
   sessions: new Map(),
@@ -105,6 +145,15 @@ const state = {
     enableLogging: true,
   },
   snippets: [],
+  activeProjectFilter: null,
+  projectTabMap: new Map(),
+  tabGroups: new Map(),       // Map<groupId, TabGroup>
+  tabToGroup: new Map(),      // Map<sessionId, groupId>
+  autoGroupByProject: true,   // Auto-group tabs by project
+  groupCounter: 0,            // Counter for generating group IDs
+  closedTabs: [],             // Store last 10 closed tabs
+  tabSearchVisible: false,    // Tab search overlay state
+  tabSearchQuery: '',         // Current search query
 };
 
 // DOM Elements - will be initialized after DOM loads
@@ -289,23 +338,40 @@ function renderProjectList(projects) {
     <li class="sidebar__item" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
+      <button class="sidebar__item-filter" data-project-id="${p.id}" title="Filter tabs">🔍</button>
       <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
     </li>
   `).join('');
 
   document.querySelectorAll('#projectList .sidebar__item').forEach(item => {
+    const projectId = item.dataset.projectId;
     const projectPath = JSON.parse(item.dataset.path);
     const projectName = item.querySelector('.sidebar__item-name').textContent;
+
     item.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('sidebar__item-delete')) {
-        createSessionInDirectory(projectPath, projectName);
+      if (!e.target.classList.contains('sidebar__item-delete') &&
+          !e.target.classList.contains('sidebar__item-filter')) {
+        createSessionInDirectory(projectPath, projectName, projectId);
       }
     });
+
+    const filterBtn = item.querySelector('.sidebar__item-filter');
+    filterBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.activeProjectFilter === projectId) {
+        clearProjectFilter();
+      } else {
+        setProjectFilter(projectId);
+      }
+    });
+
     const deleteBtn = item.querySelector('.sidebar__item-delete');
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       await removeProject(deleteBtn.dataset.projectId);
     });
+
+    updateProjectTabCount(projectId);
   });
 }
 
@@ -342,7 +408,7 @@ function hideAddProjectModal() {
 
 // ===== Session Functions =====
 
-async function createSession(name = null, workingDir = null) {
+async function createSession(name = null, workingDir = null, projectId = null) {
   const id = `session-${++state.sessionCounter}`;
   const sessionName = name || `Terminal ${state.sessionCounter}`;
   debug('Creating session:', id, sessionName);
@@ -502,8 +568,19 @@ async function createSession(name = null, workingDir = null) {
     unlistenPtyError,
     status: ptySessionId ? SESSION_STATUS.RUNNING : SESSION_STATUS.EXITED,
     projectName: name,
+    projectId: projectId,
+    projectPath: workingDir,
+    pinned: false,    // Phase 3: Tab pinning
+    color: null,      // Phase 3: Tab color
   };
   state.sessions.set(id, session);
+
+  // Link session to project
+  if (projectId) {
+    linkSessionToProject(id, projectId);
+    // Auto-group by project if enabled
+    autoGroupSessionByProject(id, projectId, name);
+  }
 
   // Create tab
   createTab(session);
@@ -655,6 +732,17 @@ async function closeSession(id) {
   const session = state.sessions.get(id);
   if (!session) return;
 
+  // Phase 3: Store closed tab info for restoration (but not for pinned tabs)
+  if (!session.pinned) {
+    storeClosedTabInfo(session);
+  }
+
+  // Remove from group
+  removeTabFromGroup(id);
+
+  // Unlink from project
+  unlinkSessionFromProject(id);
+
   if (session.ptySessionId) {
     try {
       await invoke('kill_pty', { sessionId: session.ptySessionId });
@@ -686,8 +774,8 @@ async function closeSession(id) {
   }
 }
 
-async function createSessionInDirectory(path, projectName) {
-  await createSession(`${projectName}`, path);
+async function createSessionInDirectory(path, projectName, projectId = null) {
+  await createSession(`${projectName}`, path, projectId);
 }
 
 // Tab drag and drop handlers
@@ -746,20 +834,48 @@ function showTabContextMenu(e, sessionId) {
   menu.className = 'context-menu';
   menu.style.left = `${e.clientX}px`;
   menu.style.top = `${e.clientY}px`;
+
+  const session = state.sessions.get(sessionId);
+  const isInGroup = state.tabToGroup.has(sessionId);
+  const isPinned = session ? session.pinned : false;
+
   menu.innerHTML = `
     <div class="context-menu__item" data-action="duplicate">Duplicate</div>
-    <div class="context-menu__item" data-action="close">Close</div>
+    <div class="context-menu__item" data-action="${isPinned ? 'unpin' : 'pin'}">${isPinned ? 'Unpin Tab' : 'Pin Tab'}</div>
+    <div class="context-menu__item" data-action="set-color">Set Color ▶</div>
     <div class="context-menu__separator"></div>
+    <div class="context-menu__item" data-action="close">Close</div>
     <div class="context-menu__item" data-action="close-others">Close Other Tabs</div>
+    <div class="context-menu__separator"></div>
+    <div class="context-menu__item" data-action="restore-closed">Restore Last Closed Tab</div>
+    <div class="context-menu__separator"></div>
+    <div class="context-menu__item" data-action="create-group">Create Group from Tab</div>
+    ${isInGroup ? '<div class="context-menu__item" data-action="remove-from-group">Remove from Group</div>' : ''}
   `;
 
   menu.addEventListener('click', async (e) => {
     const action = e.target.dataset.action;
     if (!action) return;
+
+    if (action === 'set-color') {
+      // Don't close menu, show color picker submenu
+      showColorPickerMenu(e, sessionId, menu);
+      return;
+    }
+
     switch (action) {
       case 'duplicate': await duplicateSession(sessionId); break;
+      case 'pin': togglePinTab(sessionId); break;
+      case 'unpin': togglePinTab(sessionId); break;
       case 'close': await closeSession(sessionId); break;
       case 'close-others': await closeOtherSessions(sessionId); break;
+      case 'restore-closed': await restoreLastClosedTab(); break;
+      case 'create-group': {
+        const groupName = prompt('Enter group name:');
+        if (groupName) createTabGroup(groupName, [sessionId]);
+        break;
+      }
+      case 'remove-from-group': removeTabFromGroup(sessionId); break;
     }
     menu.remove();
   });
@@ -788,6 +904,621 @@ async function closeOtherSessions(keepSessionId) {
   }
 }
 
+// ===== Phase 3: Advanced Tab Management Functions =====
+
+// Toggle pin state of a tab
+function togglePinTab(sessionId) {
+  const session = state.sessions.get(sessionId);
+  if (!session) return;
+
+  session.pinned = !session.pinned;
+
+  // Update tab UI
+  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
+  if (tab) {
+    tab.classList.toggle('tab--pinned', session.pinned);
+
+    // Move pinned tabs to the front
+    if (session.pinned) {
+      const tabsList = document.getElementById('tabsList');
+      const firstUnpinnedTab = tabsList.querySelector('.tab:not(.tab--pinned):not(.tab-group)');
+      if (firstUnpinnedTab) {
+        tabsList.insertBefore(tab, firstUnpinnedTab);
+      }
+    }
+  }
+
+  debug('Tab pinned state toggled:', sessionId, session.pinned);
+}
+
+// Set tab color
+function setTabColor(sessionId, color) {
+  const session = state.sessions.get(sessionId);
+  if (!session) return;
+
+  session.color = color;
+
+  // Update tab UI
+  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
+  if (tab) {
+    if (color) {
+      tab.style.borderTopColor = color;
+      tab.classList.add('tab--colored');
+    } else {
+      tab.style.borderTopColor = '';
+      tab.classList.remove('tab--colored');
+    }
+  }
+
+  debug('Tab color set:', sessionId, color);
+}
+
+// Show color picker submenu in context menu
+function showColorPickerMenu(e, sessionId, parentMenu) {
+  // Remove existing color picker if any
+  const existingPicker = document.getElementById('colorPickerMenu');
+  if (existingPicker) existingPicker.remove();
+
+  const colorPicker = document.createElement('div');
+  colorPicker.id = 'colorPickerMenu';
+  colorPicker.className = 'context-menu context-menu--submenu';
+
+  const parentRect = parentMenu.getBoundingClientRect();
+  colorPicker.style.left = `${parentRect.right}px`;
+  colorPicker.style.top = `${e.clientY}px`;
+
+  const colorSwatches = TAB_COLORS.map(color => {
+    if (color.value === null) {
+      return `<div class="context-menu__item" data-color="null">
+        <span class="context-menu__color-swatch context-menu__color-swatch--none"></span>
+        <span>${color.name}</span>
+      </div>`;
+    }
+    return `<div class="context-menu__item" data-color="${color.value}">
+      <span class="context-menu__color-swatch" style="background-color: ${color.value}"></span>
+      <span>${color.name}</span>
+    </div>`;
+  }).join('');
+
+  colorPicker.innerHTML = colorSwatches;
+
+  colorPicker.addEventListener('click', (e) => {
+    const colorValue = e.target.closest('.context-menu__item')?.dataset.color;
+    if (colorValue !== undefined) {
+      setTabColor(sessionId, colorValue === 'null' ? null : colorValue);
+      parentMenu.remove();
+      colorPicker.remove();
+    }
+  });
+
+  document.body.appendChild(colorPicker);
+
+  // Remove when clicking outside
+  setTimeout(() => {
+    const closeColorPicker = (e) => {
+      if (!colorPicker.contains(e.target) && !parentMenu.contains(e.target)) {
+        colorPicker.remove();
+        document.removeEventListener('click', closeColorPicker);
+      }
+    };
+    document.addEventListener('click', closeColorPicker);
+  }, 0);
+}
+
+// Store info about closed tab
+function storeClosedTabInfo(session) {
+  const closedTab = {
+    name: session.name,
+    projectId: session.projectId,
+    projectPath: session.projectPath,
+    projectName: session.projectName,
+    closedAt: new Date()
+  };
+
+  state.closedTabs.unshift(closedTab);
+
+  // Keep only last 10
+  if (state.closedTabs.length > 10) {
+    state.closedTabs.pop();
+  }
+
+  debug('Closed tab stored:', closedTab.name);
+}
+
+// Restore the last closed tab
+async function restoreLastClosedTab() {
+  if (state.closedTabs.length === 0) {
+    debug('No closed tabs to restore');
+    return;
+  }
+
+  const closedTab = state.closedTabs.shift();
+
+  // Recreate session
+  if (closedTab.projectPath) {
+    await createSession(closedTab.name, closedTab.projectPath, closedTab.projectId);
+  } else {
+    await createSession(closedTab.name);
+  }
+
+  debug('Restored tab:', closedTab.name);
+}
+
+// Show tab search overlay
+function showTabSearch() {
+  state.tabSearchVisible = true;
+
+  let searchEl = document.getElementById('tabSearch');
+  if (!searchEl) {
+    searchEl = document.createElement('div');
+    searchEl.id = 'tabSearch';
+    searchEl.className = 'tab-search';
+    searchEl.innerHTML = `
+      <input type="text" class="tab-search__input" id="tabSearchInput" placeholder="Search tabs..." autocomplete="off">
+      <div class="tab-search__results" id="tabSearchResults"></div>
+    `;
+    document.querySelector('.main').insertBefore(searchEl, document.querySelector('.tabs'));
+
+    const input = document.getElementById('tabSearchInput');
+    input.addEventListener('input', (e) => filterTabsByQuery(e.target.value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        hideTabSearch();
+      } else if (e.key === 'Enter') {
+        const firstResult = document.querySelector('.tab-search__result');
+        if (firstResult) {
+          activateSession(firstResult.dataset.sessionId);
+          hideTabSearch();
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const results = document.querySelectorAll('.tab-search__result');
+        if (results.length > 0) {
+          results[0].focus();
+        }
+      }
+    });
+  }
+
+  searchEl.classList.add('tab-search--visible');
+  const input = document.getElementById('tabSearchInput');
+  input.focus();
+  input.value = '';
+  filterTabsByQuery('');
+
+  debug('Tab search opened');
+}
+
+// Hide tab search overlay
+function hideTabSearch() {
+  state.tabSearchVisible = false;
+  const searchEl = document.getElementById('tabSearch');
+  if (searchEl) {
+    searchEl.classList.remove('tab-search--visible');
+  }
+
+  debug('Tab search closed');
+}
+
+// Filter tabs by search query
+function filterTabsByQuery(query) {
+  const resultsEl = document.getElementById('tabSearchResults');
+  if (!resultsEl) return;
+
+  const lowerQuery = query.toLowerCase();
+  const matches = [];
+
+  state.sessions.forEach((session, sessionId) => {
+    if (!query || session.name.toLowerCase().includes(lowerQuery)) {
+      matches.push(session);
+    }
+  });
+
+  resultsEl.innerHTML = matches.map(session => `
+    <div class="tab-search__result" data-session-id="${session.id}" tabindex="0">
+      <span class="tab-search__result-status tab__status--${session.status}">${getStatusIcon(session.status)}</span>
+      <span class="tab-search__result-name">${escapeHtml(session.name)}</span>
+      ${session.pinned ? '<span class="tab-search__result-pin">📌</span>' : ''}
+      ${session.color ? `<span class="tab-search__result-color" style="background-color: ${session.color}"></span>` : ''}
+    </div>
+  `).join('');
+
+  // Add click and keyboard handlers
+  resultsEl.querySelectorAll('.tab-search__result').forEach((result, index) => {
+    result.addEventListener('click', () => {
+      activateSession(result.dataset.sessionId);
+      hideTabSearch();
+    });
+
+    result.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        activateSession(result.dataset.sessionId);
+        hideTabSearch();
+      } else if (e.key === 'Escape') {
+        hideTabSearch();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = result.nextElementSibling;
+        if (next) next.focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = result.previousElementSibling;
+        if (prev) {
+          prev.focus();
+        } else {
+          document.getElementById('tabSearchInput').focus();
+        }
+      }
+    });
+  });
+}
+
+// ===== Tab Grouping Functions =====
+
+// Create a new tab group
+function createTabGroup(name, tabIds = [], options = {}) {
+  const id = `group-${++state.groupCounter}`;
+  const group = new TabGroup(id, name, options);
+
+  tabIds.forEach(sessionId => {
+    group.addTab(sessionId);
+    state.tabToGroup.set(sessionId, id);
+  });
+
+  state.tabGroups.set(id, group);
+  renderTabGroups();
+  return group;
+}
+
+// Add a tab to an existing group
+function addTabToGroup(sessionId, groupId) {
+  // Remove from current group if exists
+  const currentGroupId = state.tabToGroup.get(sessionId);
+  if (currentGroupId) {
+    removeTabFromGroup(sessionId, false);
+  }
+
+  const group = state.tabGroups.get(groupId);
+  if (group) {
+    group.addTab(sessionId);
+    state.tabToGroup.set(sessionId, groupId);
+    renderTabGroups();
+  }
+}
+
+// Remove a tab from its group
+function removeTabFromGroup(sessionId, rerender = true) {
+  const groupId = state.tabToGroup.get(sessionId);
+  if (!groupId) return;
+
+  const group = state.tabGroups.get(groupId);
+  if (group) {
+    group.removeTab(sessionId);
+    state.tabToGroup.delete(sessionId);
+
+    // Remove empty auto-groups
+    if (group.isEmpty() && group.isAutoGroup) {
+      state.tabGroups.delete(groupId);
+    }
+  }
+
+  if (rerender) renderTabGroups();
+}
+
+// Toggle group collapse state
+function toggleGroupCollapse(groupId) {
+  const group = state.tabGroups.get(groupId);
+  if (group) {
+    group.collapsed = !group.collapsed;
+    renderTabGroups();
+  }
+}
+
+// Auto-group a session by its project
+function autoGroupSessionByProject(sessionId, projectId, projectName) {
+  if (!state.autoGroupByProject || !projectId) return;
+
+  // Find existing group for this project
+  let existingGroupId = null;
+  state.tabGroups.forEach((group, id) => {
+    if (group.projectId === projectId) {
+      existingGroupId = id;
+    }
+  });
+
+  if (existingGroupId) {
+    addTabToGroup(sessionId, existingGroupId);
+  } else {
+    // Create new group for this project
+    createTabGroup(projectName || 'Project', [sessionId], {
+      projectId: projectId,
+      isAutoGroup: true,
+      color: getProjectColor(projectId)
+    });
+  }
+}
+
+// Get a consistent color for a project
+function getProjectColor(projectId) {
+  const colors = ['#0e639c', '#6a9955', '#ce9178', '#dcdcaa', '#9cdcfe', '#c586c0', '#4ec9b0'];
+  const hash = projectId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+}
+
+// Delete a tab group (ungroups all tabs)
+function deleteTabGroup(groupId) {
+  const group = state.tabGroups.get(groupId);
+  if (!group) return;
+
+  group.tabIds.forEach(sessionId => {
+    state.tabToGroup.delete(sessionId);
+  });
+
+  state.tabGroups.delete(groupId);
+  renderTabGroups();
+}
+
+// Render tabs with grouping support
+function renderTabGroups() {
+  const tabsList = document.getElementById('tabsList');
+  if (!tabsList) return;
+
+  // Clear current tabs
+  tabsList.innerHTML = '';
+
+  // Get grouped and ungrouped tabs
+  const groupedSessionIds = new Set(state.tabToGroup.keys());
+  const ungroupedSessions = [];
+
+  state.sessions.forEach((session, sessionId) => {
+    if (!groupedSessionIds.has(sessionId)) {
+      ungroupedSessions.push(session);
+    }
+  });
+
+  // Phase 3: Separate pinned and unpinned ungrouped tabs
+  const pinnedSessions = ungroupedSessions.filter(s => s.pinned);
+  const unpinnedSessions = ungroupedSessions.filter(s => !s.pinned);
+
+  // Render groups first
+  state.tabGroups.forEach((group, groupId) => {
+    const groupElement = createGroupElement(group);
+    tabsList.appendChild(groupElement);
+  });
+
+  // Phase 3: Render pinned tabs first (at the front)
+  pinnedSessions.forEach(session => {
+    const tab = createTabElement(session);
+    tabsList.appendChild(tab);
+  });
+
+  // Render unpinned tabs
+  unpinnedSessions.forEach(session => {
+    const tab = createTabElement(session);
+    tabsList.appendChild(tab);
+  });
+
+  // Apply filter if active
+  renderFilteredTabs();
+}
+
+// Create group container element
+function createGroupElement(group) {
+  const groupEl = document.createElement('div');
+  groupEl.className = `tab-group ${group.collapsed ? 'tab-group--collapsed' : ''}`;
+  groupEl.dataset.groupId = group.id;
+
+  // Group header
+  const header = document.createElement('div');
+  header.className = 'tab-group__header';
+  header.style.borderLeftColor = group.color;
+  header.innerHTML = `
+    <span class="tab-group__collapse">${group.collapsed ? '▶' : '▼'}</span>
+    <span class="tab-group__name">${escapeHtml(group.name)}</span>
+    <span class="tab-group__count">${group.size}</span>
+  `;
+
+  header.addEventListener('click', () => toggleGroupCollapse(group.id));
+
+  // Group tabs container
+  const tabsContainer = document.createElement('div');
+  tabsContainer.className = 'tab-group__tabs';
+
+  if (!group.collapsed) {
+    group.tabIds.forEach(sessionId => {
+      const session = state.sessions.get(sessionId);
+      if (session) {
+        const tab = createTabElement(session, true);
+        tabsContainer.appendChild(tab);
+      }
+    });
+  }
+
+  groupEl.appendChild(header);
+  groupEl.appendChild(tabsContainer);
+
+  return groupEl;
+}
+
+// Create tab element (extracted from createTab for reuse)
+function createTabElement(session, isGrouped = false) {
+  const tab = document.createElement('div');
+  tab.className = `tab ${isGrouped ? 'tab--grouped' : ''}`;
+  tab.dataset.sessionId = session.id;
+  tab.draggable = true;
+
+  if (session.id === state.activeSessionId) {
+    tab.classList.add('tab--active');
+  }
+
+  // Phase 3: Add pinned state
+  if (session.pinned) {
+    tab.classList.add('tab--pinned');
+  }
+
+  // Phase 3: Add color indicator if session has color
+  if (session.color) {
+    tab.style.borderTopColor = session.color;
+    tab.classList.add('tab--colored');
+  }
+
+  const statusIcon = getStatusIcon(session.status);
+  tab.innerHTML = `
+    <span class="tab__status tab__status--${session.status}">${statusIcon}</span>
+    <span class="tab__title">${escapeHtml(session.name)}</span>
+    <button class="tab__close">&times;</button>
+  `;
+
+  tab.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('tab__close')) {
+      activateSession(session.id);
+    }
+  });
+
+  tab.querySelector('.tab__close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeSession(session.id);
+  });
+
+  // Drag handlers
+  tab.addEventListener('dragstart', handleTabDragStart);
+  tab.addEventListener('dragenter', handleTabDragEnter);
+  tab.addEventListener('dragover', handleTabDragOver);
+  tab.addEventListener('dragleave', handleTabDragLeave);
+  tab.addEventListener('drop', handleTabDrop);
+  tab.addEventListener('dragend', handleTabDragEnd);
+
+  tab.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showTabContextMenu(e, session.id);
+  });
+
+  return tab;
+}
+
+// ===== Project Filtering Functions =====
+
+function setProjectFilter(projectId) {
+  state.activeProjectFilter = projectId;
+  renderFilteredTabs();
+  updateFilterIndicator();
+  updateProjectFilterButtons();
+}
+
+function clearProjectFilter() {
+  state.activeProjectFilter = null;
+  renderFilteredTabs();
+  updateFilterIndicator();
+  updateProjectFilterButtons();
+}
+
+function renderFilteredTabs() {
+  const tabs = document.querySelectorAll('.tab');
+  const groups = document.querySelectorAll('.tab-group');
+
+  tabs.forEach(tab => {
+    const sessionId = tab.dataset.sessionId;
+    const session = state.sessions.get(sessionId);
+    if (!state.activeProjectFilter) {
+      tab.style.display = '';
+    } else if (session && session.projectId === state.activeProjectFilter) {
+      tab.style.display = '';
+    } else {
+      tab.style.display = 'none';
+    }
+  });
+
+  // Handle group visibility
+  groups.forEach(groupEl => {
+    const groupId = groupEl.dataset.groupId;
+    const group = state.tabGroups.get(groupId);
+    if (!group) return;
+
+    if (!state.activeProjectFilter) {
+      groupEl.style.display = '';
+    } else if (group.projectId === state.activeProjectFilter) {
+      groupEl.style.display = '';
+    } else {
+      groupEl.style.display = 'none';
+    }
+  });
+}
+
+function linkSessionToProject(sessionId, projectId) {
+  if (!projectId) return;
+  if (!state.projectTabMap.has(projectId)) {
+    state.projectTabMap.set(projectId, new Set());
+  }
+  state.projectTabMap.get(projectId).add(sessionId);
+  updateProjectTabCount(projectId);
+}
+
+function unlinkSessionFromProject(sessionId) {
+  const session = state.sessions.get(sessionId);
+  if (session && session.projectId) {
+    const projectId = session.projectId;
+    const tabSet = state.projectTabMap.get(projectId);
+    if (tabSet) {
+      tabSet.delete(sessionId);
+      updateProjectTabCount(projectId);
+    }
+  }
+}
+
+function updateProjectTabCount(projectId) {
+  const projectItem = document.querySelector(`[data-project-id="${projectId}"]`);
+  if (!projectItem) return;
+
+  const tabSet = state.projectTabMap.get(projectId);
+  const count = tabSet ? tabSet.size : 0;
+
+  let badge = projectItem.querySelector('.sidebar__item-tab-count');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'sidebar__item-tab-count';
+      projectItem.insertBefore(badge, projectItem.querySelector('.sidebar__item-filter'));
+    }
+    badge.textContent = count;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+function updateFilterIndicator() {
+  let indicator = document.querySelector('.tabs__filter-indicator');
+  if (state.activeProjectFilter) {
+    const projectItem = document.querySelector(`[data-project-id="${state.activeProjectFilter}"]`);
+    const projectName = projectItem ? projectItem.querySelector('.sidebar__item-name').textContent : 'Project';
+
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.className = 'tabs__filter-indicator';
+      indicator.innerHTML = `
+        <span class="tabs__filter-text">Filtered: <strong></strong></span>
+        <button class="tabs__filter-clear">&times;</button>
+      `;
+      indicator.querySelector('.tabs__filter-clear').addEventListener('click', clearProjectFilter);
+      const tabsContainer = document.getElementById('tabsContainer');
+      tabsContainer.insertBefore(indicator, tabsContainer.firstChild);
+    }
+    indicator.querySelector('strong').textContent = projectName;
+  } else if (indicator) {
+    indicator.remove();
+  }
+}
+
+function updateProjectFilterButtons() {
+  document.querySelectorAll('.sidebar__item-filter').forEach(btn => {
+    const projectId = btn.dataset.projectId;
+    if (state.activeProjectFilter === projectId) {
+      btn.classList.add('sidebar__item-filter--active');
+    } else {
+      btn.classList.remove('sidebar__item-filter--active');
+    }
+  });
+}
+
 function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && e.key === 't') {
     e.preventDefault();
@@ -796,7 +1527,25 @@ function handleKeyboardShortcuts(e) {
   }
   if (e.ctrlKey && e.key === 'w') {
     e.preventDefault();
-    if (state.activeSessionId) closeSession(state.activeSessionId);
+    if (state.activeSessionId) {
+      const session = state.sessions.get(state.activeSessionId);
+      // Phase 3: Don't close pinned tabs with Ctrl+W
+      if (session && !session.pinned) {
+        closeSession(state.activeSessionId);
+      }
+    }
+    return;
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    e.preventDefault();
+    // Phase 3: Restore last closed tab (Ctrl+Shift+T)
+    restoreLastClosedTab();
+    return;
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+    e.preventDefault();
+    // Phase 3: Show tab search (Ctrl+Shift+F)
+    showTabSearch();
     return;
   }
   if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
