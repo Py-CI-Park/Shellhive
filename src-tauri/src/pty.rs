@@ -160,17 +160,46 @@ pub async fn create_pty(
         println!("[PTY] Reader thread ended for session {}", session_id);
     });
 
-    // Spawn thread to monitor child process exit
+    // Spawn thread to monitor child process exit using polling
     let session_id_exit = id.clone();
     let app_handle_exit = app.clone();
     thread::spawn(move || {
         println!("[PTY] Child monitor thread started for session {}", session_id_exit);
-        // Take ownership of child from Arc<Mutex>
-        if let Some(mut child) = child_for_monitor.lock().take() {
-            let exit_status = child.wait();
-            println!("[PTY] Child exited for session {}: {:?}", session_id_exit, exit_status);
+
+        loop {
+            // Check if child still exists and poll its status
+            let should_exit = {
+                let mut guard = child_for_monitor.lock();
+                if let Some(ref mut child) = *guard {
+                    // try_wait returns Ok(Some(status)) if exited, Ok(None) if still running
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            println!("[PTY] Child exited for session {}: {:?}", session_id_exit, status);
+                            true
+                        }
+                        Ok(None) => false, // Still running
+                        Err(e) => {
+                            println!("[PTY] Error checking child status for session {}: {}", session_id_exit, e);
+                            true
+                        }
+                    }
+                } else {
+                    // Child was taken (killed externally)
+                    println!("[PTY] Child was killed externally for session {}", session_id_exit);
+                    true
+                }
+            };
+
+            if should_exit {
+                let _ = app_handle_exit.emit(&format!("pty-exit:{}", session_id_exit), ());
+                break;
+            }
+
+            // Poll every 100ms
+            thread::sleep(std::time::Duration::from_millis(100));
         }
-        let _ = app_handle_exit.emit(&format!("pty-exit:{}", session_id_exit), ());
+
+        println!("[PTY] Child monitor thread ended for session {}", session_id_exit);
     });
 
     println!("[PTY] Session {} created successfully", id);
