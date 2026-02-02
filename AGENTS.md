@@ -120,6 +120,28 @@ shellhive/
 | `bugfix/*` | 버그 수정 |
 | `docs/*` | 문서 작업 |
 
+### 변경 로그 작성 가이드
+
+모든 커밋은 [변경 로그](docs/change_log/change_log.md)에 기록되어야 합니다.
+
+**작성 규칙:**
+
+1. 커밋 후 `docs/change_log/change_log.md` 파일 업데이트
+2. 날짜별로 그룹화하여 기록
+3. 커밋 해시 포함
+4. 카테고리 분류: Added, Changed, Fixed, Documentation, Security
+
+**예시:**
+```markdown
+#### fix: 버그 수정 설명
+
+**커밋**: `abc1234`
+
+##### 수정됨 (Fixed)
+
+- 문제 설명 및 해결 내용
+```
+
 ---
 
 ## 핵심 모듈 가이드

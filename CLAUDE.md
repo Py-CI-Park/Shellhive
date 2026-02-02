@@ -75,11 +75,13 @@ cd src-tauri && cargo clippy
 ## 현재 개발 상태
 
 - [x] Phase 0: 프로젝트 초기화 및 문서 작성
-- [ ] Phase 1: 기본 Tauri 구조 + xterm.js 통합
-- [ ] Phase 2: PTY 연동
-- [ ] Phase 3: 프로젝트 관리 UI
-- [ ] Phase 4: 멀티 세션 탭
-- [ ] Phase 5: 고급 기능
+- [x] Phase 1: 기본 Tauri 구조 + xterm.js 통합
+- [x] Phase 2: PTY 연동
+- [x] Phase 3: 프로젝트 관리 UI
+- [x] Phase 4: 멀티 세션 탭
+- [x] Phase 5: 고급 기능
+
+> 상세 변경 내역: [변경 로그](docs/change_log/change_log.md)
 
 ---
 
@@ -113,6 +115,7 @@ tokio = { version = "1", features = ["full"] }
 2. **JavaScript**: ES6+, 세미콜론 사용
 3. **커밋**: 한글 메시지
 4. **브랜치**: `feature/*`, `bugfix/*`, `docs/*`
+5. **변경 로그**: 커밋 시 [change_log.md](docs/change_log/change_log.md) 업데이트 필수
 
 ---
 
