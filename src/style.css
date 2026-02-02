@@ -201,6 +201,7 @@ html, body {
   flex: 1;
   overflow-x: auto;
   height: 100%;
+  align-items: stretch;
 }
 
 .tabs__list::-webkit-scrollbar {
@@ -734,22 +735,29 @@ html, body {
 }
 
 /* Tab Groups */
+/* Tab Group - 가로 레이아웃으로 수정 */
 .tab-group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
+  height: 100%;
 }
 
 .tab-group__header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  background: var(--bg-secondary);
+  gap: 4px;
+  padding: 0 8px;
+  background: var(--bg-tertiary);
   border-left: 3px solid var(--accent);
+  border-right: 1px solid var(--border);
   cursor: pointer;
   font-size: 11px;
   color: var(--text-secondary);
   user-select: none;
+  min-width: 80px;
+  max-width: 150px;
+  height: 100%;
 }
 
 .tab-group__header:hover {
@@ -759,6 +767,7 @@ html, body {
 .tab-group__collapse {
   font-size: 8px;
   width: 12px;
+  flex-shrink: 0;
 }
 
 .tab-group__name {
@@ -769,15 +778,18 @@ html, body {
 }
 
 .tab-group__count {
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   padding: 1px 5px;
   border-radius: 8px;
   font-size: 10px;
+  flex-shrink: 0;
 }
 
 .tab-group__tabs {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
+  height: 100%;
 }
 
 .tab-group--collapsed .tab-group__tabs {
@@ -785,8 +797,8 @@ html, body {
 }
 
 .tab--grouped {
-  border-left: 2px solid transparent;
-  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  margin-left: 0;
 }
 
 /* Tab Color Indicator */

@@ -2096,7 +2096,10 @@ function createGroupElement(group) {
     <span class="tab-group__count">${group.size}</span>
   `;
 
-  header.addEventListener('click', () => toggleGroupCollapse(group.id));
+  header.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleGroupCollapse(group.id);
+  });
 
   // Group tabs container
   const tabsContainer = document.createElement('div');
