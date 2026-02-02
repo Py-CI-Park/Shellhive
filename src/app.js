@@ -39,6 +39,52 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+// Confirm dialog
+function showConfirmDialog(title, message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-dialog-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-dialog">
+        <div class="confirm-dialog__header">
+          <h3 class="confirm-dialog__title">${escapeHtml(title)}</h3>
+        </div>
+        <div class="confirm-dialog__body">
+          <p class="confirm-dialog__message">${escapeHtml(message)}</p>
+        </div>
+        <div class="confirm-dialog__footer">
+          <button class="btn btn--secondary confirm-dialog__cancel">취소</button>
+          <button class="btn btn--danger confirm-dialog__confirm">삭제</button>
+        </div>
+      </div>
+    `;
+
+    const closeDialog = (result) => {
+      overlay.classList.add('confirm-dialog-overlay--hiding');
+      setTimeout(() => overlay.remove(), 200);
+      resolve(result);
+    };
+
+    overlay.querySelector('.confirm-dialog__cancel').addEventListener('click', () => closeDialog(false));
+    overlay.querySelector('.confirm-dialog__confirm').addEventListener('click', () => closeDialog(true));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeDialog(false);
+    });
+
+    // ESC key to cancel
+    const handleKeydown = (e) => {
+      if (e.key === 'Escape') {
+        closeDialog(false);
+        document.removeEventListener('keydown', handleKeydown);
+      }
+    };
+    document.addEventListener('keydown', handleKeydown);
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('.confirm-dialog__cancel').focus();
+  });
+}
+
 // Debug logging
 function debug(...args) {
   console.log('[Shellhive]', ...args);
@@ -699,7 +745,14 @@ function setupProjectListeners() {
     const deleteBtn = item.querySelector('.sidebar__item-delete');
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      await removeProject(deleteBtn.dataset.projectId);
+      const confirmed = await showConfirmDialog(
+        '프로젝트 삭제',
+        `"${projectName}" 프로젝트를 삭제하시겠습니까?`
+      );
+      if (confirmed) {
+        await removeProject(deleteBtn.dataset.projectId);
+        showToast('프로젝트가 삭제되었습니다', 'success');
+      }
     });
 
     updateProjectTabCount(projectId);
