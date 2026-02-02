@@ -726,6 +726,37 @@ html, body {
   margin: 4px 0;
 }
 
+/* Context menu submenu styles */
+.context-menu__item--submenu {
+  position: relative;
+}
+
+.context-menu__submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  min-width: 180px;
+  padding: 4px 0;
+  margin-left: 4px;
+  z-index: 2001;
+}
+
+.context-menu__item--submenu:hover .context-menu__submenu {
+  display: block;
+}
+
+.context-menu__preset-icon {
+  font-family: monospace;
+  font-size: 10px;
+  margin-right: 8px;
+  opacity: 0.7;
+}
+
 /* Snippet hover tooltip */
 .sidebar__item[data-tooltip]:hover::after {
   content: attr(data-tooltip);
@@ -1281,6 +1312,16 @@ html, body {
   flex-direction: column;
 }
 
+.terminal-container--maximized {
+  display: flex;
+  flex: 1;
+}
+
+.terminal-container--maximized .terminal-wrapper {
+  flex: 1;
+  display: block !important;
+}
+
 .split-container {
   display: flex;
   flex: 1;
@@ -1315,6 +1356,20 @@ html, body {
   border-color: var(--accent);
 }
 
+.terminal-wrapper--split:hover {
+  border-color: rgba(14, 99, 156, 0.5);
+}
+
+.terminal-wrapper--swap-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.terminal-wrapper--swap-source {
+  outline: 2px solid #e5c07b;
+  outline-offset: -2px;
+}
+
 /* Split Resizer */
 .split-resizer {
   background: var(--border);
@@ -1326,14 +1381,28 @@ html, body {
   background: var(--accent);
 }
 
+.split-resizer--active {
+  background: var(--accent);
+}
+
 .split-resizer--horizontal {
   height: 4px;
   cursor: row-resize;
 }
 
+.split-resizer--horizontal:hover {
+  height: 6px;
+  margin: -1px 0;
+}
+
 .split-resizer--vertical {
   width: 4px;
   cursor: col-resize;
+}
+
+.split-resizer--vertical:hover {
+  width: 6px;
+  margin: 0 -1px;
 }
 
 /* High Contrast specific overrides */
@@ -1374,6 +1443,14 @@ html, body {
   border: 2px solid var(--text-primary);
 }
 
+:root.theme-high-contrast .terminal-wrapper--split.terminal-wrapper--active {
+  border: 3px solid var(--accent);
+}
+
+:root.theme-high-contrast .split-resizer {
+  background: var(--text-primary);
+}
+
 /* Accessibility - Focus Styles */
 .tab:focus,
 .sidebar__item:focus,
@@ -1386,6 +1463,17 @@ html, body {
 .sidebar__item:focus:not(:focus-visible),
 .btn:focus:not(:focus-visible) {
   outline: none;
+}
+
+/* Pane Focus Animation */
+@keyframes pane-focus {
+  0% { box-shadow: 0 0 0 0 var(--accent); }
+  50% { box-shadow: 0 0 0 4px var(--accent); }
+  100% { box-shadow: 0 0 0 0 var(--accent); }
+}
+
+.terminal-wrapper--focus-animation {
+  animation: pane-focus 0.3s ease-out;
 }
 
 /* Reduced motion preference */

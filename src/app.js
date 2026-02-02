@@ -6,6 +6,7 @@ import 'xterm/css/xterm.css';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+
 import { t, setLocale, getLocale, getAvailableLocales } from './i18n/index.js';
 
 // Toast notification system
@@ -252,6 +253,35 @@ const TERMINAL_THEMES = {
   },
 };
 
+// Layout presets for split views
+const LAYOUT_PRESETS = {
+  'two-columns': {
+    name: '2열 (좌/우)',
+    icon: '⬛⬛',
+    create: () => ({ type: 'vertical', ratio: 0.5, count: 2 })
+  },
+  'two-rows': {
+    name: '2행 (상/하)',
+    icon: '⬛\n⬛',
+    create: () => ({ type: 'horizontal', ratio: 0.5, count: 2 })
+  },
+  'three-columns': {
+    name: '3열',
+    icon: '⬛⬛⬛',
+    create: () => ({ type: 'vertical', ratio: 0.33, count: 3 })
+  },
+  'main-sidebar': {
+    name: '메인 + 사이드바',
+    icon: '⬛▐',
+    create: () => ({ type: 'vertical', ratio: 0.7, count: 2 })
+  },
+  'grid-2x2': {
+    name: '2x2 그리드',
+    icon: '⬛⬛\n⬛⬛',
+    create: () => ({ type: 'grid', rows: 2, cols: 2 })
+  }
+};
+
 // Available tab colors
 const TAB_COLORS = [
   { name: 'Red', value: '#f14c4c' },
@@ -292,6 +322,9 @@ const state = {
   searchQuery: '',            // Terminal search query
   splitRoot: null,            // SplitNode root for active layout
   splitMode: false,           // Whether split mode is active
+  tabLayouts: new Map(),      // Map<sessionId, { splitRoot, splitMode }> - per-tab layouts
+  swapTargetSession: null,    // Swap target session ID
+  maximizedSession: null,     // Maximized session ID (for split mode)
 };
 
 // Sidebar collapse state
@@ -394,6 +427,39 @@ function hideSettingsModal() {
 
 // ===== Session State Persistence =====
 
+// Serialize split tree to JSON
+function serializeSplitTree(node) {
+  if (!node) return null;
+  if (node.isLeaf()) {
+    return {
+      type: 'leaf',
+      sessionId: node.sessionId
+    };
+  }
+  return {
+    type: node.type,
+    ratio: node.ratio,
+    children: [
+      serializeSplitTree(node.children[0]),
+      serializeSplitTree(node.children[1])
+    ]
+  };
+}
+
+// Deserialize split tree from JSON
+function deserializeSplitTree(data) {
+  if (!data) return null;
+  const node = new SplitNode(data.type, data.sessionId || null);
+  if (data.type !== 'leaf') {
+    node.ratio = data.ratio || 0.5;
+    node.children = [
+      deserializeSplitTree(data.children[0]),
+      deserializeSplitTree(data.children[1])
+    ];
+  }
+  return node;
+}
+
 async function saveSessionState() {
   try {
     const sessions = [];
@@ -420,10 +486,20 @@ async function saveSessionState() {
       });
     });
 
+    // Serialize tab layouts (split configurations)
+    const tabLayoutsObj = {};
+    state.tabLayouts.forEach((layout, sessionId) => {
+      tabLayoutsObj[sessionId] = {
+        splitMode: layout.splitMode,
+        splitRoot: serializeSplitTree(layout.splitRoot)
+      };
+    });
+
     const sessionState = {
       sessions,
       active_session_id: state.activeSessionId,
       tab_groups: tabGroups,
+      tab_layouts: tabLayoutsObj,
       window_state: {
         width: window.innerWidth,
         height: window.innerHeight,
@@ -501,6 +577,18 @@ async function restoreSessionState() {
 
   // Re-render tab groups
   renderTabGroups();
+
+  // Restore tab layouts (split configurations)
+  if (sessionState.tab_layouts) {
+    Object.entries(sessionState.tab_layouts).forEach(([sessionId, layoutData]) => {
+      if (state.sessions.has(sessionId)) {
+        state.tabLayouts.set(sessionId, {
+          splitMode: layoutData.splitMode,
+          splitRoot: deserializeSplitTree(layoutData.splitRoot)
+        });
+      }
+    });
+  }
 
   // Activate last active session
   if (sessionState.active_session_id) {
@@ -1144,6 +1232,11 @@ function activateSession(id) {
   const session = state.sessions.get(id);
   if (!session) return;
 
+  // Save current tab's layout before switching
+  if (state.activeSessionId && state.activeSessionId !== id) {
+    saveTabLayout(state.activeSessionId);
+  }
+
   state.sessions.forEach((s) => {
     s.wrapper.classList.remove('terminal-wrapper--active');
   });
@@ -1158,6 +1251,10 @@ function activateSession(id) {
   }
 
   state.activeSessionId = id;
+
+  // Restore new tab's layout after switching
+  restoreTabLayout(id);
+
   setTimeout(() => {
     session.fitAddon.fit();
     session.terminal.focus();
@@ -1204,6 +1301,9 @@ async function closeSession(id) {
   if (tab) tab.remove();
 
   state.sessions.delete(id);
+
+  // Remove layout data for closed tab
+  state.tabLayouts.delete(id);
 
   if (state.activeSessionId === id) {
     const remaining = Array.from(state.sessions.keys());
@@ -1296,15 +1396,40 @@ function showTabContextMenu(e, sessionId) {
     <div class="context-menu__separator"></div>
     <div class="context-menu__item" data-action="split-horizontal">Split Horizontal</div>
     <div class="context-menu__item" data-action="split-vertical">Split Vertical</div>
+    ${state.splitMode ? '<div class="context-menu__item" data-action="swap-position">Swap Position</div>' : ''}
+    ${state.splitMode ? `<div class="context-menu__item" data-action="toggle-maximize">${state.maximizedSession === sessionId ? 'Restore Pane' : 'Maximize Pane'}</div>` : ''}
+    <div class="context-menu__item context-menu__item--submenu" data-action="layout-presets">
+      Layout Presets ▶
+      <div class="context-menu__submenu">
+        ${Object.entries(LAYOUT_PRESETS).map(([key, preset]) =>
+    `<div class="context-menu__item" data-preset="${key}">${preset.name}</div>`
+  ).join('')}
+      </div>
+    </div>
   `;
 
   menu.addEventListener('click', async (e) => {
     const action = e.target.dataset.action;
+    const preset = e.target.dataset.preset;
+
+    // Handle preset click
+    if (preset) {
+      activateSession(sessionId);
+      await applyLayoutPreset(preset);
+      menu.remove();
+      return;
+    }
+
     if (!action) return;
 
     if (action === 'set-color') {
       // Don't close menu, show color picker submenu
       showColorPickerMenu(e, sessionId, menu);
+      return;
+    }
+
+    if (action === 'layout-presets') {
+      // Don't close menu for submenu parent
       return;
     }
 
@@ -1329,6 +1454,12 @@ function showTabContextMenu(e, sessionId) {
     case 'split-vertical':
       activateSession(sessionId);
       splitVertical();
+      break;
+    case 'swap-position':
+      startSwapMode(sessionId);
+      break;
+    case 'toggle-maximize':
+      toggleMaximize(sessionId);
       break;
     }
     menu.remove();
@@ -1802,6 +1933,47 @@ function splitVertical() {
   splitActivePane('vertical');
 }
 
+// Toggle maximize for a split pane
+function toggleMaximize(sessionId = state.activeSessionId) {
+  if (!state.splitMode || !state.splitRoot) {
+    showToast('분할 모드에서만 사용 가능합니다', 'warning');
+    return;
+  }
+
+  if (state.maximizedSession === sessionId) {
+    // Restore original layout
+    state.maximizedSession = null;
+    renderSplitLayout();
+    showToast('창 최대화 해제', 'info', 1500);
+  } else {
+    // Maximize
+    state.maximizedSession = sessionId;
+    renderMaximizedView(sessionId);
+    showToast('창 최대화 (다시 누르면 복원)', 'info', 2000);
+  }
+}
+
+// Render maximized view for a session
+function renderMaximizedView(sessionId) {
+  const container = document.getElementById('terminalContainer');
+  const session = state.sessions.get(sessionId);
+
+  if (!session) return;
+
+  // Hide all sessions except the maximized one
+  state.sessions.forEach((s, id) => {
+    s.wrapper.style.display = id === sessionId ? 'block' : 'none';
+    s.wrapper.classList.remove('terminal-wrapper--split');
+  });
+
+  container.innerHTML = '';
+  container.className = 'terminal-container terminal-container--maximized';
+  container.appendChild(session.wrapper);
+
+  // Fit terminal after render
+  setTimeout(() => session.fitAddon.fit(), 50);
+}
+
 async function splitActivePane(direction) {
   if (!state.activeSessionId) return;
 
@@ -1857,6 +2029,12 @@ function renderSplitLayout() {
     return;
   }
 
+  // If there's a maximized session, render maximized view
+  if (state.maximizedSession) {
+    renderMaximizedView(state.maximizedSession);
+    return;
+  }
+
   container.innerHTML = '';
   container.className = 'terminal-container terminal-container--split';
 
@@ -1880,8 +2058,14 @@ function renderSplitNode(node) {
     session.wrapper.classList.toggle('terminal-wrapper--active',
       node.sessionId === state.activeSessionId);
 
-    // Add click handler for focus
-    session.wrapper.onclick = () => activateSession(node.sessionId);
+    // Add click handler for focus or swap
+    session.wrapper.onclick = () => {
+      if (state.swapTargetSession) {
+        completeSwap(node.sessionId);
+      } else {
+        activateSession(node.sessionId);
+      }
+    };
 
     return session.wrapper;
   }
@@ -1981,6 +2165,122 @@ function removeLeafNode(node, sessionId, parent) {
 function exitSplitMode() {
   state.splitMode = false;
   state.splitRoot = null;
+  renderSplitLayout();
+}
+
+// Swap two panes
+function swapPanes(sessionId1, sessionId2) {
+  if (!state.splitMode || !state.splitRoot) return;
+
+  const node1 = findLeafNode(state.splitRoot, sessionId1);
+  const node2 = findLeafNode(state.splitRoot, sessionId2);
+
+  if (!node1 || !node2) return;
+
+  // Swap session IDs
+  const temp = node1.sessionId;
+  node1.sessionId = node2.sessionId;
+  node2.sessionId = temp;
+
+  renderSplitLayout();
+  showToast('창 위치가 교환되었습니다', 'success', 2000);
+}
+
+// Start swap mode
+function startSwapMode(sessionId) {
+  if (!state.splitMode) {
+    showToast('분할 모드에서만 사용 가능합니다', 'warning');
+    return;
+  }
+  state.swapTargetSession = sessionId;
+  showToast('교환할 창을 클릭하세요', 'info');
+}
+
+// Complete swap operation
+function completeSwap(sessionId) {
+  if (state.swapTargetSession && state.swapTargetSession !== sessionId) {
+    swapPanes(state.swapTargetSession, sessionId);
+  }
+  state.swapTargetSession = null;
+}
+
+// Get all leaf nodes from split tree
+function getAllLeafNodes(node) {
+  if (!node) return [];
+  if (node.isLeaf()) return [node];
+  return [
+    ...getAllLeafNodes(node.children[0]),
+    ...getAllLeafNodes(node.children[1])
+  ];
+}
+
+// Apply a layout preset
+async function applyLayoutPreset(presetKey) {
+  const preset = LAYOUT_PRESETS[presetKey];
+  if (!preset) return;
+
+  const config = preset.create();
+
+  // Current active session is the base
+  if (!state.activeSessionId) return;
+
+  // Reset existing split
+  exitSplitMode();
+
+  // Create layout based on preset type
+  if (config.type === 'grid') {
+    await createGridLayout(config.rows, config.cols);
+  } else {
+    await createLinearLayout(config.type, config.count, config.ratio);
+  }
+}
+
+// Create linear split layout (horizontal or vertical)
+async function createLinearLayout(direction, count, ratio) {
+  initSplitMode();
+  for (let i = 1; i < count; i++) {
+    await splitActivePane(direction);
+  }
+}
+
+// Create grid layout (rows x cols)
+async function createGridLayout(rows, cols) {
+  // First split horizontally for rows
+  initSplitMode();
+  for (let i = 1; i < rows; i++) {
+    await splitActivePane('horizontal');
+  }
+
+  // Then split each row vertically for cols
+  const leaves = getAllLeafNodes(state.splitRoot);
+  for (const leaf of leaves) {
+    state.activeSessionId = leaf.sessionId;
+    for (let j = 1; j < cols; j++) {
+      await splitActivePane('vertical');
+    }
+  }
+}
+
+// Save current tab's layout to tabLayouts
+function saveTabLayout(sessionId) {
+  if (sessionId && state.splitMode && state.splitRoot) {
+    state.tabLayouts.set(sessionId, {
+      splitRoot: state.splitRoot,
+      splitMode: state.splitMode
+    });
+  }
+}
+
+// Restore tab's layout from tabLayouts
+function restoreTabLayout(sessionId) {
+  const layout = state.tabLayouts.get(sessionId);
+  if (layout) {
+    state.splitRoot = layout.splitRoot;
+    state.splitMode = layout.splitMode;
+  } else {
+    state.splitRoot = null;
+    state.splitMode = false;
+  }
   renderSplitLayout();
 }
 
@@ -2441,6 +2741,12 @@ function handleKeyboardShortcuts(e) {
     splitVertical();
     return;
   }
+  // Ctrl+Shift+M - Toggle maximize pane
+  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+    e.preventDefault();
+    toggleMaximize();
+    return;
+  }
   if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
     e.preventDefault();
     switchToNextTab();
@@ -2484,6 +2790,28 @@ function handleKeyboardShortcuts(e) {
     toggleFullscreen();
     return;
   }
+
+  // Ctrl+Alt+Arrow - Focus pane by direction
+  if (e.ctrlKey && e.altKey) {
+    switch (e.key) {
+    case 'ArrowLeft':
+      e.preventDefault();
+      focusPaneByDirection('left');
+      return;
+    case 'ArrowRight':
+      e.preventDefault();
+      focusPaneByDirection('right');
+      return;
+    case 'ArrowUp':
+      e.preventDefault();
+      focusPaneByDirection('up');
+      return;
+    case 'ArrowDown':
+      e.preventDefault();
+      focusPaneByDirection('down');
+      return;
+    }
+  }
 }
 
 // ===== Terminal Clear Functions =====
@@ -2517,6 +2845,26 @@ function toggleFullscreen() {
   }
 }
 
+// Focus pane by direction (for split mode navigation)
+function focusPaneByDirection(direction) {
+  if (!state.splitMode || !state.splitRoot) return;
+
+  const leaves = getAllLeafNodes(state.splitRoot);
+  if (leaves.length <= 1) return;
+
+  const currentIndex = leaves.findIndex(n => n.sessionId === state.activeSessionId);
+  if (currentIndex === -1) return;
+
+  let nextIndex;
+  if (direction === 'right' || direction === 'down') {
+    nextIndex = (currentIndex + 1) % leaves.length;
+  } else {
+    nextIndex = (currentIndex - 1 + leaves.length) % leaves.length;
+  }
+
+  activateSession(leaves[nextIndex].sessionId);
+}
+
 // Get keyboard shortcuts info
 function getKeyboardShortcuts() {
   return [
@@ -2529,6 +2877,8 @@ function getKeyboardShortcuts() {
     { keys: 'Ctrl+Shift+F', action: '탭 검색' },
     { keys: 'Ctrl+Shift+D', action: '가로 분할' },
     { keys: 'Ctrl+Shift+E', action: '세로 분할' },
+    { keys: 'Ctrl+Shift+M', action: '현재 창 최대화 토글' },
+    { keys: 'Ctrl+Alt+Arrow', action: '분할 창 포커스 이동' },
     { keys: 'Ctrl+F', action: '터미널 검색' },
     { keys: 'Ctrl+L', action: '화면 지우기' },
     { keys: 'Ctrl+K', action: '스크롤백 지우기' },
