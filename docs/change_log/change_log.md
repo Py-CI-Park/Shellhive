@@ -17,7 +17,40 @@
 
 ## [Unreleased]
 
-*현재 릴리즈되지 않은 변경사항이 없습니다.*
+### 2026-02-02
+
+#### feat(i18n): 다국어 지원 (Phase 9.2)
+
+##### 추가됨 (Added)
+
+- **i18n 모듈 구현** (`src/i18n/index.js`)
+  - 한국어(ko), 영어(en) 번역 딕셔너리
+  - `setLocale()`, `getLocale()`, `t()`, `getAvailableLocales()` 함수
+  - 플레이스홀더 치환 기능 (`{name}`, `{count}` 등)
+
+- **Settings 구조체에 locale 필드 추가** (`src-tauri/src/settings.rs`)
+  - `locale: String` 필드 추가
+  - 기본값: "ko" (한국어)
+  - locale 유효성 검증 추가 (en, ko)
+
+- **설정 UI에 언어 선택 옵션 추가** (`index.html`)
+  - Language 드롭다운 메뉴 (English, 한국어)
+
+##### 변경됨 (Changed)
+
+- **app.js 다국어 지원 통합**
+  - i18n 모듈 import
+  - state.settings에 locale 필드 추가
+  - `showSettingsModal()`: locale 선택기 값 설정
+  - `saveSettings()`: locale 저장 및 적용
+  - `loadSettings()`: 앱 시작 시 locale 적용
+
+##### 문서 (Documentation)
+
+- **i18n 구현 요약 문서 추가** (`docs/i18n_implementation_summary.md`)
+  - 구현 개요 및 파일 목록
+  - 번역 키 카테고리 설명
+  - 사용 예제 및 향후 개선사항
 
 ---
 
