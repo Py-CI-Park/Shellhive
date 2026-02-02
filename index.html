@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
+  <a href="#terminalContainer" class="skip-link">Skip to main content</a>
   <div id="app">
     <aside class="sidebar">
       <div class="sidebar__header">
@@ -15,36 +16,36 @@
       <div class="sidebar__projects">
         <div class="sidebar__section-header">
           <span>Projects</span>
-          <button class="sidebar__add-btn" id="addProjectBtn">+</button>
+          <button class="sidebar__add-btn" id="addProjectBtn" aria-label="프로젝트 추가">+</button>
         </div>
         <ul class="sidebar__list" id="projectList"></ul>
       </div>
       <div class="sidebar__snippets">
         <div class="sidebar__section-header">
           <span>Snippets</span>
-          <button class="sidebar__add-btn" id="addSnippetBtn">+</button>
+          <button class="sidebar__add-btn" id="addSnippetBtn" aria-label="스니펫 추가">+</button>
         </div>
         <ul class="sidebar__list sidebar__list--snippets" id="snippetList"></ul>
       </div>
       <div class="sidebar__footer">
-        <button class="sidebar__settings-btn" id="settingsBtn">Settings</button>
+        <button class="sidebar__settings-btn" id="settingsBtn" aria-label="설정 열기">Settings</button>
       </div>
     </aside>
     <main class="main">
       <div class="tabs" id="tabsContainer">
         <div class="tabs__list" id="tabsList"></div>
-        <button class="tabs__new-btn" id="newTabBtn">+</button>
+        <button class="tabs__new-btn" id="newTabBtn" aria-label="새 탭 만들기">+</button>
       </div>
       <div class="terminal-container" id="terminalContainer"></div>
     </main>
   </div>
 
   <!-- Add Project Modal -->
-  <div class="modal" id="addProjectModal">
+  <div class="modal" id="addProjectModal" role="dialog" aria-labelledby="addProjectModalTitle" aria-modal="true">
     <div class="modal__content">
       <div class="modal__header">
-        <h2 class="modal__title">Add Project</h2>
-        <button class="modal__close" id="closeAddProjectModal">&times;</button>
+        <h2 class="modal__title" id="addProjectModalTitle">Add Project</h2>
+        <button class="modal__close" id="closeAddProjectModal" aria-label="닫기">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -67,11 +68,11 @@
   </div>
 
   <!-- Add Snippet Modal -->
-  <div class="modal" id="addSnippetModal">
+  <div class="modal" id="addSnippetModal" role="dialog" aria-labelledby="addSnippetModalTitle" aria-modal="true">
     <div class="modal__content">
       <div class="modal__header">
-        <h2 class="modal__title">Add Snippet</h2>
-        <button class="modal__close" id="closeAddSnippetModal">&times;</button>
+        <h2 class="modal__title" id="addSnippetModalTitle">Add Snippet</h2>
+        <button class="modal__close" id="closeAddSnippetModal" aria-label="닫기">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -91,11 +92,11 @@
   </div>
 
   <!-- Settings Modal -->
-  <div class="modal" id="settingsModal">
+  <div class="modal" id="settingsModal" role="dialog" aria-labelledby="settingsModalTitle" aria-modal="true">
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
-        <h2 class="modal__title">Settings</h2>
-        <button class="modal__close" id="closeSettingsModal">&times;</button>
+        <h2 class="modal__title" id="settingsModalTitle">Settings</h2>
+        <button class="modal__close" id="closeSettingsModal" aria-label="닫기">&times;</button>
       </div>
       <div class="modal__body">
         <div class="settings-section">
@@ -107,6 +108,7 @@
               <option value="dark">Dark</option>
               <option value="light">Light</option>
               <option value="monokai">Monokai</option>
+              <option value="high-contrast">High Contrast</option>
             </select>
           </div>
 
@@ -127,6 +129,14 @@
               <option value="Source Code Pro">Source Code Pro</option>
               <option value="Courier New">Courier New</option>
               <option value="monospace">System Monospace</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="settingsLocale">Language</label>
+            <select id="settingsLocale" class="form-select">
+              <option value="en">English</option>
+              <option value="ko">한국어</option>
             </select>
           </div>
         </div>

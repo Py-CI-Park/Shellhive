@@ -1,10 +1,43 @@
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
+import { SearchAddon } from 'xterm-addon-search';
 import 'xterm/css/xterm.css';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import { t, setLocale, getLocale, getAvailableLocales } from './i18n/index.js';
+
+// Toast notification system
+const toastContainer = document.createElement('div');
+toastContainer.id = 'toastContainer';
+toastContainer.className = 'toast-container';
+document.body.appendChild(toastContainer);
+
+function showToast(message, type = 'info', duration = 3000) {
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${type}`;
+  toast.innerHTML = `
+    <span class="toast__icon">${type === 'error' ? '⚠' : type === 'success' ? '✓' : 'ℹ'}</span>
+    <span class="toast__message">${message}</span>
+    <button class="toast__close">&times;</button>
+  `;
+
+  toast.querySelector('.toast__close').addEventListener('click', () => {
+    toast.classList.add('toast--hiding');
+    setTimeout(() => toast.remove(), 300);
+  });
+
+  toastContainer.appendChild(toast);
+
+  // Auto-remove after duration
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.classList.add('toast--hiding');
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, duration);
+}
 
 // Debug logging
 function debug(...args) {
@@ -17,6 +50,9 @@ const SESSION_STATUS = {
   RUNNING: 'running',
   EXITED: 'exited'
 };
+
+// Performance constants
+const MAX_SESSIONS = 20;
 
 // TabGroup class for organizing tabs
 class TabGroup {
@@ -44,6 +80,33 @@ class TabGroup {
 
   isEmpty() {
     return this.tabIds.size === 0;
+  }
+}
+
+// Split pane management
+class SplitNode {
+  constructor(type = 'leaf', sessionId = null) {
+    this.type = type; // 'horizontal', 'vertical', 'leaf'
+    this.ratio = 0.5;
+    this.children = null; // [SplitNode, SplitNode] for non-leaf
+    this.sessionId = sessionId; // for leaf nodes only
+  }
+
+  isLeaf() {
+    return this.type === 'leaf';
+  }
+
+  split(direction, newSessionId) {
+    if (!this.isLeaf()) return null;
+
+    const oldSessionId = this.sessionId;
+    this.type = direction; // 'horizontal' or 'vertical'
+    this.sessionId = null;
+    this.children = [
+      new SplitNode('leaf', oldSessionId),
+      new SplitNode('leaf', newSessionId)
+    ];
+    return this.children[1];
   }
 }
 
@@ -118,6 +181,29 @@ const TERMINAL_THEMES = {
     brightCyan: '#a1efe4',
     brightWhite: '#f9f8f5',
   },
+  'high-contrast': {
+    background: '#000000',
+    foreground: '#ffffff',
+    cursor: '#00ff00',
+    cursorAccent: '#000000',
+    selectionBackground: '#00ffff',
+    black: '#000000',
+    red: '#ff0000',
+    green: '#00ff00',
+    yellow: '#ffff00',
+    blue: '#0000ff',
+    magenta: '#ff00ff',
+    cyan: '#00ffff',
+    white: '#ffffff',
+    brightBlack: '#808080',
+    brightRed: '#ff0000',
+    brightGreen: '#00ff00',
+    brightYellow: '#ffff00',
+    brightBlue: '#0000ff',
+    brightMagenta: '#ff00ff',
+    brightCyan: '#00ffff',
+    brightWhite: '#ffffff',
+  },
 };
 
 // Available tab colors
@@ -143,8 +229,10 @@ const state = {
     fontSize: 14,
     fontFamily: 'Consolas',
     enableLogging: true,
+    locale: 'ko',
   },
   snippets: [],
+  categories: [],             // Project categories
   activeProjectFilter: null,
   projectTabMap: new Map(),
   tabGroups: new Map(),       // Map<groupId, TabGroup>
@@ -154,6 +242,16 @@ const state = {
   closedTabs: [],             // Store last 10 closed tabs
   tabSearchVisible: false,    // Tab search overlay state
   tabSearchQuery: '',         // Current search query
+  searchVisible: false,       // Terminal search visible state
+  searchQuery: '',            // Terminal search query
+  splitRoot: null,            // SplitNode root for active layout
+  splitMode: false,           // Whether split mode is active
+};
+
+// Sidebar collapse state
+const sidebarState = {
+  projectsCollapsed: false,
+  snippetsCollapsed: false
 };
 
 // DOM Elements - will be initialized after DOM loads
@@ -174,6 +272,13 @@ async function loadSettings() {
     debug('Settings loaded:', settings);
     state.settings = settings;
     applyTheme(settings.theme);
+
+    // Apply locale setting
+    if (settings.locale) {
+      setLocale(settings.locale);
+      state.settings.locale = settings.locale;
+    }
+
     return settings;
   } catch (error) {
     debug('Failed to load settings:', error);
@@ -187,23 +292,31 @@ async function saveSettings(settings) {
     state.settings = settings;
     applyTheme(settings.theme);
 
+    // Apply locale setting
+    if (settings.locale) {
+      setLocale(settings.locale);
+    }
+
     // Update all existing terminals
     state.sessions.forEach((session) => {
       updateTerminalSettings(session.terminal, settings);
     });
     debug('Settings saved');
+    showToast('설정이 저장되었습니다', 'success');
   } catch (error) {
     debug('Failed to save settings:', error);
-    alert(`Failed to save settings: ${error}`);
+    showToast(`설정 저장 실패: ${error}`, 'error');
   }
 }
 
 function applyTheme(theme) {
-  document.documentElement.classList.remove('theme-light', 'theme-monokai');
+  document.documentElement.classList.remove('theme-light', 'theme-monokai', 'theme-high-contrast');
   if (theme === 'light') {
     document.documentElement.classList.add('theme-light');
   } else if (theme === 'monokai') {
     document.documentElement.classList.add('theme-monokai');
+  } else if (theme === 'high-contrast') {
+    document.documentElement.classList.add('theme-high-contrast');
   }
 }
 
@@ -222,10 +335,136 @@ function showSettingsModal() {
   fontSizeValue.textContent = `${settingsFontSize.value}px`;
   settingsFontFamily.value = state.settings.fontFamily || state.settings.font_family || 'Consolas';
   settingsEnableLogging.checked = state.settings.enableLogging ?? state.settings.enable_logging ?? true;
+
+  const settingsLocale = document.getElementById('settingsLocale');
+  if (settingsLocale) {
+    settingsLocale.value = state.settings.locale || 'ko';
+  }
 }
 
 function hideSettingsModal() {
   settingsModal.classList.remove('modal--visible');
+}
+
+// ===== Session State Persistence =====
+
+async function saveSessionState() {
+  try {
+    const sessions = [];
+    state.sessions.forEach((session, id) => {
+      sessions.push({
+        id: session.id,
+        name: session.name,
+        working_dir: session.projectPath || null,
+        project_id: session.projectId || null,
+        pinned: session.pinned || false,
+        color: session.color || null,
+      });
+    });
+
+    const tabGroups = [];
+    state.tabGroups.forEach((group, id) => {
+      tabGroups.push({
+        id: group.id,
+        name: group.name,
+        color: group.color,
+        collapsed: group.collapsed,
+        tab_ids: Array.from(group.tabIds),
+        project_id: group.projectId || null,
+      });
+    });
+
+    const sessionState = {
+      sessions,
+      active_session_id: state.activeSessionId,
+      tab_groups: tabGroups,
+      window_state: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        x: null,
+        y: null,
+        maximized: false,
+      },
+    };
+
+    await invoke('save_session_state', { state: sessionState });
+    debug('Session state saved');
+  } catch (error) {
+    debug('Failed to save session state:', error);
+  }
+}
+
+async function loadSessionState() {
+  try {
+    const sessionState = await invoke('load_session_state');
+    debug('Session state loaded:', sessionState);
+    return sessionState;
+  } catch (error) {
+    debug('Failed to load session state:', error);
+    return null;
+  }
+}
+
+async function restoreSessionState() {
+  const sessionState = await loadSessionState();
+  if (!sessionState || sessionState.sessions.length === 0) {
+    // No saved state, create default session
+    await createSession('Terminal 1');
+    return;
+  }
+
+  // Restore tab groups first
+  for (const groupInfo of sessionState.tab_groups) {
+    const group = new TabGroup(groupInfo.id, groupInfo.name, {
+      color: groupInfo.color,
+      projectId: groupInfo.project_id,
+    });
+    group.collapsed = groupInfo.collapsed;
+    state.tabGroups.set(groupInfo.id, group);
+
+    // Update group counter
+    const groupNum = parseInt(groupInfo.id.replace('group-', ''));
+    if (groupNum >= state.groupCounter) {
+      state.groupCounter = groupNum + 1;
+    }
+  }
+
+  // Restore sessions
+  for (const sessionInfo of sessionState.sessions) {
+    const session = await createSession(
+      sessionInfo.name,
+      sessionInfo.working_dir,
+      sessionInfo.project_id
+    );
+
+    if (session) {
+      session.pinned = sessionInfo.pinned;
+      session.color = sessionInfo.color;
+
+      // Update tab UI for pinned/color
+      const tab = document.querySelector(`[data-session-id="${session.id}"]`);
+      if (tab) {
+        if (session.pinned) tab.classList.add('tab--pinned');
+        if (session.color) {
+          tab.style.borderTopColor = session.color;
+          tab.classList.add('tab--colored');
+        }
+      }
+    }
+  }
+
+  // Re-render tab groups
+  renderTabGroups();
+
+  // Activate last active session
+  if (sessionState.active_session_id) {
+    const sessionIds = Array.from(state.sessions.keys());
+    if (sessionIds.length > 0) {
+      activateSession(sessionIds[sessionIds.length - 1]);
+    }
+  }
+
+  showToast('이전 세션이 복원되었습니다', 'success');
 }
 
 // ===== Snippet Functions =====
@@ -274,9 +513,10 @@ async function addSnippet(name, command) {
   try {
     await invoke('add_snippet', { name, command });
     await loadSnippets();
+    showToast('스니펫이 추가되었습니다', 'success');
   } catch (error) {
     debug('Failed to add snippet:', error);
-    alert(`Failed to add snippet: ${error}`);
+    showToast(`스니펫 추가 실패: ${error}`, 'error');
   }
 }
 
@@ -291,12 +531,12 @@ async function removeSnippet(id) {
 
 async function executeSnippet(command) {
   if (!state.activeSessionId) {
-    alert('No active terminal session');
+    showToast('활성 터미널 세션이 없습니다', 'warning');
     return;
   }
   const session = state.sessions.get(state.activeSessionId);
   if (!session || !session.ptySessionId) {
-    alert('Terminal session is not connected');
+    showToast('터미널 세션이 연결되지 않았습니다', 'warning');
     return;
   }
   try {
@@ -306,6 +546,7 @@ async function executeSnippet(command) {
     });
   } catch (error) {
     debug('Failed to execute snippet:', error);
+    showToast(`스니펫 실행 실패: ${error}`, 'error');
   }
 }
 
@@ -321,6 +562,46 @@ function hideAddSnippetModal() {
   addSnippetModal.classList.remove('modal--visible');
 }
 
+// ===== Category Functions =====
+
+async function loadCategories() {
+  try {
+    const categories = await invoke('list_categories');
+    state.categories = categories;
+    await loadProjects();
+  } catch (error) {
+    debug('Failed to load categories:', error);
+  }
+}
+
+async function addCategory(name, color = null) {
+  try {
+    await invoke('add_category', { name, color });
+    await loadCategories();
+    showToast(`카테고리 '${name}' 추가됨`, 'success');
+  } catch (error) {
+    showToast(`카테고리 추가 실패: ${error}`, 'error');
+  }
+}
+
+async function removeCategory(id) {
+  try {
+    await invoke('remove_category', { id });
+    await loadCategories();
+  } catch (error) {
+    showToast(`카테고리 삭제 실패: ${error}`, 'error');
+  }
+}
+
+async function setProjectCategory(projectId, categoryId) {
+  try {
+    await invoke('set_project_category', { projectId, categoryId });
+    await loadProjects();
+  } catch (error) {
+    showToast(`카테고리 설정 실패: ${error}`, 'error');
+  }
+}
+
 // ===== Project Functions =====
 
 async function loadProjects() {
@@ -334,7 +615,55 @@ async function loadProjects() {
 }
 
 function renderProjectList(projects) {
-  projectList.innerHTML = projects.map(p => `
+  // Group projects by category
+  const categorized = new Map();
+  categorized.set(null, []); // Uncategorized
+
+  state.categories.forEach(cat => {
+    categorized.set(cat.id, []);
+  });
+
+  projects.forEach(p => {
+    const catId = p.category_id || null;
+    if (categorized.has(catId)) {
+      categorized.get(catId).push(p);
+    } else {
+      categorized.get(null).push(p);
+    }
+  });
+
+  let html = '';
+
+  // Render categorized projects
+  state.categories.forEach(cat => {
+    const catProjects = categorized.get(cat.id);
+    if (catProjects && catProjects.length > 0) {
+      html += `
+        <li class="sidebar__category" data-category-id="${cat.id}">
+          <div class="sidebar__category-header" style="border-left-color: ${cat.color || 'var(--accent)'}">
+            <span class="sidebar__category-name">${escapeHtml(cat.name)}</span>
+            <span class="sidebar__category-count">${catProjects.length}</span>
+          </div>
+          <ul class="sidebar__category-items">
+            ${renderProjectItems(catProjects)}
+          </ul>
+        </li>
+      `;
+    }
+  });
+
+  // Render uncategorized projects
+  const uncategorized = categorized.get(null);
+  if (uncategorized && uncategorized.length > 0) {
+    html += renderProjectItems(uncategorized);
+  }
+
+  projectList.innerHTML = html;
+  setupProjectListeners();
+}
+
+function renderProjectItems(projects) {
+  return projects.map(p => `
     <li class="sidebar__item" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
@@ -342,7 +671,9 @@ function renderProjectList(projects) {
       <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
     </li>
   `).join('');
+}
 
+function setupProjectListeners() {
   document.querySelectorAll('#projectList .sidebar__item').forEach(item => {
     const projectId = item.dataset.projectId;
     const projectPath = JSON.parse(item.dataset.path);
@@ -379,9 +710,10 @@ async function addProject(name, path) {
   try {
     await invoke('add_project', { name, path, shell: null });
     await loadProjects();
+    showToast('프로젝트가 추가되었습니다', 'success');
   } catch (error) {
     debug('Failed to add project:', error);
-    alert(`Failed to add project: ${error}`);
+    showToast(`프로젝트 추가 실패: ${error}`, 'error');
   }
 }
 
@@ -409,6 +741,12 @@ function hideAddProjectModal() {
 // ===== Session Functions =====
 
 async function createSession(name = null, workingDir = null, projectId = null) {
+  // Check session limit
+  if (state.sessions.size >= MAX_SESSIONS) {
+    showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다. 기존 세션을 닫아주세요.`, 'warning');
+    return null;
+  }
+
   const id = `session-${++state.sessionCounter}`;
   const sessionName = name || `Terminal ${state.sessionCounter}`;
   debug('Creating session:', id, sessionName);
@@ -439,9 +777,11 @@ async function createSession(name = null, workingDir = null, projectId = null) {
 
   const fitAddon = new FitAddon();
   const webLinksAddon = new WebLinksAddon();
+  const searchAddon = new SearchAddon();
 
   terminal.loadAddon(fitAddon);
   terminal.loadAddon(webLinksAddon);
+  terminal.loadAddon(searchAddon);
 
   terminal.open(wrapper);
 
@@ -460,6 +800,32 @@ async function createSession(name = null, workingDir = null, projectId = null) {
   let unlistenPtyExit = null;
   let unlistenPtyError = null;
 
+  // PTY reconnection logic
+  const MAX_RECONNECT_ATTEMPTS = 3;
+  let reconnectAttempts = 0;
+
+  async function tryConnectPty(sessionId, workingDir, terminal) {
+    const delays = [1000, 2000, 4000]; // exponential backoff
+
+    while (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      try {
+        const ptySessionId = await invoke('create_pty', {
+          workingDir: workingDir,
+          shell: null,
+        });
+        return ptySessionId;
+      } catch (error) {
+        reconnectAttempts++;
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+          throw error;
+        }
+        terminal.writeln(`\x1b[33mConnection failed. Retrying... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})\x1b[0m`);
+        showToast(`PTY 연결 재시도 중... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, 'warning');
+        await new Promise(resolve => setTimeout(resolve, delays[reconnectAttempts - 1]));
+      }
+    }
+  }
+
   try {
     // Use provided working directory or get user home directory
     let dir = workingDir;
@@ -475,15 +841,13 @@ async function createSession(name = null, workingDir = null, projectId = null) {
 
     terminal.writeln(`\x1b[90mConnecting to PTY in ${dir}...\x1b[0m`);
 
-    // Create PTY with default shell
-    ptySessionId = await invoke('create_pty', {
-      workingDir: dir,
-      shell: null,
-    });
+    // Create PTY with reconnection support
+    ptySessionId = await tryConnectPty(id, dir, terminal);
     debug('PTY session created:', ptySessionId);
 
     terminal.writeln('\x1b[32mPTY connected!\x1b[0m');
     terminal.writeln('');
+    showToast('터미널 세션이 성공적으로 연결되었습니다', 'success', 2000);
 
     // Send initial size to PTY
     setTimeout(async () => {
@@ -553,6 +917,7 @@ async function createSession(name = null, workingDir = null, projectId = null) {
     terminal.writeln('');
     terminal.writeln('\x1b[33mPlease check if the application has proper permissions.\x1b[0m');
     debug('PTY creation failed:', error);
+    showToast(`PTY 연결 실패: ${error}`, 'error', 5000);
   }
 
   // Store session
@@ -561,6 +926,7 @@ async function createSession(name = null, workingDir = null, projectId = null) {
     name: sessionName,
     terminal,
     fitAddon,
+    searchAddon,
     wrapper,
     ptySessionId,
     unlistenPtyData,
@@ -625,11 +991,20 @@ async function createSession(name = null, workingDir = null, projectId = null) {
 let logBuffer = {};
 let logTimeouts = {};
 
+// Limit log buffer size per session
+const MAX_LOG_BUFFER_SIZE = 10000; // characters
+
 function logSessionOutput(sessionId, data) {
   if (!logBuffer[sessionId]) {
     logBuffer[sessionId] = '';
   }
+
   logBuffer[sessionId] += data;
+
+  // Truncate if too large
+  if (logBuffer[sessionId].length > MAX_LOG_BUFFER_SIZE) {
+    logBuffer[sessionId] = logBuffer[sessionId].slice(-MAX_LOG_BUFFER_SIZE);
+  }
 
   if (logTimeouts[sessionId]) {
     clearTimeout(logTimeouts[sessionId]);
@@ -665,6 +1040,14 @@ function createTab(session) {
     }
   });
 
+  // Double-click to rename
+  tab.addEventListener('dblclick', (e) => {
+    if (!e.target.classList.contains('tab__close')) {
+      e.preventDefault();
+      startTabRename(session.id);
+    }
+  });
+
   tab.querySelector('.tab__close').addEventListener('click', (e) => {
     e.stopPropagation();
     closeSession(session.id);
@@ -687,10 +1070,10 @@ function createTab(session) {
 
 function getStatusIcon(status) {
   switch (status) {
-    case SESSION_STATUS.CONNECTING: return '●';
-    case SESSION_STATUS.RUNNING: return '●';
-    case SESSION_STATUS.EXITED: return '○';
-    default: return '○';
+  case SESSION_STATUS.CONNECTING: return '●';
+  case SESSION_STATUS.RUNNING: return '●';
+  case SESSION_STATUS.EXITED: return '○';
+  default: return '○';
   }
 }
 
@@ -731,6 +1114,11 @@ function activateSession(id) {
 async function closeSession(id) {
   const session = state.sessions.get(id);
   if (!session) return;
+
+  // Handle split pane closure
+  if (state.splitMode) {
+    closeSplitPane(id);
+  }
 
   // Phase 3: Store closed tab info for restoration (but not for pinned tabs)
   if (!session.pinned) {
@@ -841,6 +1229,7 @@ function showTabContextMenu(e, sessionId) {
 
   menu.innerHTML = `
     <div class="context-menu__item" data-action="duplicate">Duplicate</div>
+    <div class="context-menu__item" data-action="rename">Rename Tab</div>
     <div class="context-menu__item" data-action="${isPinned ? 'unpin' : 'pin'}">${isPinned ? 'Unpin Tab' : 'Pin Tab'}</div>
     <div class="context-menu__item" data-action="set-color">Set Color ▶</div>
     <div class="context-menu__separator"></div>
@@ -851,6 +1240,9 @@ function showTabContextMenu(e, sessionId) {
     <div class="context-menu__separator"></div>
     <div class="context-menu__item" data-action="create-group">Create Group from Tab</div>
     ${isInGroup ? '<div class="context-menu__item" data-action="remove-from-group">Remove from Group</div>' : ''}
+    <div class="context-menu__separator"></div>
+    <div class="context-menu__item" data-action="split-horizontal">Split Horizontal</div>
+    <div class="context-menu__item" data-action="split-vertical">Split Vertical</div>
   `;
 
   menu.addEventListener('click', async (e) => {
@@ -864,18 +1256,27 @@ function showTabContextMenu(e, sessionId) {
     }
 
     switch (action) {
-      case 'duplicate': await duplicateSession(sessionId); break;
-      case 'pin': togglePinTab(sessionId); break;
-      case 'unpin': togglePinTab(sessionId); break;
-      case 'close': await closeSession(sessionId); break;
-      case 'close-others': await closeOtherSessions(sessionId); break;
-      case 'restore-closed': await restoreLastClosedTab(); break;
-      case 'create-group': {
-        const groupName = prompt('Enter group name:');
-        if (groupName) createTabGroup(groupName, [sessionId]);
-        break;
-      }
-      case 'remove-from-group': removeTabFromGroup(sessionId); break;
+    case 'duplicate': await duplicateSession(sessionId); break;
+    case 'rename': startTabRename(sessionId); break;
+    case 'pin': togglePinTab(sessionId); break;
+    case 'unpin': togglePinTab(sessionId); break;
+    case 'close': await closeSession(sessionId); break;
+    case 'close-others': await closeOtherSessions(sessionId); break;
+    case 'restore-closed': await restoreLastClosedTab(); break;
+    case 'create-group': {
+      const groupName = prompt('Enter group name:');
+      if (groupName) createTabGroup(groupName, [sessionId]);
+      break;
+    }
+    case 'remove-from-group': removeTabFromGroup(sessionId); break;
+    case 'split-horizontal':
+      activateSession(sessionId);
+      splitHorizontal();
+      break;
+    case 'split-vertical':
+      activateSession(sessionId);
+      splitVertical();
+      break;
     }
     menu.remove();
   });
@@ -902,6 +1303,61 @@ async function closeOtherSessions(keepSessionId) {
   for (const id of sessionsToClose) {
     await closeSession(id);
   }
+}
+
+// ===== Tab Rename Functions =====
+
+function startTabRename(sessionId) {
+  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
+  if (!tab) return;
+
+  const session = state.sessions.get(sessionId);
+  if (!session) return;
+
+  const titleEl = tab.querySelector('.tab__title');
+  const currentName = session.name;
+
+  // Create inline input
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'tab__rename-input';
+  input.value = currentName;
+
+  // Replace title with input
+  titleEl.style.display = 'none';
+  tab.insertBefore(input, titleEl.nextSibling);
+
+  input.focus();
+  input.select();
+
+  function finishRename(save = true) {
+    const newName = input.value.trim();
+
+    if (save && newName && newName !== currentName) {
+      session.name = newName;
+      titleEl.textContent = newName;
+      debug('Tab renamed:', sessionId, newName);
+      showToast(`탭 이름 변경: ${newName}`, 'success', 2000);
+    }
+
+    input.remove();
+    titleEl.style.display = '';
+  }
+
+  input.addEventListener('blur', () => finishRename(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishRename(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finishRename(false);
+    }
+    e.stopPropagation();
+  });
+
+  // Prevent tab click from activating while renaming
+  input.addEventListener('click', (e) => e.stopPropagation());
 }
 
 // ===== Phase 3: Advanced Tab Management Functions =====
@@ -1153,6 +1609,328 @@ function filterTabsByQuery(query) {
   });
 }
 
+// ===== Terminal Search Functions =====
+
+function showTerminalSearch() {
+  state.searchVisible = true;
+
+  let searchBar = document.getElementById('terminalSearchBar');
+  if (!searchBar) {
+    searchBar = document.createElement('div');
+    searchBar.id = 'terminalSearchBar';
+    searchBar.className = 'terminal-search';
+    searchBar.innerHTML = `
+      <input type="text" class="terminal-search__input" id="terminalSearchInput" placeholder="검색..." autocomplete="off">
+      <span class="terminal-search__count" id="terminalSearchCount"></span>
+      <button class="terminal-search__btn" id="terminalSearchPrev" title="이전 (Shift+Enter)">▲</button>
+      <button class="terminal-search__btn" id="terminalSearchNext" title="다음 (Enter)">▼</button>
+      <button class="terminal-search__close" id="terminalSearchClose">&times;</button>
+    `;
+
+    const terminalContainer = document.getElementById('terminalContainer');
+    terminalContainer.insertBefore(searchBar, terminalContainer.firstChild);
+
+    const input = document.getElementById('terminalSearchInput');
+    const prevBtn = document.getElementById('terminalSearchPrev');
+    const nextBtn = document.getElementById('terminalSearchNext');
+    const closeBtn = document.getElementById('terminalSearchClose');
+
+    input.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value;
+      performTerminalSearch(e.target.value);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          searchTerminalPrevious();
+        } else {
+          searchTerminalNext();
+        }
+      } else if (e.key === 'Escape') {
+        hideTerminalSearch();
+      }
+    });
+
+    prevBtn.addEventListener('click', () => searchTerminalPrevious());
+    nextBtn.addEventListener('click', () => searchTerminalNext());
+    closeBtn.addEventListener('click', () => hideTerminalSearch());
+  }
+
+  searchBar.classList.add('terminal-search--visible');
+  const input = document.getElementById('terminalSearchInput');
+  input.focus();
+  input.select();
+}
+
+function hideTerminalSearch() {
+  state.searchVisible = false;
+  const searchBar = document.getElementById('terminalSearchBar');
+  if (searchBar) {
+    searchBar.classList.remove('terminal-search--visible');
+  }
+
+  // Clear search highlights
+  const session = state.sessions.get(state.activeSessionId);
+  if (session && session.searchAddon) {
+    session.searchAddon.clearDecorations();
+  }
+
+  // Return focus to terminal
+  if (state.activeSessionId) {
+    const session = state.sessions.get(state.activeSessionId);
+    if (session) {
+      session.terminal.focus();
+    }
+  }
+}
+
+function performTerminalSearch(query) {
+  const session = state.sessions.get(state.activeSessionId);
+  if (!session || !session.searchAddon) return;
+
+  if (!query) {
+    session.searchAddon.clearDecorations();
+    updateSearchCount(0, 0);
+    return;
+  }
+
+  session.searchAddon.findNext(query, {
+    caseSensitive: false,
+    wholeWord: false,
+    regex: false,
+    decorations: {
+      matchBackground: '#515c6a',
+      activeMatchBackground: '#515c6a',
+      matchBorder: '#74879f',
+      activeMatchColorOverviewRuler: '#515c6a',
+      matchOverviewRuler: '#515c6a'
+    }
+  });
+}
+
+function searchTerminalNext() {
+  const session = state.sessions.get(state.activeSessionId);
+  if (!session || !session.searchAddon || !state.searchQuery) return;
+  session.searchAddon.findNext(state.searchQuery);
+}
+
+function searchTerminalPrevious() {
+  const session = state.sessions.get(state.activeSessionId);
+  if (!session || !session.searchAddon || !state.searchQuery) return;
+  session.searchAddon.findPrevious(state.searchQuery);
+}
+
+function updateSearchCount(current, total) {
+  const countEl = document.getElementById('terminalSearchCount');
+  if (countEl) {
+    countEl.textContent = total > 0 ? `${current}/${total}` : '';
+  }
+}
+
+// ===== Split Pane Functions =====
+
+function initSplitMode() {
+  if (!state.activeSessionId) return;
+
+  state.splitMode = true;
+  state.splitRoot = new SplitNode('leaf', state.activeSessionId);
+  renderSplitLayout();
+}
+
+function splitHorizontal() {
+  if (!state.splitMode) initSplitMode();
+  splitActivePane('horizontal');
+}
+
+function splitVertical() {
+  if (!state.splitMode) initSplitMode();
+  splitActivePane('vertical');
+}
+
+async function splitActivePane(direction) {
+  if (!state.activeSessionId) return;
+
+  // Check session limit
+  if (state.sessions.size >= MAX_SESSIONS) {
+    showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다`, 'warning');
+    return;
+  }
+
+  // Find the leaf node containing the active session
+  const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
+  if (!leafNode) return;
+
+  // Create a new session for the split
+  const session = state.sessions.get(state.activeSessionId);
+  const newSession = await createSession(
+    `${session.name} (split)`,
+    session.projectPath,
+    session.projectId
+  );
+
+  if (!newSession) return;
+
+  // Split the leaf node
+  leafNode.split(direction, newSession.id);
+
+  // Render the new layout
+  renderSplitLayout();
+
+  showToast(`화면 ${direction === 'horizontal' ? '가로' : '세로'} 분할`, 'success', 2000);
+}
+
+function findLeafNode(node, sessionId) {
+  if (!node) return null;
+  if (node.isLeaf()) {
+    return node.sessionId === sessionId ? node : null;
+  }
+  return findLeafNode(node.children[0], sessionId) ||
+         findLeafNode(node.children[1], sessionId);
+}
+
+function renderSplitLayout() {
+  const container = document.getElementById('terminalContainer');
+  if (!state.splitMode || !state.splitRoot) {
+    // Reset to normal mode
+    container.innerHTML = '';
+    container.className = 'terminal-container';
+
+    state.sessions.forEach((session) => {
+      container.appendChild(session.wrapper);
+      session.wrapper.classList.remove('terminal-wrapper--split');
+    });
+    return;
+  }
+
+  container.innerHTML = '';
+  container.className = 'terminal-container terminal-container--split';
+
+  const layoutEl = renderSplitNode(state.splitRoot);
+  container.appendChild(layoutEl);
+
+  // Fit all terminals
+  setTimeout(() => {
+    state.sessions.forEach(session => {
+      session.fitAddon.fit();
+    });
+  }, 100);
+}
+
+function renderSplitNode(node) {
+  if (node.isLeaf()) {
+    const session = state.sessions.get(node.sessionId);
+    if (!session) return document.createElement('div');
+
+    session.wrapper.classList.add('terminal-wrapper--split');
+    session.wrapper.classList.toggle('terminal-wrapper--active',
+      node.sessionId === state.activeSessionId);
+
+    // Add click handler for focus
+    session.wrapper.onclick = () => activateSession(node.sessionId);
+
+    return session.wrapper;
+  }
+
+  const container = document.createElement('div');
+  container.className = `split-container split-container--${node.type}`;
+
+  const pane1 = document.createElement('div');
+  pane1.className = 'split-pane';
+  pane1.style.flex = node.ratio;
+  pane1.appendChild(renderSplitNode(node.children[0]));
+
+  const resizer = document.createElement('div');
+  resizer.className = `split-resizer split-resizer--${node.type}`;
+  resizer.addEventListener('mousedown', (e) => startSplitResize(e, node));
+
+  const pane2 = document.createElement('div');
+  pane2.className = 'split-pane';
+  pane2.style.flex = 1 - node.ratio;
+  pane2.appendChild(renderSplitNode(node.children[1]));
+
+  container.appendChild(pane1);
+  container.appendChild(resizer);
+  container.appendChild(pane2);
+
+  return container;
+}
+
+function startSplitResize(e, node) {
+  e.preventDefault();
+
+  const container = e.target.parentElement;
+  const isHorizontal = node.type === 'horizontal';
+  const startPos = isHorizontal ? e.clientY : e.clientX;
+  const containerSize = isHorizontal ? container.offsetHeight : container.offsetWidth;
+  const startRatio = node.ratio;
+
+  function onMouseMove(e) {
+    const currentPos = isHorizontal ? e.clientY : e.clientX;
+    const delta = (currentPos - startPos) / containerSize;
+    node.ratio = Math.max(0.1, Math.min(0.9, startRatio + delta));
+    renderSplitLayout();
+  }
+
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  }
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+
+function closeSplitPane(sessionId) {
+  if (!state.splitMode || !state.splitRoot) return false;
+
+  // Find and remove the leaf node
+  const removed = removeLeafNode(state.splitRoot, sessionId, null);
+
+  if (removed) {
+    // Check if we should exit split mode
+    if (state.splitRoot.isLeaf()) {
+      state.splitMode = false;
+      state.splitRoot = null;
+    }
+    renderSplitLayout();
+    return true;
+  }
+
+  return false;
+}
+
+function removeLeafNode(node, sessionId, parent) {
+  if (!node) return false;
+
+  if (node.isLeaf()) {
+    return node.sessionId === sessionId;
+  }
+
+  // Check children
+  for (let i = 0; i < 2; i++) {
+    if (node.children[i].isLeaf() && node.children[i].sessionId === sessionId) {
+      // Replace this node with the other child
+      const otherChild = node.children[1 - i];
+      node.type = otherChild.type;
+      node.sessionId = otherChild.sessionId;
+      node.children = otherChild.children;
+      node.ratio = otherChild.ratio;
+      return true;
+    }
+  }
+
+  return removeLeafNode(node.children[0], sessionId, node) ||
+         removeLeafNode(node.children[1], sessionId, node);
+}
+
+function exitSplitMode() {
+  state.splitMode = false;
+  state.splitRoot = null;
+  renderSplitLayout();
+}
+
 // ===== Tab Grouping Functions =====
 
 // Create a new tab group
@@ -1347,6 +2125,11 @@ function createTabElement(session, isGrouped = false) {
   tab.dataset.sessionId = session.id;
   tab.draggable = true;
 
+  // Accessibility attributes
+  tab.setAttribute('role', 'tab');
+  tab.setAttribute('aria-selected', session.id === state.activeSessionId ? 'true' : 'false');
+  tab.setAttribute('tabindex', session.id === state.activeSessionId ? '0' : '-1');
+
   if (session.id === state.activeSessionId) {
     tab.classList.add('tab--active');
   }
@@ -1375,6 +2158,14 @@ function createTabElement(session, isGrouped = false) {
     }
   });
 
+  // Double-click to rename
+  tab.addEventListener('dblclick', (e) => {
+    if (!e.target.classList.contains('tab__close')) {
+      e.preventDefault();
+      startTabRename(session.id);
+    }
+  });
+
   tab.querySelector('.tab__close').addEventListener('click', (e) => {
     e.stopPropagation();
     closeSession(session.id);
@@ -1394,6 +2185,35 @@ function createTabElement(session, isGrouped = false) {
   });
 
   return tab;
+}
+
+// Debounce utility
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Toggle sidebar section collapse
+function toggleSidebarSection(section) {
+  sidebarState[section + 'Collapsed'] = !sidebarState[section + 'Collapsed'];
+  const sectionEl = document.querySelector(`.sidebar__${section}`);
+  const list = sectionEl.querySelector('.sidebar__list');
+  const header = sectionEl.querySelector('.sidebar__section-header');
+
+  if (sidebarState[section + 'Collapsed']) {
+    list.style.display = 'none';
+    header.classList.add('sidebar__section-header--collapsed');
+  } else {
+    list.style.display = '';
+    header.classList.remove('sidebar__section-header--collapsed');
+  }
 }
 
 // ===== Project Filtering Functions =====
@@ -1520,6 +2340,11 @@ function updateProjectFilterButtons() {
 }
 
 function handleKeyboardShortcuts(e) {
+  if (e.ctrlKey && e.key === 'f') {
+    e.preventDefault();
+    showTerminalSearch();
+    return;
+  }
   if (e.ctrlKey && e.key === 't') {
     e.preventDefault();
     createSession();
@@ -1548,6 +2373,18 @@ function handleKeyboardShortcuts(e) {
     showTabSearch();
     return;
   }
+  // Ctrl+Shift+D - Horizontal split
+  if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+    e.preventDefault();
+    splitHorizontal();
+    return;
+  }
+  // Ctrl+Shift+E - Vertical split
+  if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+    e.preventDefault();
+    splitVertical();
+    return;
+  }
   if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
     e.preventDefault();
     switchToNextTab();
@@ -1568,6 +2405,80 @@ function handleKeyboardShortcuts(e) {
     showSettingsModal();
     return;
   }
+
+  // Phase 7.4: Additional keyboard shortcuts
+
+  // Ctrl+L - Clear terminal screen
+  if (e.ctrlKey && e.key === 'l') {
+    e.preventDefault();
+    clearTerminalScreen();
+    return;
+  }
+
+  // Ctrl+K - Clear scrollback buffer
+  if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault();
+    clearTerminalScrollback();
+    return;
+  }
+
+  // F11 - Toggle fullscreen
+  if (e.key === 'F11') {
+    e.preventDefault();
+    toggleFullscreen();
+    return;
+  }
+}
+
+// ===== Terminal Clear Functions =====
+
+function clearTerminalScreen() {
+  const session = state.sessions.get(state.activeSessionId);
+  if (!session) return;
+
+  // Send clear screen escape sequence (like running 'clear' or 'cls')
+  session.terminal.write('\x1b[2J\x1b[H');
+  debug('Terminal screen cleared');
+}
+
+function clearTerminalScrollback() {
+  const session = state.sessions.get(state.activeSessionId);
+  if (!session) return;
+
+  // Clear the scrollback buffer
+  session.terminal.clear();
+  debug('Terminal scrollback cleared');
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(err => {
+      debug('Fullscreen error:', err);
+      showToast('전체화면 전환에 실패했습니다', 'error');
+    });
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+// Get keyboard shortcuts info
+function getKeyboardShortcuts() {
+  return [
+    { keys: 'Ctrl+T', action: '새 탭' },
+    { keys: 'Ctrl+W', action: '탭 닫기' },
+    { keys: 'Ctrl+Tab', action: '다음 탭' },
+    { keys: 'Ctrl+Shift+Tab', action: '이전 탭' },
+    { keys: 'Ctrl+1-9', action: '탭 전환' },
+    { keys: 'Ctrl+Shift+T', action: '마지막 닫은 탭 복원' },
+    { keys: 'Ctrl+Shift+F', action: '탭 검색' },
+    { keys: 'Ctrl+Shift+D', action: '가로 분할' },
+    { keys: 'Ctrl+Shift+E', action: '세로 분할' },
+    { keys: 'Ctrl+F', action: '터미널 검색' },
+    { keys: 'Ctrl+L', action: '화면 지우기' },
+    { keys: 'Ctrl+K', action: '스크롤백 지우기' },
+    { keys: 'Ctrl+,', action: '설정' },
+    { keys: 'F11', action: '전체화면 토글' },
+  ];
 }
 
 function switchToNextTab() {
@@ -1588,6 +2499,83 @@ function switchToTabByIndex(index) {
   const sessionIds = Array.from(state.sessions.keys());
   if (index >= 0 && index < sessionIds.length) {
     activateSession(sessionIds[index]);
+  }
+}
+
+// ===== File Drag and Drop Functions =====
+
+function setupFileDragDrop() {
+  const container = document.getElementById('terminalContainer');
+
+  // Prevent default drag behaviors
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    container.addEventListener(eventName, preventDefaults, false);
+    document.body.addEventListener(eventName, preventDefaults, false);
+  });
+
+  // Highlight drop zone
+  ['dragenter', 'dragover'].forEach(eventName => {
+    container.addEventListener(eventName, highlightDropZone, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    container.addEventListener(eventName, unhighlightDropZone, false);
+  });
+
+  // Handle dropped files
+  container.addEventListener('drop', handleFileDrop, false);
+}
+
+function preventDefaults(e) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+function highlightDropZone(e) {
+  // Only highlight if dragging files
+  if (e.dataTransfer.types.includes('Files')) {
+    document.getElementById('terminalContainer').classList.add('terminal-container--drop-active');
+  }
+}
+
+function unhighlightDropZone(e) {
+  document.getElementById('terminalContainer').classList.remove('terminal-container--drop-active');
+}
+
+async function handleFileDrop(e) {
+  const session = state.sessions.get(state.activeSessionId);
+  if (!session || !session.ptySessionId) {
+    showToast('활성 터미널 세션이 없습니다', 'warning');
+    return;
+  }
+
+  const files = e.dataTransfer.files;
+  if (files.length === 0) return;
+
+  // Build path string (quote paths with spaces)
+  const paths = [];
+  for (let i = 0; i < files.length; i++) {
+    let path = files[i].path;
+    // Quote path if it contains spaces
+    if (path.includes(' ')) {
+      path = `"${path}"`;
+    }
+    paths.push(path);
+  }
+
+  const pathString = paths.join(' ');
+
+  try {
+    await invoke('write_pty', {
+      sessionId: session.ptySessionId,
+      data: pathString
+    });
+
+    showToast(`${files.length}개 파일 경로 입력됨`, 'success', 2000);
+    debug('File paths inserted:', pathString);
+  } catch (error) {
+    debug('Failed to insert file paths:', error);
+    showToast('파일 경로 입력 실패', 'error');
   }
 }
 
@@ -1628,6 +2616,42 @@ function initializeDOMElements() {
   debug('DOM elements initialized');
 }
 
+// ===== Accessibility Functions =====
+function setupAccessibility() {
+  // Set up ARIA roles and labels
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.setAttribute('role', 'navigation');
+    sidebar.setAttribute('aria-label', '사이드바 네비게이션');
+  }
+
+  const tabsList = document.getElementById('tabsList');
+  if (tabsList) {
+    tabsList.setAttribute('role', 'tablist');
+    tabsList.setAttribute('aria-label', '터미널 탭 목록');
+  }
+
+  const terminalContainer = document.getElementById('terminalContainer');
+  if (terminalContainer) {
+    terminalContainer.setAttribute('role', 'main');
+    terminalContainer.setAttribute('aria-label', '터미널 영역');
+  }
+
+  const projectList = document.getElementById('projectList');
+  if (projectList) {
+    projectList.setAttribute('role', 'list');
+    projectList.setAttribute('aria-label', '프로젝트 목록');
+  }
+
+  const snippetList = document.getElementById('snippetList');
+  if (snippetList) {
+    snippetList.setAttribute('role', 'list');
+    snippetList.setAttribute('aria-label', '스니펫 목록');
+  }
+
+  debug('Accessibility setup complete');
+}
+
 // ===== Setup Event Listeners =====
 function setupEventListeners() {
   newTabBtn.addEventListener('click', () => createSession());
@@ -1662,7 +2686,7 @@ function setupEventListeners() {
       }
     } catch (error) {
       debug('Failed to open folder dialog:', error);
-      alert(`Failed to open folder dialog: ${error}`);
+      showToast(`폴더 선택 실패: ${error}`, 'error');
     }
   });
 
@@ -1688,11 +2712,13 @@ function setupEventListeners() {
   });
 
   saveSettingsBtn.addEventListener('click', async () => {
+    const settingsLocale = document.getElementById('settingsLocale');
     await saveSettings({
       theme: settingsTheme.value,
       font_size: parseInt(settingsFontSize.value),
       font_family: settingsFontFamily.value,
       enable_logging: settingsEnableLogging.checked,
+      locale: settingsLocale?.value || 'ko',
     });
     hideSettingsModal();
   });
@@ -1701,10 +2727,10 @@ function setupEventListeners() {
     if (confirm('Are you sure you want to delete all session logs?')) {
       try {
         const count = await invoke('clear_all_logs');
-        alert(`Deleted ${count} log files.`);
+        showToast(`${count}개의 로그 파일이 삭제되었습니다`, 'success');
       } catch (error) {
         debug('Failed to clear logs:', error);
-        alert(`Failed to clear logs: ${error}`);
+        showToast(`로그 삭제 실패: ${error}`, 'error');
       }
     }
   });
@@ -1731,6 +2757,18 @@ function setupEventListeners() {
     handleKeyboardShortcuts(e);
   });
 
+  // Save session state before window closes
+  window.addEventListener('beforeunload', () => {
+    saveSessionState();
+  });
+
+  // Auto-save every 30 seconds
+  setInterval(() => {
+    if (state.sessions.size > 0) {
+      saveSessionState();
+    }
+  }, 30000);
+
   debug('Event listeners setup complete');
 }
 
@@ -1741,17 +2779,19 @@ async function initialize() {
 
   initializeDOMElements();
   setupEventListeners();
+  setupAccessibility();
+  setupFileDragDrop();
 
   try {
     await loadSettings();
-    await loadProjects();
+    await loadCategories();
     await loadSnippets();
   } catch (error) {
     debug('Error loading data:', error);
   }
 
-  // Create initial terminal session
-  createSession('Terminal 1');
+  // Restore previous session state or create new
+  await restoreSessionState();
 
   debug('Shellhive initialized successfully');
 }
