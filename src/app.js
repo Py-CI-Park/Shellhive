@@ -460,6 +460,34 @@ function deserializeSplitTree(data) {
   return node;
 }
 
+// Helper function to update session IDs in a split tree using the ID mapping
+function updateSessionIdsInTree(node, idMap) {
+  if (!node) return null;
+
+  // Deserialize first
+  const deserializedNode = deserializeSplitTree(node);
+
+  // Recursively update session IDs
+  function updateNode(n) {
+    if (!n) return null;
+
+    if (n.type === 'leaf') {
+      // Update leaf node's session ID
+      if (n.sessionId && idMap.has(n.sessionId)) {
+        n.sessionId = idMap.get(n.sessionId);
+      }
+    } else {
+      // Recursively update children
+      if (n.children) {
+        n.children.forEach(child => updateNode(child));
+      }
+    }
+    return n;
+  }
+
+  return updateNode(deserializedNode);
+}
+
 async function saveSessionState() {
   try {
     const sessions = [];
@@ -551,7 +579,9 @@ async function restoreSessionState() {
     }
   }
 
-  // Restore sessions
+  // Restore sessions - track old ID to new ID mapping
+  const sessionIdMap = new Map(); // oldId -> newId
+
   for (const sessionInfo of sessionState.sessions) {
     const session = await createSession(
       sessionInfo.name,
@@ -560,6 +590,9 @@ async function restoreSessionState() {
     );
 
     if (session) {
+      // Map old session ID to new session ID
+      sessionIdMap.set(sessionInfo.id, session.id);
+
       session.pinned = sessionInfo.pinned;
       session.color = sessionInfo.color;
 
@@ -578,13 +611,16 @@ async function restoreSessionState() {
   // Re-render tab groups
   renderTabGroups();
 
-  // Restore tab layouts (split configurations)
+  // Restore tab layouts (split configurations) with session ID mapping
   if (sessionState.tab_layouts) {
-    Object.entries(sessionState.tab_layouts).forEach(([sessionId, layoutData]) => {
-      if (state.sessions.has(sessionId)) {
-        state.tabLayouts.set(sessionId, {
+    Object.entries(sessionState.tab_layouts).forEach(([oldSessionId, layoutData]) => {
+      const newSessionId = sessionIdMap.get(oldSessionId);
+      if (newSessionId && state.sessions.has(newSessionId)) {
+        // Update session IDs in the split tree
+        const updatedSplitRoot = updateSessionIdsInTree(layoutData.splitRoot, sessionIdMap);
+        state.tabLayouts.set(newSessionId, {
           splitMode: layoutData.splitMode,
-          splitRoot: deserializeSplitTree(layoutData.splitRoot)
+          splitRoot: updatedSplitRoot
         });
       }
     });
