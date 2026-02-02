@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shellhive</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="sidebar__header">
+        <h1 class="sidebar__title">Shellhive</h1>
+      </div>
+      <div class="sidebar__projects">
+        <div class="sidebar__section-header">
+          <span>Projects</span>
+          <button class="sidebar__add-btn" id="addProjectBtn">+</button>
+        </div>
+        <ul class="sidebar__list" id="projectList"></ul>
+      </div>
+      <div class="sidebar__snippets">
+        <div class="sidebar__section-header">
+          <span>Snippets</span>
+          <button class="sidebar__add-btn" id="addSnippetBtn">+</button>
+        </div>
+        <ul class="sidebar__list sidebar__list--snippets" id="snippetList"></ul>
+      </div>
+      <div class="sidebar__footer">
+        <button class="sidebar__settings-btn" id="settingsBtn">Settings</button>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="tabs" id="tabsContainer">
+        <div class="tabs__list" id="tabsList"></div>
+        <button class="tabs__new-btn" id="newTabBtn">+</button>
+      </div>
+      <div class="terminal-container" id="terminalContainer"></div>
+    </main>
+  </div>
+
+  <!-- Add Project Modal -->
+  <div class="modal" id="addProjectModal">
+    <div class="modal__content">
+      <div class="modal__header">
+        <h2 class="modal__title">Add Project</h2>
+        <button class="modal__close" id="closeAddProjectModal">&times;</button>
+      </div>
+      <div class="modal__body">
+        <div class="form-group">
+          <label for="projectName">Project Name</label>
+          <input type="text" id="projectName" placeholder="e.g., my-project">
+        </div>
+        <div class="form-group">
+          <label for="projectPath">Path</label>
+          <div class="input-with-button">
+            <input type="text" id="projectPath" placeholder="C:\Users\...">
+            <button id="browsePathBtn">Browse</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="cancelAddProject">Cancel</button>
+        <button class="btn btn--primary" id="confirmAddProject">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Snippet Modal -->
+  <div class="modal" id="addSnippetModal">
+    <div class="modal__content">
+      <div class="modal__header">
+        <h2 class="modal__title">Add Snippet</h2>
+        <button class="modal__close" id="closeAddSnippetModal">&times;</button>
+      </div>
+      <div class="modal__body">
+        <div class="form-group">
+          <label for="snippetName">Snippet Name</label>
+          <input type="text" id="snippetName" placeholder="e.g., git status">
+        </div>
+        <div class="form-group">
+          <label for="snippetCommand">Command</label>
+          <input type="text" id="snippetCommand" placeholder="e.g., git status -s">
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="cancelAddSnippet">Cancel</button>
+        <button class="btn btn--primary" id="confirmAddSnippet">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="settingsModal">
+    <div class="modal__content modal__content--wide">
+      <div class="modal__header">
+        <h2 class="modal__title">Settings</h2>
+        <button class="modal__close" id="closeSettingsModal">&times;</button>
+      </div>
+      <div class="modal__body">
+        <div class="settings-section">
+          <h3 class="settings-section__title">Appearance</h3>
+
+          <div class="form-group">
+            <label for="settingsTheme">Theme</label>
+            <select id="settingsTheme" class="form-select">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="monokai">Monokai</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="settingsFontSize">Font Size</label>
+            <div class="input-with-value">
+              <input type="range" id="settingsFontSize" min="10" max="24" value="14">
+              <span id="fontSizeValue">14px</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="settingsFontFamily">Font Family</label>
+            <select id="settingsFontFamily" class="form-select">
+              <option value="Consolas">Consolas</option>
+              <option value="JetBrains Mono">JetBrains Mono</option>
+              <option value="Fira Code">Fira Code</option>
+              <option value="Source Code Pro">Source Code Pro</option>
+              <option value="Courier New">Courier New</option>
+              <option value="monospace">System Monospace</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3 class="settings-section__title">Logging</h3>
+
+          <div class="form-group form-group--checkbox">
+            <input type="checkbox" id="settingsEnableLogging" checked>
+            <label for="settingsEnableLogging">Enable session logging</label>
+          </div>
+
+          <p class="settings-help">Session logs are saved to AppData/shellhive/logs/</p>
+
+          <button class="btn btn--secondary btn--small" id="clearLogsBtn">Clear All Logs</button>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="cancelSettings">Cancel</button>
+        <button class="btn btn--primary" id="saveSettings">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
