@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
@@ -10,12 +10,31 @@ pub struct Project {
     pub path: String,
     pub shell: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub category_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectCategory {
+    pub id: String,
+    pub name: String,
+    pub color: Option<String>,
+    pub order: i32,
+}
+
+impl Default for ProjectCategory {
+    fn default() -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "Default".to_string(),
+            color: None,
+            order: 0,
+        }
+    }
 }
 
 /// 설정 파일 경로 가져오기 (APPDATA/shellhive/projects.json)
 fn get_projects_file_path() -> Result<PathBuf, String> {
-    let data_dir = dirs::data_dir()
-        .ok_or_else(|| "Failed to get data directory".to_string())?;
+    let data_dir = dirs::data_dir().ok_or_else(|| "Failed to get data directory".to_string())?;
 
     let shellhive_dir = data_dir.join("shellhive");
 
@@ -53,8 +72,7 @@ fn save_projects(projects: &[Project]) -> Result<(), String> {
     let content = serde_json::to_string_pretty(projects)
         .map_err(|e| format!("Failed to serialize projects: {}", e))?;
 
-    fs::write(&file_path, content)
-        .map_err(|e| format!("Failed to write projects file: {}", e))?;
+    fs::write(&file_path, content).map_err(|e| format!("Failed to write projects file: {}", e))?;
 
     Ok(())
 }
@@ -94,6 +112,7 @@ pub async fn add_project(
         path,
         shell,
         created_at: Utc::now(),
+        category_id: None,
     };
 
     // 프로젝트 추가 및 저장
@@ -130,7 +149,8 @@ pub async fn update_project(
     let mut projects = load_projects()?;
 
     // ID로 프로젝트 인덱스 찾기
-    let project_idx = projects.iter()
+    let project_idx = projects
+        .iter()
         .position(|p| p.id == id)
         .ok_or_else(|| format!("Project with id '{}' not found", id))?;
 
@@ -146,7 +166,10 @@ pub async fn update_project(
 
         // 중복 체크 (다른 프로젝트가 같은 경로를 사용하는지)
         if projects.iter().any(|p| p.id != id && p.path == *new_path) {
-            return Err(format!("Another project with path '{}' already exists", new_path));
+            return Err(format!(
+                "Another project with path '{}' already exists",
+                new_path
+            ));
         }
 
         projects[project_idx].path = new_path.clone();
@@ -165,4 +188,109 @@ pub async fn update_project(
 
     save_projects(&projects)?;
     Ok(updated_project)
+}
+
+/// 카테고리 파일 경로 가져오기
+fn get_categories_file_path() -> Result<PathBuf, String> {
+    let data_dir = dirs::data_dir().ok_or_else(|| "Failed to get data directory".to_string())?;
+    let shellhive_dir = data_dir.join("shellhive");
+    if !shellhive_dir.exists() {
+        std::fs::create_dir_all(&shellhive_dir)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    Ok(shellhive_dir.join("categories.json"))
+}
+
+#[tauri::command]
+pub async fn list_categories() -> Result<Vec<ProjectCategory>, String> {
+    let file_path = get_categories_file_path()?;
+    if !file_path.exists() {
+        return Ok(vec![]);
+    }
+    let content = std::fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read categories: {}", e))?;
+    let categories: Vec<ProjectCategory> =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse categories: {}", e))?;
+    Ok(categories)
+}
+
+#[tauri::command]
+pub async fn add_category(name: String, color: Option<String>) -> Result<ProjectCategory, String> {
+    let mut categories = list_categories().await?;
+
+    let order = categories.len() as i32;
+    let category = ProjectCategory {
+        id: uuid::Uuid::new_v4().to_string(),
+        name,
+        color,
+        order,
+    };
+
+    categories.push(category.clone());
+    save_categories(&categories)?;
+
+    Ok(category)
+}
+
+#[tauri::command]
+pub async fn remove_category(id: String) -> Result<(), String> {
+    let mut categories = list_categories().await?;
+    categories.retain(|c| c.id != id);
+    save_categories(&categories)?;
+
+    // Also update projects to remove the category reference
+    let mut projects = list_projects().await?;
+    for project in &mut projects {
+        if project.category_id.as_ref() == Some(&id) {
+            project.category_id = None;
+        }
+    }
+    save_projects(&projects)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_category(
+    id: String,
+    name: Option<String>,
+    color: Option<String>,
+) -> Result<(), String> {
+    let mut categories = list_categories().await?;
+
+    if let Some(cat) = categories.iter_mut().find(|c| c.id == id) {
+        if let Some(n) = name {
+            cat.name = n;
+        }
+        if let Some(c) = color {
+            cat.color = Some(c);
+        }
+    }
+
+    save_categories(&categories)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_project_category(
+    project_id: String,
+    category_id: Option<String>,
+) -> Result<(), String> {
+    let mut projects = list_projects().await?;
+
+    if let Some(project) = projects.iter_mut().find(|p| p.id == project_id) {
+        project.category_id = category_id;
+    }
+
+    save_projects(&projects)?;
+    Ok(())
+}
+
+fn save_categories(categories: &[ProjectCategory]) -> Result<(), String> {
+    let file_path = get_categories_file_path()?;
+    let content = serde_json::to_string_pretty(categories)
+        .map_err(|e| format!("Failed to serialize categories: {}", e))?;
+    std::fs::write(&file_path, content)
+        .map_err(|e| format!("Failed to write categories: {}", e))?;
+    Ok(())
 }

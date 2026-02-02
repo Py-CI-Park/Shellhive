@@ -1,13 +1,13 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod pty;
 mod project;
-mod snippet;
+mod pty;
 mod settings;
+mod snippet;
 
-use tauri::Manager;
 use std::env;
+use tauri::Manager;
 
 #[tauri::command]
 fn get_home_dir() -> Result<String, String> {
@@ -39,6 +39,11 @@ fn main() {
             project::add_project,
             project::remove_project,
             project::update_project,
+            project::list_categories,
+            project::add_category,
+            project::remove_category,
+            project::update_category,
+            project::set_project_category,
             snippet::list_snippets,
             snippet::add_snippet,
             snippet::remove_snippet,
@@ -51,6 +56,8 @@ fn main() {
             settings::list_session_logs,
             settings::delete_session_log,
             settings::clear_all_logs,
+            settings::save_session_state,
+            settings::load_session_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

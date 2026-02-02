@@ -13,8 +13,7 @@ pub struct Snippet {
 
 /// Get snippets file path (APPDATA/shellhive/snippets.json)
 fn get_snippets_file_path() -> Result<PathBuf, String> {
-    let data_dir = dirs::data_dir()
-        .ok_or_else(|| "Failed to get data directory".to_string())?;
+    let data_dir = dirs::data_dir().ok_or_else(|| "Failed to get data directory".to_string())?;
 
     let shellhive_dir = data_dir.join("shellhive");
 
@@ -52,8 +51,7 @@ fn save_snippets(snippets: &[Snippet]) -> Result<(), String> {
     let content = serde_json::to_string_pretty(snippets)
         .map_err(|e| format!("Failed to serialize snippets: {}", e))?;
 
-    fs::write(&file_path, content)
-        .map_err(|e| format!("Failed to write snippets file: {}", e))?;
+    fs::write(&file_path, content).map_err(|e| format!("Failed to write snippets file: {}", e))?;
 
     Ok(())
 }
