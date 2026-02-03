@@ -46,6 +46,7 @@ pub async fn create_pty(
     state: tauri::State<'_, PtyManager>,
     working_dir: String,
     shell: Option<String>,
+    env_vars: Option<HashMap<String, String>>,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
 
@@ -76,6 +77,14 @@ pub async fn create_pty(
     // Create command
     let mut cmd = CommandBuilder::new(&shell_cmd);
     cmd.cwd(&working_dir);
+
+    // Add environment variables if provided
+    if let Some(vars) = env_vars {
+        println!("[PTY] Setting {} environment variables", vars.len());
+        for (key, value) in vars {
+            cmd.env(key, value);
+        }
+    }
 
     // Spawn command
     let child = pty_pair.slave.spawn_command(cmd).map_err(|e| {
