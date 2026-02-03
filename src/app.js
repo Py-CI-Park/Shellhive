@@ -5316,7 +5316,7 @@ function changeTheme(theme) {
 
 function handleKeyboardShortcuts(e) {
   // Ctrl+Shift+P - Command Palette
-  if (e.ctrlKey && e.shiftKey && e.key === 'P') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyP') {
     e.preventDefault();
     showCommandPalette();
     return;
@@ -5342,32 +5342,32 @@ function handleKeyboardShortcuts(e) {
     }
     return;
   }
-  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyT') {
     e.preventDefault();
     // Phase 3: Restore last closed tab (Ctrl+Shift+T)
     restoreLastClosedTab();
     return;
   }
-  if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyF') {
     e.preventDefault();
     // Phase 3: Show tab search (Ctrl+Shift+F)
     showTabSearch();
     return;
   }
   // Ctrl+Shift+D - Horizontal split
-  if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
     e.preventDefault();
     splitHorizontal();
     return;
   }
   // Ctrl+Shift+E - Vertical split
-  if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyE') {
     e.preventDefault();
     splitVertical();
     return;
   }
   // Ctrl+Shift+R - Toggle recording
-  if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyR') {
     e.preventDefault();
     if (recordingManager.isRecording()) {
       stopRecordingUI();
@@ -5377,7 +5377,7 @@ function handleKeyboardShortcuts(e) {
     return;
   }
   // Ctrl+Shift+M - Toggle maximize pane
-  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') {
     e.preventDefault();
     toggleMaximize();
     return;
@@ -5420,7 +5420,7 @@ function handleKeyboardShortcuts(e) {
   }
 
   // Ctrl+Shift+C - Start Claude Code session
-  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
     e.preventDefault();
     startClaudeSession();
     return;
