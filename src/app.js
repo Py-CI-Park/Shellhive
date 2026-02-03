@@ -20,7 +20,7 @@ function showToast(message, type = 'info', duration = 3000) {
   toast.className = `toast toast--${type}`;
   toast.innerHTML = `
     <span class="toast__icon">${type === 'error' ? '⚠' : type === 'success' ? '✓' : 'ℹ'}</span>
-    <span class="toast__message">${message}</span>
+    <span class="toast__message">${escapeHtml(message)}</span>
     <button class="toast__close">&times;</button>
   `;
 
@@ -325,6 +325,7 @@ const state = {
   tabLayouts: new Map(),      // Map<sessionId, { splitRoot, splitMode }> - per-tab layouts
   swapTargetSession: null,    // Swap target session ID
   maximizedSession: null,     // Maximized session ID (for split mode)
+  splitInProgress: false,     // Prevent race condition in splitActivePane
 };
 
 // Sidebar collapse state
@@ -1268,6 +1269,15 @@ function activateSession(id) {
   const session = state.sessions.get(id);
   if (!session) return;
 
+  // Cancel any pending swap operation
+  if (state.swapTargetSession) {
+    const prevSession = state.sessions.get(state.swapTargetSession);
+    if (prevSession) {
+      prevSession.wrapper.classList.remove('terminal-wrapper--swap-source');
+    }
+    state.swapTargetSession = null;
+  }
+
   // Save current tab's layout before switching
   if (state.activeSessionId && state.activeSessionId !== id) {
     saveTabLayout(state.activeSessionId);
@@ -1971,6 +1981,10 @@ function splitVertical() {
 
 // Toggle maximize for a split pane
 function toggleMaximize(sessionId = state.activeSessionId) {
+  if (!sessionId) {
+    showToast('활성 세션이 없습니다', 'warning');
+    return;
+  }
   if (!state.splitMode || !state.splitRoot) {
     showToast('분할 모드에서만 사용 가능합니다', 'warning');
     return;
@@ -2013,33 +2027,41 @@ function renderMaximizedView(sessionId) {
 async function splitActivePane(direction) {
   if (!state.activeSessionId) return;
 
-  // Check session limit
-  if (state.sessions.size >= MAX_SESSIONS) {
-    showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다`, 'warning');
-    return;
+  // Prevent race condition - only one split operation at a time
+  if (state.splitInProgress) return;
+  state.splitInProgress = true;
+
+  try {
+    // Check session limit
+    if (state.sessions.size >= MAX_SESSIONS) {
+      showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다`, 'warning');
+      return;
+    }
+
+    // Find the leaf node containing the active session
+    const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
+    if (!leafNode) return;
+
+    // Create a new session for the split
+    const session = state.sessions.get(state.activeSessionId);
+    const newSession = await createSession(
+      `${session.name} (split)`,
+      session.projectPath,
+      session.projectId
+    );
+
+    if (!newSession) return;
+
+    // Split the leaf node
+    leafNode.split(direction, newSession.id);
+
+    // Render the new layout
+    renderSplitLayout();
+
+    showToast(`화면 ${direction === 'horizontal' ? '가로' : '세로'} 분할`, 'success', 2000);
+  } finally {
+    state.splitInProgress = false;
   }
-
-  // Find the leaf node containing the active session
-  const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
-  if (!leafNode) return;
-
-  // Create a new session for the split
-  const session = state.sessions.get(state.activeSessionId);
-  const newSession = await createSession(
-    `${session.name} (split)`,
-    session.projectPath,
-    session.projectId
-  );
-
-  if (!newSession) return;
-
-  // Split the leaf node
-  leafNode.split(direction, newSession.id);
-
-  // Render the new layout
-  renderSplitLayout();
-
-  showToast(`화면 ${direction === 'horizontal' ? '가로' : '세로'} 분할`, 'success', 2000);
 }
 
 function findLeafNode(node, sessionId) {
@@ -2229,12 +2251,22 @@ function startSwapMode(sessionId) {
     return;
   }
   state.swapTargetSession = sessionId;
+  // Add visual feedback to source pane
+  const session = state.sessions.get(sessionId);
+  if (session) {
+    session.wrapper.classList.add('terminal-wrapper--swap-source');
+  }
   showToast('교환할 창을 클릭하세요', 'info');
 }
 
 // Complete swap operation
 function completeSwap(sessionId) {
   if (state.swapTargetSession && state.swapTargetSession !== sessionId) {
+    // Remove visual feedback from source pane
+    const sourceSession = state.sessions.get(state.swapTargetSession);
+    if (sourceSession) {
+      sourceSession.wrapper.classList.remove('terminal-wrapper--swap-source');
+    }
     swapPanes(state.swapTargetSession, sessionId);
   }
   state.swapTargetSession = null;
@@ -2300,8 +2332,10 @@ async function createGridLayout(rows, cols) {
 // Save current tab's layout to tabLayouts
 function saveTabLayout(sessionId) {
   if (sessionId && state.splitMode && state.splitRoot) {
+    // Deep clone via serialize/deserialize to avoid shared reference issues
+    const clonedRoot = deserializeSplitTree(serializeSplitTree(state.splitRoot));
     state.tabLayouts.set(sessionId, {
-      splitRoot: state.splitRoot,
+      splitRoot: clonedRoot,
       splitMode: state.splitMode
     });
   }

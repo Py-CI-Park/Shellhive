@@ -17,6 +17,41 @@
 
 ## [Unreleased]
 
+### 2026-02-03
+
+#### fix(security): 코드 리뷰 이슈 수정 (CRITICAL + HIGH)
+
+##### 수정됨 (Fixed)
+
+- **CRITICAL: XSS 취약점 제거** (`src/app.js` - showToast 함수, 라인 23)
+  - `showToast()` 함수에서 메시지를 `escapeHtml()`로 감싸 XSS 공격 차단
+  - 사용자 입력이 HTML로 직접 삽입되는 보안 취약점 해결
+  - 특수 문자 자동 이스케이프 (`<`, `>`, `&`, `"`, `'`)
+
+- **HIGH: 상태 불일치 문제 해결** (`src/app.js` - saveTabLayout 함수, 라인 2333)
+  - `saveTabLayout()`에서 Deep clone 구현
+  - `serializeSplitTree()` + `deserializeSplitTree()` 조합으로 완전한 복사본 생성
+  - 탭 간 레이아웃 공유 참조 문제 해결
+
+- **HIGH: Null 체크 추가** (`src/app.js` - toggleMaximize 함수, 라인 1983)
+  - `toggleMaximize()` 함수에 sessionId null 체크 추가
+  - 활성 세션이 없을 때 명확한 경고 메시지 표시
+  - 예상치 못한 에러 방지
+
+- **HIGH: Race Condition 해결** (`src/app.js` - splitActivePane 함수, 라인 2027)
+  - `state.splitInProgress` 플래그 추가
+  - try/finally 블록으로 동시성 제어 구현
+  - 빠른 연속 분할 작업 시 트리 구조 손상 방지
+
+##### 문서 (Documentation)
+
+- **코드 리뷰 수정 보고서 추가** (`docs/code-review-fixes-2026-02-03.md`)
+  - 4개 이슈 상세 설명 (문제점, 수정 내용, 기술적 세부사항)
+  - 테스트 및 검증 방법
+  - 향후 개선 사항 제안
+
+---
+
 ### 2026-02-02
 
 #### feat(i18n): 다국어 지원 (Phase 9.2)
