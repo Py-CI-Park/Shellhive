@@ -54,6 +54,29 @@
         <div class="tabs__list" id="tabsList"></div>
         <button class="tabs__new-btn" id="newTabBtn" aria-label="새 탭 만들기">+</button>
       </div>
+      <div class="split-toolbar" id="splitToolbar">
+        <div class="split-toolbar__group">
+          <button class="split-toolbar__btn" id="splitHorizontalBtn" title="가로 분할 (Ctrl+Shift+D)">
+            <span class="split-toolbar__icon">&#x2B1C;&#x2B1C;</span>
+          </button>
+          <button class="split-toolbar__btn" id="splitVerticalBtn" title="세로 분할 (Ctrl+Shift+E)">
+            <span class="split-toolbar__icon split-toolbar__icon--vertical">&#x2B1B;<br>&#x2B1B;</span>
+          </button>
+        </div>
+        <div class="split-toolbar__divider"></div>
+        <div class="split-toolbar__group">
+          <button class="split-toolbar__btn" id="presetTwoColBtn" title="2열 레이아웃">2열</button>
+          <button class="split-toolbar__btn" id="presetTwoRowBtn" title="2행 레이아웃">2행</button>
+          <button class="split-toolbar__btn" id="presetGridBtn" title="2x2 그리드">그리드</button>
+          <button class="split-toolbar__btn" id="presetThreeColBtn" title="3열 레이아웃">3열</button>
+        </div>
+        <div class="split-toolbar__divider"></div>
+        <div class="split-toolbar__group">
+          <button class="split-toolbar__btn" id="swapPanesBtn" title="창 교환">&#x21C4;</button>
+          <button class="split-toolbar__btn" id="maximizePaneBtn" title="창 최대화 (Ctrl+Shift+M)">&#x2610;</button>
+          <button class="split-toolbar__btn" id="closeSplitBtn" title="분할 종료">&#x2715;</button>
+        </div>
+      </div>
       <div class="terminal-container" id="terminalContainer"></div>
       <!-- AI Mode Input Bar -->
       <div class="ai-input-bar" id="aiInputBar">

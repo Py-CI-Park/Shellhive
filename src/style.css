@@ -303,6 +303,79 @@ html, body {
   color: var(--text-primary);
 }
 
+/* Split Toolbar */
+.split-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.split-toolbar__group {
+  display: flex;
+  gap: 4px;
+}
+
+.split-toolbar__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.split-toolbar__btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.split-toolbar__btn:active {
+  transform: scale(0.95);
+}
+
+.split-toolbar__btn--active {
+  background: var(--accent);
+  color: white;
+}
+
+.split-toolbar__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.split-toolbar__btn:disabled:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  transform: none;
+}
+
+.split-toolbar__icon {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 2px;
+}
+
+.split-toolbar__icon--vertical {
+  line-height: 0.8;
+  letter-spacing: 0;
+}
+
+.split-toolbar__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
 /* Terminal container */
 .terminal-container {
   flex: 1;

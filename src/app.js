@@ -6306,6 +6306,7 @@ async function initialize() {
   setupFileDragDrop();
   createRecordingControls();
   initializeHistoryPanel();  // 히스토리 패널 초기화
+  setupSplitToolbar();       // 분할 툴바 초기화
 
   // 명령어 히스토리 로드
   commandHistory.load();
@@ -6768,4 +6769,31 @@ function setupGitPanelListeners(panel, gitPath) {
 function initializeHistoryPanel() {
   // history-panel.js에서 가져온 createHistoryPanel 호출
   createHistoryPanel(commandHistory, state, showToast, escapeHtml);
+}
+
+// Split Toolbar 초기화
+function setupSplitToolbar() {
+  // Split buttons
+  document.getElementById('splitHorizontalBtn')?.addEventListener('click', splitHorizontal);
+  document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
+
+  // Preset buttons
+  document.getElementById('presetTwoColBtn')?.addEventListener('click', () => applyLayoutPreset('two-column'));
+  document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-row'));
+  document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid'));
+  document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-column'));
+
+  // Control buttons
+  document.getElementById('swapPanesBtn')?.addEventListener('click', () => {
+    if (state.activeSessionId) {
+      startSwapMode(state.activeSessionId);
+    }
+  });
+  document.getElementById('maximizePaneBtn')?.addEventListener('click', () => toggleMaximize());
+  document.getElementById('closeSplitBtn')?.addEventListener('click', () => {
+    exitSplitMode();
+    showToast('분할 모드 종료', 'info');
+  });
+
+  debug('Split toolbar setup complete');
 }
