@@ -1575,6 +1575,8 @@ html, body {
 .terminal-container--split {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  width: 100%;
 }
 
 .terminal-container--maximized {
@@ -1592,6 +1594,7 @@ html, body {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  height: 100%;
 }
 
 .split-container--horizontal {

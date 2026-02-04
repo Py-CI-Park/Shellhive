@@ -4437,7 +4437,7 @@ function renderSplitNode(node) {
 
   const pane1 = document.createElement('div');
   pane1.className = 'split-pane';
-  pane1.style.flex = node.ratio;
+  pane1.style.flex = `1 1 ${node.ratio * 100}%`;
   pane1.appendChild(renderSplitNode(node.children[0]));
 
   const resizer = document.createElement('div');
@@ -4446,7 +4446,7 @@ function renderSplitNode(node) {
 
   const pane2 = document.createElement('div');
   pane2.className = 'split-pane';
-  pane2.style.flex = 1 - node.ratio;
+  pane2.style.flex = `1 1 ${(1 - node.ratio) * 100}%`;
   pane2.appendChild(renderSplitNode(node.children[1]));
 
   container.appendChild(pane1);
