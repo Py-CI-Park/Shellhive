@@ -4266,11 +4266,19 @@ function initSplitMode() {
 }
 
 function splitHorizontal() {
+  if (!state.activeSessionId) {
+    showToast('먼저 터미널 세션을 생성하세요', 'warning');
+    return;
+  }
   if (!state.splitMode) initSplitMode();
   splitActivePane('horizontal');
 }
 
 function splitVertical() {
+  if (!state.activeSessionId) {
+    showToast('먼저 터미널 세션을 생성하세요', 'warning');
+    return;
+  }
   if (!state.splitMode) initSplitMode();
   splitActivePane('vertical');
 }
@@ -4580,13 +4588,17 @@ function getAllLeafNodes(node) {
 
 // Apply a layout preset
 async function applyLayoutPreset(presetKey) {
+  if (!state.activeSessionId) {
+    showToast('먼저 터미널 세션을 생성하세요', 'warning');
+    return;
+  }
+
   const preset = LAYOUT_PRESETS[presetKey];
   if (!preset) return;
 
   const config = preset.create();
 
   // Current active session is the base
-  if (!state.activeSessionId) return;
 
   // Reset existing split
   exitSplitMode();
@@ -6773,6 +6785,7 @@ function initializeHistoryPanel() {
 
 // Split Toolbar 초기화
 function setupSplitToolbar() {
+  console.log('Setting up split toolbar...');
   // Split buttons
   document.getElementById('splitHorizontalBtn')?.addEventListener('click', splitHorizontal);
   document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
@@ -6796,4 +6809,5 @@ function setupSplitToolbar() {
   });
 
   debug('Split toolbar setup complete');
+  console.log('Split toolbar setup complete');
 }
