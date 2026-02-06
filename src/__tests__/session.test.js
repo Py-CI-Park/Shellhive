@@ -45,7 +45,7 @@ describe('Session Management', () => {
 
     it('should add and remove tabs correctly', () => {
       class TabGroup {
-        constructor(id, name, options = {}) {
+        constructor(id, name) {
           this.id = id;
           this.name = name;
           this.tabIds = new Set();

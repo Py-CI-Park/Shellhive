@@ -19,6 +19,44 @@
 
 ### 2026-02-06
 
+#### refactor(lint): app.js 정리 및 ESLint 규칙 재활성화
+
+**커밋**: `working-tree`
+
+##### 변경됨 (Changed)
+
+- `src/app.js` 미사용 코드 정리
+  - 중복 AI 변환 함수 블록 제거
+  - 미사용 카테고리/사이드바 유틸 함수 제거
+  - 미사용 변수/콜백 인자 정리
+- `BlockManager` 생명주기 연결
+  - 세션 생성 시 등록, 종료 시 해제
+  - 입력 이벤트 처리 경로 연결
+- UI 상수 분리
+  - `src/ui-constants.js` 신설
+  - `LAYOUT_PRESETS`, `TAB_COLORS`를 모듈로 이동
+- ESLint 규칙 복구
+  - `.eslintrc.json`에서 `no-unused-vars`, `indent`를 `error`로 재활성화
+  - `_` 접두 인자/변수 무시 패턴 추가
+- 테스트 코드 정리
+  - `src/__tests__/setup.js` 들여쓰기 정리
+  - `src/__tests__/session.test.js` 미사용 인자 제거
+
+#### docs(qa): run-release 분할 수동 점검 문서/로그 추가
+
+**커밋**: `working-tree`
+
+##### 문서화됨 (Documentation)
+
+- `docs/qa/run-release-split-manual-checklist.md` 추가
+  - 가로/세로 분할 중심의 수동 시나리오(TC-01~TC-06) 정의
+  - 사전 준비, 합격 기준, 결함 기록 템플릿 포함
+- `docs/qa/run-release-split-qa-log-2026-02-06.md` 추가
+  - `run-release.bat` 기동 점검 결과 기록
+  - 수동 검증 진행 상태 및 후속 액션 기록
+
+### 2026-02-06
+
 #### fix(split): 릴리즈 모드 분할 레이아웃 미표시 원인 수정
 
 **커밋**: `working-tree`

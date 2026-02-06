@@ -4,36 +4,36 @@ import { vi } from 'vitest';
 let ptyCounter = 0;
 export const invokeMock = vi.fn(async (command) => {
   switch (command) {
-  case 'get_settings':
-    return {
-      theme: 'dark',
-      font_size: 14,
-      font_family: 'Consolas',
-      enable_logging: true,
-      enable_notifications: true,
-      locale: 'ko'
-    };
-  case 'list_categories':
-  case 'list_projects':
-  case 'list_snippets':
-  case 'list_session_logs':
-    return [];
-  case 'check_claude_installed':
-    return false;
-  case 'load_session_state':
-    return null;
-  case 'get_home_dir':
-    return 'C:\\';
-  case 'create_pty':
-    ptyCounter += 1;
-    return `pty-${ptyCounter}`;
-  case 'resize_pty':
-  case 'write_pty':
-  case 'save_session_state':
-  case 'log_session_output':
-    return null;
-  default:
-    return null;
+    case 'get_settings':
+      return {
+        theme: 'dark',
+        font_size: 14,
+        font_family: 'Consolas',
+        enable_logging: true,
+        enable_notifications: true,
+        locale: 'ko'
+      };
+    case 'list_categories':
+    case 'list_projects':
+    case 'list_snippets':
+    case 'list_session_logs':
+      return [];
+    case 'check_claude_installed':
+      return false;
+    case 'load_session_state':
+      return null;
+    case 'get_home_dir':
+      return 'C:\\';
+    case 'create_pty':
+      ptyCounter += 1;
+      return `pty-${ptyCounter}`;
+    case 'resize_pty':
+    case 'write_pty':
+    case 'save_session_state':
+    case 'log_session_output':
+      return null;
+    default:
+      return null;
   }
 });
 

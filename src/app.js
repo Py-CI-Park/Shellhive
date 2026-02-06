@@ -7,8 +7,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 
-import { t, setLocale } from './i18n/index.js';
+import { setLocale } from './i18n/index.js';
 import { createHistoryPanel, showHistoryPanel } from './history-panel.js';
+import { LAYOUT_PRESETS, TAB_COLORS } from './ui-constants.js';
 
 // Toast notification system
 const toastContainer = document.createElement('div');
@@ -327,27 +328,6 @@ class TabGroup {
 
 // ===== Command Block System (Warp-style) =====
 // Note: CommandBlock class is defined below with BlockManager (line ~900+)
-
-// 프롬프트 패턴 감지 (PS1, $, >, #, 등)
-function detectPromptPattern(line) {
-  // Windows PowerShell 프롬프트: PS C:\Path>
-  if (/^PS\s+[A-Z]:\\.*?>/.test(line)) {
-    return true;
-  }
-  // CMD 프롬프트: C:\Path>
-  if (/^[A-Z]:\\.*?>/.test(line)) {
-    return true;
-  }
-  // Bash/Unix 프롬프트: user@host:~$
-  if (/^[^\s]+@[^\s]+:[^\s]*[$#]/.test(line)) {
-    return true;
-  }
-  // 간단한 프롬프트: $ 또는 >
-  if (/^[$>#]\s/.test(line)) {
-    return true;
-  }
-  return false;
-}
 
 // ===== Session Recording System =====
 
@@ -1266,46 +1246,6 @@ const TERMINAL_THEMES = {
   },
 };
 
-// Layout presets for split views
-const LAYOUT_PRESETS = {
-  'two-columns': {
-    name: '2열 (좌/우)',
-    icon: '⬛⬛',
-    create: () => ({ type: 'vertical', ratio: 0.5, count: 2 })
-  },
-  'two-rows': {
-    name: '2행 (상/하)',
-    icon: '⬛\n⬛',
-    create: () => ({ type: 'horizontal', ratio: 0.5, count: 2 })
-  },
-  'three-columns': {
-    name: '3열',
-    icon: '⬛⬛⬛',
-    create: () => ({ type: 'vertical', ratio: 0.33, count: 3 })
-  },
-  'main-sidebar': {
-    name: '메인 + 사이드바',
-    icon: '⬛▐',
-    create: () => ({ type: 'vertical', ratio: 0.7, count: 2 })
-  },
-  'grid-2x2': {
-    name: '2x2 그리드',
-    icon: '⬛⬛\n⬛⬛',
-    create: () => ({ type: 'grid', rows: 2, cols: 2 })
-  }
-};
-
-// Available tab colors
-const TAB_COLORS = [
-  { name: 'Red', value: '#f14c4c' },
-  { name: 'Orange', value: '#cca700' },
-  { name: 'Yellow', value: '#e5e510' },
-  { name: 'Green', value: '#0dbc79' },
-  { name: 'Blue', value: '#2472c8' },
-  { name: 'Purple', value: '#bc3fbc' },
-  { name: 'None', value: null }
-];
-
 // State
 const state = {
   sessions: new Map(),
@@ -1348,16 +1288,6 @@ const state = {
   currentLineBuffer: '',      // Track current line input for autocomplete
   gitPanelVisible: false,     // Git 패널 표시 상태
   currentGitPath: null,       // 현재 Git 리포지토리 경로
-  aiModeEnabled: false,       // AI 자연어 명령어 변환 모드 활성화 상태
-  aiPreviewVisible: false,    // AI 미리보기 팝업 표시 상태
-  aiOriginalInput: '',        // AI 변환 전 원본 입력
-  aiTranslatedCommand: '',    // AI 변환된 명령어
-};
-
-// Sidebar collapse state
-const sidebarState = {
-  projectsCollapsed: false,
-  snippetsCollapsed: false
 };
 
 // DOM Elements - will be initialized after DOM loads
@@ -1369,7 +1299,6 @@ let cancelAddSnippet, confirmAddSnippet, snippetNameInput, snippetCommandInput;
 let settingsBtn, settingsModal, closeSettingsModal, cancelSettings, saveSettingsBtn;
 let settingsTheme, settingsFontSize, fontSizeValue, settingsFontFamily;
 let settingsEnableLogging, settingsEnableNotifications, clearLogsBtn;
-let aiModeToggleBtn, aiPreviewPopup, aiPreviewOriginal, aiPreviewTranslated, aiPreviewAccept, aiPreviewReject;
 let settingsBackup = null;
 
 // ===== Settings Functions =====
@@ -1614,7 +1543,7 @@ function updateSessionIdsInTree(node, idMap) {
 async function saveSessionState() {
   try {
     const sessions = [];
-    state.sessions.forEach((session, id) => {
+    state.sessions.forEach((session) => {
       sessions.push({
         id: session.id,
         name: session.name,
@@ -1626,7 +1555,7 @@ async function saveSessionState() {
     });
 
     const tabGroups = [];
-    state.tabGroups.forEach((group, id) => {
+    state.tabGroups.forEach((group) => {
       tabGroups.push({
         id: group.id,
         name: group.name,
@@ -1802,162 +1731,6 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// ===== AI Natural Language Translation Functions =====
-
-/**
- * Toggle AI mode on/off
- */
-function toggleAiMode() {
-  state.aiModeEnabled = !state.aiModeEnabled;
-
-  if (aiModeToggleBtn) {
-    if (state.aiModeEnabled) {
-      aiModeToggleBtn.classList.add('ai-mode-toggle--active');
-      aiModeToggleBtn.title = t('ai.modeDisable');
-      showToast(t('ai.modeEnabled'), 'success');
-    } else {
-      aiModeToggleBtn.classList.remove('ai-mode-toggle--active');
-      aiModeToggleBtn.title = t('ai.modeEnable');
-      showToast(t('ai.modeDisabled'), 'info');
-      hideAiPreview();
-    }
-  }
-
-  debug('AI mode:', state.aiModeEnabled ? 'enabled' : 'disabled');
-}
-
-/**
- * Translate natural language input to shell command
- * @param {string} input - Natural language input
- * @returns {Promise<Object>} Translation result
- */
-async function translateNaturalLanguage(input) {
-  try {
-    const session = state.sessions.get(state.activeSessionId);
-    if (!session) {
-      return { success: false, command: null };
-    }
-
-    // Get current shell type from session
-    const shellType = session.shell || 'powershell';
-
-    debug('Translating natural language:', input, 'shell:', shellType);
-
-    const result = await invoke('translate_natural_language', {
-      text: input,
-      shellType: shellType
-    });
-
-    debug('Translation result:', result);
-    return result;
-  } catch (error) {
-    debug('Translation error:', error);
-    return {
-      success: false,
-      command: null,
-      description: error.toString(),
-      confidence: 0,
-      alternatives: []
-    };
-  }
-}
-
-/**
- * Show AI preview popup with original and translated command
- * @param {string} original - Original natural language input
- * @param {Object} result - Translation result
- */
-function showAiPreview(original, result) {
-  if (!aiPreviewPopup || !result.success || !result.command) {
-    return;
-  }
-
-  state.aiOriginalInput = original;
-  state.aiTranslatedCommand = result.command;
-  state.aiPreviewVisible = true;
-
-  aiPreviewOriginal.textContent = original;
-  aiPreviewTranslated.textContent = result.command;
-
-  // Add description if available
-  const descElement = aiPreviewPopup.querySelector('.ai-preview__description');
-  if (descElement) {
-    if (result.description) {
-      descElement.textContent = result.description;
-      descElement.style.display = 'block';
-    } else {
-      descElement.style.display = 'none';
-    }
-  }
-
-  aiPreviewPopup.classList.add('ai-preview--visible');
-
-  // Focus accept button
-  if (aiPreviewAccept) {
-    setTimeout(() => aiPreviewAccept.focus(), 100);
-  }
-
-  debug('AI preview shown:', original, '->', result.command);
-}
-
-/**
- * Hide AI preview popup
- */
-function hideAiPreview() {
-  if (!aiPreviewPopup) {
-    return;
-  }
-
-  state.aiPreviewVisible = false;
-  state.aiOriginalInput = '';
-  state.aiTranslatedCommand = '';
-
-  aiPreviewPopup.classList.remove('ai-preview--visible');
-
-  debug('AI preview hidden');
-}
-
-/**
- * Accept AI translated command and send to terminal
- */
-function acceptAiTranslation() {
-  if (!state.aiTranslatedCommand) {
-    return;
-  }
-
-  const session = state.sessions.get(state.activeSessionId);
-  if (!session) {
-    hideAiPreview();
-    return;
-  }
-
-  // Send translated command to terminal
-  const command = state.aiTranslatedCommand + '\r';
-
-  try {
-    invoke('write_to_pty', {
-      sessionId: state.activeSessionId,
-      data: command
-    });
-
-    debug('AI translated command sent:', state.aiTranslatedCommand);
-    showToast(t('ai.commandAccepted'), 'success');
-  } catch (error) {
-    debug('Failed to send AI command:', error);
-    showToast(t('ai.commandFailed'), 'error');
-  }
-
-  hideAiPreview();
-}
-
-/**
- * Reject AI translation and return to original input
- */
-function rejectAiTranslation() {
-  debug('AI translation rejected');
-  hideAiPreview();
-}
-
 async function addSnippet(name, command) {
   try {
     await invoke('add_snippet', { name, command });
@@ -2020,34 +1793,6 @@ async function loadCategories() {
     await loadProjects();
   } catch (error) {
     debug('Failed to load categories:', error);
-  }
-}
-
-async function addCategory(name, color = null) {
-  try {
-    await invoke('add_category', { name, color });
-    await loadCategories();
-    showToast(`카테고리 '${name}' 추가됨`, 'success');
-  } catch (error) {
-    showToast(`카테고리 추가 실패: ${error}`, 'error');
-  }
-}
-
-async function removeCategory(id) {
-  try {
-    await invoke('remove_category', { id });
-    await loadCategories();
-  } catch (error) {
-    showToast(`카테고리 삭제 실패: ${error}`, 'error');
-  }
-}
-
-async function setProjectCategory(projectId, categoryId) {
-  try {
-    await invoke('set_project_category', { projectId, categoryId });
-    await loadProjects();
-  } catch (error) {
-    showToast(`카테고리 설정 실패: ${error}`, 'error');
   }
 }
 
@@ -2140,7 +1885,7 @@ function setupProjectListeners() {
     const envBtn = item.querySelector('.sidebar__item-env');
     envBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      showEnvVarsModal(projectId, projectPath);
+      showEnvVarsModal(projectPath);
     });
 
     const filterBtn = item.querySelector('.sidebar__item-filter');
@@ -2204,15 +1949,12 @@ function hideAddProjectModal() {
 
 // ===== Environment Variables Functions =====
 
-let currentEnvVarsProjectId = null;
 let currentEnvVarsProjectPath = null;
 
-async function showEnvVarsModal(projectId, projectPath) {
-  currentEnvVarsProjectId = projectId;
+async function showEnvVarsModal(projectPath) {
   currentEnvVarsProjectPath = projectPath;
 
   const modal = document.getElementById('envVarsModal');
-  const envVarsList = document.getElementById('envVarsList');
 
   try {
     const envVars = await invoke('load_project_env', { projectPath });
@@ -2228,7 +1970,6 @@ async function showEnvVarsModal(projectId, projectPath) {
 function hideEnvVarsModal() {
   const modal = document.getElementById('envVarsModal');
   modal.classList.remove('modal--visible');
-  currentEnvVarsProjectId = null;
   currentEnvVarsProjectPath = null;
 }
 
@@ -2583,6 +2324,11 @@ async function createSession(name = null, workingDir = null, projectId = null, o
             updateAutocomplete(state.currentLineBuffer, id);
           }
 
+          const blockManager = state.blockManagers.get(id);
+          if (blockManager) {
+            blockManager.processUserInput(data);
+          }
+
           await invoke('write_pty', { sessionId: ptySessionId, data });
         } catch (error) {
           debug('Failed to write to PTY:', error);
@@ -2620,6 +2366,7 @@ async function createSession(name = null, workingDir = null, projectId = null, o
     color: null,      // Phase 3: Tab color
   };
   state.sessions.set(id, session);
+  state.blockManagers.set(id, new BlockManager(id));
 
   // Link session to project
   if (projectId) {
@@ -2752,10 +2499,10 @@ function createTab(session) {
 
 function getStatusIcon(status) {
   switch (status) {
-  case SESSION_STATUS.CONNECTING: return '●';
-  case SESSION_STATUS.RUNNING: return '●';
-  case SESSION_STATUS.EXITED: return '○';
-  default: return '○';
+    case SESSION_STATUS.CONNECTING: return '●';
+    case SESSION_STATUS.RUNNING: return '●';
+    case SESSION_STATUS.EXITED: return '○';
+    default: return '○';
   }
 }
 
@@ -2851,6 +2598,7 @@ async function closeSession(id) {
   if (tab) tab.remove();
 
   state.sessions.delete(id);
+  state.blockManagers.delete(id);
 
   // Claude 세션 정리
   onClaudeSessionClose(id);
@@ -2992,35 +2740,35 @@ function showTabContextMenu(e, sessionId) {
     }
 
     switch (action) {
-    case 'duplicate': await duplicateSession(sessionId); break;
-    case 'rename': startTabRename(sessionId); break;
-    case 'pin': togglePinTab(sessionId); break;
-    case 'unpin': togglePinTab(sessionId); break;
-    case 'start-sharing': showSharingModal(sessionId); break;
-    case 'stop-sharing': await stopSharing(sessionId); break;
-    case 'close': await closeSession(sessionId); break;
-    case 'close-others': await closeOtherSessions(sessionId); break;
-    case 'restore-closed': await restoreLastClosedTab(); break;
-    case 'create-group': {
-      const groupName = prompt('Enter group name:');
-      if (groupName) createTabGroup(groupName, [sessionId]);
-      break;
-    }
-    case 'remove-from-group': removeTabFromGroup(sessionId); break;
-    case 'split-horizontal':
-      activateSession(sessionId);
-      splitHorizontal();
-      break;
-    case 'split-vertical':
-      activateSession(sessionId);
-      splitVertical();
-      break;
-    case 'swap-position':
-      startSwapMode(sessionId);
-      break;
-    case 'toggle-maximize':
-      toggleMaximize(sessionId);
-      break;
+      case 'duplicate': await duplicateSession(sessionId); break;
+      case 'rename': startTabRename(sessionId); break;
+      case 'pin': togglePinTab(sessionId); break;
+      case 'unpin': togglePinTab(sessionId); break;
+      case 'start-sharing': showSharingModal(sessionId); break;
+      case 'stop-sharing': await stopSharing(sessionId); break;
+      case 'close': await closeSession(sessionId); break;
+      case 'close-others': await closeOtherSessions(sessionId); break;
+      case 'restore-closed': await restoreLastClosedTab(); break;
+      case 'create-group': {
+        const groupName = prompt('Enter group name:');
+        if (groupName) createTabGroup(groupName, [sessionId]);
+        break;
+      }
+      case 'remove-from-group': removeTabFromGroup(sessionId); break;
+      case 'split-horizontal':
+        activateSession(sessionId);
+        splitHorizontal();
+        break;
+      case 'split-vertical':
+        activateSession(sessionId);
+        splitVertical();
+        break;
+      case 'swap-position':
+        startSwapMode(sessionId);
+        break;
+      case 'toggle-maximize':
+        toggleMaximize(sessionId);
+        break;
     }
     menu.remove();
   });
@@ -3308,7 +3056,7 @@ function filterTabsByQuery(query) {
   const lowerQuery = query.toLowerCase();
   const matches = [];
 
-  state.sessions.forEach((session, sessionId) => {
+  state.sessions.forEach((session) => {
     if (!query || session.name.toLowerCase().includes(lowerQuery)) {
       matches.push(session);
     }
@@ -3324,7 +3072,7 @@ function filterTabsByQuery(query) {
   `).join('');
 
   // Add click and keyboard handlers
-  resultsEl.querySelectorAll('.tab-search__result').forEach((result, index) => {
+  resultsEl.querySelectorAll('.tab-search__result').forEach((result) => {
     result.addEventListener('click', () => {
       activateSession(result.dataset.sessionId);
       hideTabSearch();
@@ -3886,7 +3634,6 @@ function hideAllSessionsResults() {
 // ===== Session Recording UI Functions =====
 
 // Recording controls state
-let recordingControlsVisible = false;
 let playerModal = null;
 let currentPlayer = null;
 
@@ -4517,7 +4264,7 @@ function closeSplitPane(sessionId) {
   if (!state.splitMode || !state.splitRoot) return false;
 
   // Find and remove the leaf node
-  const removed = removeLeafNode(state.splitRoot, sessionId, null);
+  const removed = removeLeafNode(state.splitRoot, sessionId);
 
   if (removed) {
     // Check if we should exit split mode
@@ -4532,7 +4279,7 @@ function closeSplitPane(sessionId) {
   return false;
 }
 
-function removeLeafNode(node, sessionId, parent) {
+function removeLeafNode(node, sessionId) {
   if (!node) return false;
 
   if (node.isLeaf()) {
@@ -4552,8 +4299,8 @@ function removeLeafNode(node, sessionId, parent) {
     }
   }
 
-  return removeLeafNode(node.children[0], sessionId, node) ||
-         removeLeafNode(node.children[1], sessionId, node);
+  return removeLeafNode(node.children[0], sessionId) ||
+         removeLeafNode(node.children[1], sessionId);
 }
 
 function exitSplitMode() {
@@ -4639,12 +4386,12 @@ async function applyLayoutPreset(presetKey) {
   if (config.type === 'grid') {
     await createGridLayout(config.rows, config.cols);
   } else {
-    await createLinearLayout(config.type, config.count, config.ratio);
+    await createLinearLayout(config.type, config.count);
   }
 }
 
 // Create linear split layout (horizontal or vertical)
-async function createLinearLayout(direction, count, ratio) {
+async function createLinearLayout(direction, count) {
   initSplitMode();
   for (let i = 1; i < count; i++) {
     await splitActivePane(direction);
@@ -4786,19 +4533,6 @@ function getProjectColor(projectId) {
   return colors[hash % colors.length];
 }
 
-// Delete a tab group (ungroups all tabs)
-function deleteTabGroup(groupId) {
-  const group = state.tabGroups.get(groupId);
-  if (!group) return;
-
-  group.tabIds.forEach(sessionId => {
-    state.tabToGroup.delete(sessionId);
-  });
-
-  state.tabGroups.delete(groupId);
-  renderTabGroups();
-}
-
 // Render tabs with grouping support
 function renderTabGroups() {
   const tabsList = document.getElementById('tabsList');
@@ -4822,7 +4556,7 @@ function renderTabGroups() {
   const unpinnedSessions = ungroupedSessions.filter(s => !s.pinned);
 
   // Render groups first
-  state.tabGroups.forEach((group, groupId) => {
+  state.tabGroups.forEach((group) => {
     const groupElement = createGroupElement(group);
     tabsList.appendChild(groupElement);
   });
@@ -4951,35 +4685,6 @@ function createTabElement(session, isGrouped = false) {
   });
 
   return tab;
-}
-
-// Debounce utility
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
-
-// Toggle sidebar section collapse
-function toggleSidebarSection(section) {
-  sidebarState[section + 'Collapsed'] = !sidebarState[section + 'Collapsed'];
-  const sectionEl = document.querySelector(`.sidebar__${section}`);
-  const list = sectionEl.querySelector('.sidebar__list');
-  const header = sectionEl.querySelector('.sidebar__section-header');
-
-  if (sidebarState[section + 'Collapsed']) {
-    list.style.display = 'none';
-    header.classList.add('sidebar__section-header--collapsed');
-  } else {
-    list.style.display = '';
-    header.classList.remove('sidebar__section-header--collapsed');
-  }
 }
 
 // ===== Project Filtering Functions =====
@@ -5200,7 +4905,6 @@ function renderCommandPalette() {
 
   // 이벤트 리스너 설정
   const input = palette.querySelector('.command-palette__input');
-  const list = palette.querySelector('.command-palette__list');
 
   input.addEventListener('input', (e) => {
     filterCommands(e.target.value);
@@ -5496,22 +5200,22 @@ function handleKeyboardShortcuts(e) {
   // Ctrl+Alt+Arrow - Focus pane by direction
   if (e.ctrlKey && e.altKey) {
     switch (e.key) {
-    case 'ArrowLeft':
-      e.preventDefault();
-      focusPaneByDirection('left');
-      return;
-    case 'ArrowRight':
-      e.preventDefault();
-      focusPaneByDirection('right');
-      return;
-    case 'ArrowUp':
-      e.preventDefault();
-      focusPaneByDirection('up');
-      return;
-    case 'ArrowDown':
-      e.preventDefault();
-      focusPaneByDirection('down');
-      return;
+      case 'ArrowLeft':
+        e.preventDefault();
+        focusPaneByDirection('left');
+        return;
+      case 'ArrowRight':
+        e.preventDefault();
+        focusPaneByDirection('right');
+        return;
+      case 'ArrowUp':
+        e.preventDefault();
+        focusPaneByDirection('up');
+        return;
+      case 'ArrowDown':
+        e.preventDefault();
+        focusPaneByDirection('down');
+        return;
     }
   }
 }
@@ -5700,38 +5404,6 @@ function focusPaneByDirection(direction) {
   activateSession(leaves[nextIndex].sessionId);
 }
 
-// Get keyboard shortcuts info
-function getKeyboardShortcuts() {
-  return [
-    { keys: 'Ctrl+T', action: '새 탭' },
-    { keys: 'Ctrl+W', action: '탭 닫기' },
-    { keys: 'Ctrl+Tab', action: '다음 탭' },
-    { keys: 'Ctrl+Shift+Tab', action: '이전 탭' },
-    { keys: 'Ctrl+1-9', action: '탭 전환' },
-    { keys: 'Ctrl+Shift+T', action: '마지막 닫은 탭 복원' },
-    { keys: 'Ctrl+Shift+F', action: '탭 검색' },
-    { keys: 'Ctrl+Shift+D', action: '가로 분할' },
-    { keys: 'Ctrl+Shift+E', action: '세로 분할' },
-    { keys: 'Ctrl+Shift+M', action: '현재 창 최대화 토글' },
-    { keys: 'Ctrl+Alt+Arrow', action: '분할 창 포커스 이동' },
-    { keys: 'Ctrl+F', action: '터미널 검색' },
-    { keys: 'F3 / Shift+F3', action: '다음/이전 검색 결과' },
-    { keys: 'Alt+C', action: '검색: 대소문자 구분' },
-    { keys: 'Alt+W', action: '검색: 전체 단어' },
-    { keys: 'Alt+R', action: '검색: 정규식' },
-    { keys: 'Alt+A', action: '검색: 전체 세션' },
-    { keys: 'Ctrl+L', action: '화면 지우기' },
-    { keys: 'Ctrl+K', action: '스크롤백 지우기' },
-    { keys: 'Ctrl+,', action: '설정' },
-    { keys: 'F11', action: '전체화면 토글' },
-    { keys: 'Ctrl+R', action: '명령어 히스토리' },
-    { keys: 'Ctrl+G', action: 'Git 패널 토글' },
-    { keys: 'Ctrl+Shift+P', action: '커맨드 팔레트' },
-    { keys: 'Ctrl+Space', action: 'AI 모드 토글' },
-    { keys: 'Ctrl+Shift+C', action: 'Claude Code 시작' },
-  ];
-}
-
 function switchToNextTab() {
   const sessionIds = Array.from(state.sessions.keys());
   if (sessionIds.length === 0) return;
@@ -5790,7 +5462,7 @@ function highlightDropZone(e) {
   }
 }
 
-function unhighlightDropZone(e) {
+function unhighlightDropZone() {
   document.getElementById('terminalContainer').classList.remove('terminal-container--drop-active');
 }
 
@@ -5893,14 +5565,6 @@ function initializeDOMElements() {
   settingsEnableLogging = document.getElementById('settingsEnableLogging');
   settingsEnableNotifications = document.getElementById('settingsEnableNotifications');
   clearLogsBtn = document.getElementById('clearLogsBtn');
-
-  // AI mode elements
-  aiModeToggleBtn = document.getElementById('aiModeToggle');
-  aiPreviewPopup = document.getElementById('aiPreview');
-  aiPreviewOriginal = document.getElementById('aiPreviewOriginal');
-  aiPreviewTranslated = document.getElementById('aiPreviewTranslated');
-  aiPreviewAccept = document.getElementById('aiPreviewAccept');
-  aiPreviewReject = document.getElementById('aiPreviewReject');
 
   debug('DOM elements initialized');
 }
@@ -6456,15 +6120,6 @@ function showSharingModal(sessionId) {
 
   // 공유 시작
   startSharing(sessionId);
-}
-
-// 공유 모달 숨기기
-function hideSharingModal() {
-  const modal = document.getElementById('sharingModal');
-  if (modal) {
-    modal.classList.add('sharing-modal-overlay--hiding');
-    setTimeout(() => modal.remove(), 200);
-  }
 }
 
 // 세션 공유 시작
