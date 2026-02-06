@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -11,6 +12,8 @@ pub struct Project {
     pub shell: Option<String>,
     pub created_at: DateTime<Utc>,
     pub category_id: Option<String>,
+    #[serde(default)]
+    pub env_vars: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,6 +116,7 @@ pub async fn add_project(
         shell,
         created_at: Utc::now(),
         category_id: None,
+        env_vars: HashMap::new(),
     };
 
     // 프로젝트 추가 및 저장
@@ -293,4 +297,113 @@ fn save_categories(categories: &[ProjectCategory]) -> Result<(), String> {
     std::fs::write(&file_path, content)
         .map_err(|e| format!("Failed to write categories: {}", e))?;
     Ok(())
+}
+
+/// Load environment variables from .shellhive.env file in project directory
+#[tauri::command]
+pub async fn load_project_env(project_path: String) -> Result<HashMap<String, String>, String> {
+    let env_file = PathBuf::from(&project_path).join(".shellhive.env");
+    let mut env_vars = HashMap::new();
+
+    if !env_file.exists() {
+        return Ok(env_vars);
+    }
+
+    let content = fs::read_to_string(&env_file)
+        .map_err(|e| format!("Failed to read .shellhive.env: {}", e))?;
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        // Skip empty lines and comments
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        // Parse KEY=value format
+        if let Some(pos) = line.find('=') {
+            let key = line[..pos].trim().to_string();
+            let value = line[pos + 1..].trim().to_string();
+
+            // Remove surrounding quotes if present
+            let value = if (value.starts_with('"') && value.ends_with('"'))
+                || (value.starts_with('\'') && value.ends_with('\''))
+            {
+                value[1..value.len() - 1].to_string()
+            } else {
+                value
+            };
+
+            if !key.is_empty() {
+                env_vars.insert(key, value);
+            }
+        }
+    }
+
+    Ok(env_vars)
+}
+
+/// Save environment variables to .shellhive.env file in project directory
+#[tauri::command]
+pub async fn save_project_env(
+    project_path: String,
+    env_vars: HashMap<String, String>,
+) -> Result<(), String> {
+    let env_file = PathBuf::from(&project_path).join(".shellhive.env");
+
+    let mut content = String::from("# Shellhive Project Environment Variables\n");
+    content.push_str("# Format: KEY=value\n\n");
+
+    // Sort keys for consistent output
+    let mut keys: Vec<_> = env_vars.keys().collect();
+    keys.sort();
+
+    for key in keys {
+        if let Some(value) = env_vars.get(key) {
+            // Quote values that contain spaces or special characters
+            let formatted_value = if value.contains(' ')
+                || value.contains('=')
+                || value.contains('#')
+                || value.contains('"')
+            {
+                format!("\"{}\"", value.replace('\"', "\\\""))
+            } else {
+                value.clone()
+            };
+            content.push_str(&format!("{}={}\n", key, formatted_value));
+        }
+    }
+
+    fs::write(&env_file, content).map_err(|e| format!("Failed to write .shellhive.env: {}", e))?;
+
+    Ok(())
+}
+
+/// Get environment variables for a project (from .shellhive.env file)
+#[tauri::command]
+pub async fn get_project_env_vars(project_id: String) -> Result<HashMap<String, String>, String> {
+    let projects = load_projects()?;
+
+    let project = projects
+        .iter()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project with id '{}' not found", project_id))?;
+
+    load_project_env(project.path.clone()).await
+}
+
+/// Update environment variables for a project
+#[tauri::command]
+pub async fn update_project_env_vars(
+    project_id: String,
+    env_vars: HashMap<String, String>,
+) -> Result<(), String> {
+    let projects = load_projects()?;
+
+    let project = projects
+        .iter()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project with id '{}' not found", project_id))?;
+
+    save_project_env(project.path.clone(), env_vars).await
 }

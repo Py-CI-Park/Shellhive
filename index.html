@@ -27,6 +27,24 @@
         </div>
         <ul class="sidebar__list sidebar__list--snippets" id="snippetList"></ul>
       </div>
+      <div class="sidebar__git">
+        <div class="sidebar__section-header">
+          <span>Git</span>
+        </div>
+        <div id="gitPanel" class="git-panel" style="display: none;">
+          <!-- Git panel will be rendered here -->
+        </div>
+      </div>
+      <div class="sidebar__claude">
+        <div class="sidebar__section-header">
+          <span>Claude Code</span>
+          <span class="claude-status" id="claudeStatus" title="Claude Code 상태"></span>
+        </div>
+        <button class="sidebar__claude-btn" id="claudeBtn" aria-label="Claude Code 시작">
+          <span class="claude-icon">🤖</span>
+          <span class="claude-text">Start Claude</span>
+        </button>
+      </div>
       <div class="sidebar__footer">
         <button class="sidebar__settings-btn" id="settingsBtn" aria-label="설정 열기">Settings</button>
       </div>
@@ -36,8 +54,101 @@
         <div class="tabs__list" id="tabsList"></div>
         <button class="tabs__new-btn" id="newTabBtn" aria-label="새 탭 만들기">+</button>
       </div>
+      <div class="split-toolbar" id="splitToolbar">
+        <div class="split-toolbar__group">
+          <button class="split-toolbar__btn" id="splitHorizontalBtn" title="가로 분할 (Ctrl+Shift+D)">
+            <span class="split-toolbar__icon">&#x2B1C;&#x2B1C;</span>
+          </button>
+          <button class="split-toolbar__btn" id="splitVerticalBtn" title="세로 분할 (Ctrl+Shift+E)">
+            <span class="split-toolbar__icon split-toolbar__icon--vertical">&#x2B1B;<br>&#x2B1B;</span>
+          </button>
+        </div>
+        <div class="split-toolbar__divider"></div>
+        <div class="split-toolbar__group">
+          <button class="split-toolbar__btn" id="presetTwoColBtn" title="2열 레이아웃">2열</button>
+          <button class="split-toolbar__btn" id="presetTwoRowBtn" title="2행 레이아웃">2행</button>
+          <button class="split-toolbar__btn" id="presetGridBtn" title="2x2 그리드">그리드</button>
+          <button class="split-toolbar__btn" id="presetThreeColBtn" title="3열 레이아웃">3열</button>
+        </div>
+        <div class="split-toolbar__divider"></div>
+        <div class="split-toolbar__group">
+          <button class="split-toolbar__btn" id="swapPanesBtn" title="창 교환">&#x21C4;</button>
+          <button class="split-toolbar__btn" id="maximizePaneBtn" title="창 최대화 (Ctrl+Shift+M)">&#x2610;</button>
+          <button class="split-toolbar__btn" id="closeSplitBtn" title="분할 종료">&#x2715;</button>
+        </div>
+      </div>
       <div class="terminal-container" id="terminalContainer"></div>
+      <!-- AI Mode Input Bar -->
+      <div class="ai-input-bar" id="aiInputBar">
+        <button class="ai-input-bar__toggle" id="aiModeToggle" title="AI Mode (Ctrl+Space)">
+          <span class="ai-input-bar__icon">AI</span>
+        </button>
+        <div class="ai-input-bar__input-container">
+          <input type="text" class="ai-input-bar__input" id="aiInput" placeholder="자연어로 명령어를 입력하세요... (예: js 파일 찾아줘)" disabled />
+          <button class="ai-input-bar__send" id="aiSendBtn" disabled>변환</button>
+        </div>
+        <button class="ai-input-bar__help" id="aiHelpBtn" title="AI 도움말">?</button>
+      </div>
     </main>
+  </div>
+
+  <!-- AI Command Preview Modal -->
+  <div class="modal" id="aiPreviewModal" role="dialog" aria-labelledby="aiPreviewModalTitle" aria-modal="true">
+    <div class="modal__content">
+      <div class="modal__header">
+        <h2 class="modal__title" id="aiPreviewModalTitle">AI 명령어 변환</h2>
+        <button class="modal__close" id="closeAiPreviewModal" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal__body">
+        <div class="ai-preview">
+          <div class="ai-preview__input">
+            <span class="ai-preview__label">입력:</span>
+            <span class="ai-preview__text" id="aiPreviewInput"></span>
+          </div>
+          <div class="ai-preview__arrow">↓</div>
+          <div class="ai-preview__output">
+            <span class="ai-preview__label">변환된 명령어:</span>
+            <code class="ai-preview__command" id="aiPreviewCommand"></code>
+          </div>
+          <div class="ai-preview__description" id="aiPreviewDescription"></div>
+          <div class="ai-preview__confidence" id="aiPreviewConfidence"></div>
+          <div class="ai-preview__alternatives" id="aiPreviewAlternatives"></div>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="cancelAiPreview">취소</button>
+        <button class="btn btn--secondary" id="copyAiCommand">복사</button>
+        <button class="btn btn--primary" id="executeAiCommand">실행</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Help Modal -->
+  <div class="modal" id="aiHelpModal" role="dialog" aria-labelledby="aiHelpModalTitle" aria-modal="true">
+    <div class="modal__content modal__content--wide">
+      <div class="modal__header">
+        <h2 class="modal__title" id="aiHelpModalTitle">AI 명령어 변환 도움말</h2>
+        <button class="modal__close" id="closeAiHelpModal" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal__body">
+        <p class="ai-help__intro">자연어로 원하는 작업을 설명하면 쉘 명령어로 변환해 드립니다.</p>
+        <div class="ai-help__patterns" id="aiHelpPatterns">
+          <!-- Patterns will be inserted here -->
+        </div>
+        <div class="ai-help__tips">
+          <h4>사용 팁</h4>
+          <ul>
+            <li><strong>Ctrl+Space</strong>: AI 모드 켜기/끄기</li>
+            <li><strong>Enter</strong>: 명령어 변환</li>
+            <li>따옴표로 파일명이나 검색어를 감싸면 더 정확합니다</li>
+            <li>예: "test.js 파일 삭제해줘", "'에러' 텍스트 검색"</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--primary" id="closeAiHelp">확인</button>
+      </div>
+    </div>
   </div>
 
   <!-- Add Project Modal -->
@@ -87,6 +198,51 @@
       <div class="modal__footer">
         <button class="btn btn--secondary" id="cancelAddSnippet">Cancel</button>
         <button class="btn btn--primary" id="confirmAddSnippet">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Command History Panel -->
+  <div class="history-panel" id="historyPanel" role="dialog" aria-labelledby="historyPanelTitle" aria-modal="true">
+    <div class="history-panel__container">
+      <div class="history-panel__header">
+        <h3 class="history-panel__title" id="historyPanelTitle">Command History</h3>
+        <input class="history-panel__search" id="historySearch" placeholder="Search commands..." autocomplete="off" />
+        <div class="history-panel__filters">
+          <button class="history-panel__filter history-panel__filter--active" data-filter="all">All</button>
+          <button class="history-panel__filter" data-filter="favorites">Favorites</button>
+          <button class="history-panel__filter" data-filter="frequent">Frequent</button>
+          <button class="history-panel__filter" data-filter="current">Current Project</button>
+        </div>
+        <button class="history-panel__close" id="closeHistoryPanel" aria-label="Close">&times;</button>
+      </div>
+      <div class="history-panel__list" id="historyList">
+        <!-- History items will be inserted here -->
+      </div>
+      <div class="history-panel__footer">
+        <span class="history-panel__count" id="historyCount">0 commands</span>
+        <button class="btn btn--small btn--secondary" id="clearHistoryBtn">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Environment Variables Modal -->
+  <div class="modal" id="envVarsModal" role="dialog" aria-labelledby="envVarsModalTitle" aria-modal="true">
+    <div class="modal__content modal__content--wide">
+      <div class="modal__header">
+        <h2 class="modal__title" id="envVarsModalTitle">Environment Variables</h2>
+        <button class="modal__close" id="closeEnvVarsModal" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal__body">
+        <p class="env-vars-description">Set environment variables for this project. These will be applied when opening a new terminal in this project.</p>
+        <div class="env-vars-list" id="envVarsList">
+          <!-- Environment variable rows will be inserted here -->
+        </div>
+        <button class="btn btn--secondary btn--small" id="addEnvVarBtn">+ Add Variable</button>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="cancelEnvVars">Cancel</button>
+        <button class="btn btn--primary" id="saveEnvVars">Save</button>
       </div>
     </div>
   </div>
@@ -152,6 +308,47 @@
           <p class="settings-help">Session logs are saved to AppData/shellhive/logs/</p>
 
           <button class="btn btn--secondary btn--small" id="clearLogsBtn">Clear All Logs</button>
+        </div>
+
+        <div class="settings-section">
+          <h3 class="settings-section__title">Notifications</h3>
+
+          <div class="form-group form-group--checkbox">
+            <input type="checkbox" id="settingsEnableNotifications" checked>
+            <label for="settingsEnableNotifications">Enable build/test notifications</label>
+          </div>
+
+          <p class="settings-help">Get system notifications when builds or tests complete</p>
+        </div>
+
+        <div class="settings-section">
+          <h3 class="settings-section__title">Snippet Auto-Generation</h3>
+
+          <div class="form-group form-group--checkbox">
+            <input type="checkbox" id="settingsEnableSnippetSuggestions" checked>
+            <label for="settingsEnableSnippetSuggestions">Enable snippet suggestions</label>
+          </div>
+
+          <p class="settings-help">Automatically suggest saving frequently used commands as snippets</p>
+
+          <div class="form-group">
+            <label for="settingsSnippetThreshold">Minimum usage count for suggestions</label>
+            <div class="input-with-value">
+              <input type="range" id="settingsSnippetThreshold" min="2" max="10" value="3">
+              <span id="snippetThresholdValue">3 times</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3 class="settings-section__title">Terminal Display</h3>
+
+          <div class="form-group form-group--checkbox">
+            <input type="checkbox" id="settingsBlockMode">
+            <label for="settingsBlockMode">블록 모드 (Warp-style command blocks)</label>
+          </div>
+
+          <p class="settings-help">명령어를 블록 단위로 표시합니다 (명령어, 출력, 실행 시간, 종료 상태 포함)</p>
         </div>
       </div>
       <div class="modal__footer">

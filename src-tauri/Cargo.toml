@@ -20,6 +20,7 @@ uuid = { version = "1", features = ["v4"] }
 parking_lot = "0.12"
 dirs = "5"
 chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
 
 [features]
 default = ["custom-protocol"]

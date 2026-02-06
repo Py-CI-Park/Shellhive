@@ -1,18 +1,10 @@
 use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PtySession {
-    pub id: String,
-    pub working_dir: String,
-    pub shell: String,
-}
 
 // Store both the master PTY handle and the writer
 struct PtySessionData {
@@ -46,6 +38,7 @@ pub async fn create_pty(
     state: tauri::State<'_, PtyManager>,
     working_dir: String,
     shell: Option<String>,
+    env_vars: Option<HashMap<String, String>>,
 ) -> Result<String, String> {
     let id = uuid::Uuid::new_v4().to_string();
 
@@ -76,6 +69,14 @@ pub async fn create_pty(
     // Create command
     let mut cmd = CommandBuilder::new(&shell_cmd);
     cmd.cwd(&working_dir);
+
+    // Add environment variables if provided
+    if let Some(vars) = env_vars {
+        println!("[PTY] Setting {} environment variables", vars.len());
+        for (key, value) in vars {
+            cmd.env(key, value);
+        }
+    }
 
     // Spawn command
     let child = pty_pair.slave.spawn_command(cmd).map_err(|e| {

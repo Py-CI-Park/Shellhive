@@ -7,9 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 
-import { setLocale } from './i18n/index.js';
-import { createHistoryPanel, showHistoryPanel } from './history-panel.js';
-import { LAYOUT_PRESETS, TAB_COLORS } from './ui-constants.js';
+import { t, setLocale, getLocale, getAvailableLocales } from './i18n/index.js';
 
 // Toast notification system
 const toastContainer = document.createElement('div');
@@ -327,7 +325,151 @@ class TabGroup {
 }
 
 // ===== Command Block System (Warp-style) =====
-// Note: CommandBlock class is defined below with BlockManager (line ~900+)
+
+class CommandBlock {
+  constructor(id, command, timestamp) {
+    this.id = id;
+    this.command = command;
+    this.timestamp = timestamp;
+    this.output = '';
+    this.exitCode = null;
+    this.startTime = Date.now();
+    this.endTime = null;
+    this.isRunning = true;
+  }
+
+  addOutput(data) {
+    this.output += data;
+  }
+
+  finish(exitCode = 0) {
+    this.exitCode = exitCode;
+    this.endTime = Date.now();
+    this.isRunning = false;
+  }
+
+  getDuration() {
+    const end = this.endTime || Date.now();
+    return end - this.startTime;
+  }
+
+  getFormattedDuration() {
+    const duration = this.getDuration();
+    if (duration < 1000) {
+      return `${duration}ms`;
+    } else if (duration < 60000) {
+      return `${(duration / 1000).toFixed(2)}s`;
+    } else {
+      const minutes = Math.floor(duration / 60000);
+      const seconds = Math.floor((duration % 60000) / 1000);
+      return `${minutes}m ${seconds}s`;
+    }
+  }
+
+  getStatusIcon() {
+    if (this.isRunning) {
+      return '⏳';
+    }
+    return this.exitCode === 0 ? '✓' : '✗';
+  }
+
+  getStatusClass() {
+    if (this.isRunning) {
+      return 'command-block__status-icon--running';
+    }
+    return this.exitCode === 0 ? 'command-block__status-icon--success' : 'command-block__status-icon--error';
+  }
+
+  getStatusText() {
+    if (this.isRunning) {
+      return 'Running...';
+    }
+    return this.exitCode === 0 ? 'Success' : `Failed (exit code: ${this.exitCode})`;
+  }
+
+  render() {
+    const block = document.createElement('div');
+    block.className = 'command-block';
+    block.dataset.blockId = this.id;
+
+    const formattedTime = new Date(this.timestamp).toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+
+    block.innerHTML = `
+      <div class="command-block__header">
+        <div class="command-block__header-left">
+          <span class="command-block__toggle">▼</span>
+          <span class="command-block__command">${escapeHtml(this.command)}</span>
+        </div>
+        <span class="command-block__timestamp">${formattedTime}</span>
+      </div>
+      <div class="command-block__output">${escapeHtml(this.output)}</div>
+      <div class="command-block__footer">
+        <div class="command-block__status">
+          <span class="command-block__status-icon ${this.getStatusClass()}">${this.getStatusIcon()}</span>
+          <span class="command-block__status-text">${this.getStatusText()}</span>
+        </div>
+        <span class="command-block__duration">${this.getFormattedDuration()}</span>
+      </div>
+    `;
+
+    // 헤더 클릭 시 블록 접기/펴기
+    const header = block.querySelector('.command-block__header');
+    header.addEventListener('click', () => {
+      block.classList.toggle('command-block--collapsed');
+    });
+
+    return block;
+  }
+
+  updateBlock(blockElement) {
+    const outputEl = blockElement.querySelector('.command-block__output');
+    const statusIconEl = blockElement.querySelector('.command-block__status-icon');
+    const statusTextEl = blockElement.querySelector('.command-block__status-text');
+    const durationEl = blockElement.querySelector('.command-block__duration');
+
+    if (outputEl) {
+      outputEl.textContent = this.output;
+    }
+
+    if (statusIconEl) {
+      statusIconEl.textContent = this.getStatusIcon();
+      statusIconEl.className = `command-block__status-icon ${this.getStatusClass()}`;
+    }
+
+    if (statusTextEl) {
+      statusTextEl.textContent = this.getStatusText();
+    }
+
+    if (durationEl) {
+      durationEl.textContent = this.getFormattedDuration();
+    }
+  }
+}
+
+// 프롬프트 패턴 감지 (PS1, $, >, #, 등)
+function detectPromptPattern(line) {
+  // Windows PowerShell 프롬프트: PS C:\Path>
+  if (/^PS\s+[A-Z]:\\.*?>/.test(line)) {
+    return true;
+  }
+  // CMD 프롬프트: C:\Path>
+  if (/^[A-Z]:\\.*?>/.test(line)) {
+    return true;
+  }
+  // Bash/Unix 프롬프트: user@host:~$
+  if (/^[^\s]+@[^\s]+:[^\s]*[\$#]/.test(line)) {
+    return true;
+  }
+  // 간단한 프롬프트: $ 또는 >
+  if (/^[\$>#]\s/.test(line)) {
+    return true;
+  }
+  return false;
+}
 
 // ===== Session Recording System =====
 
@@ -955,7 +1097,6 @@ class BlockManager {
 
   // Detect if output contains a new prompt (command completed)
   detectPrompt(data) {
-    // eslint-disable-next-line no-control-regex
     const cleanData = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, ''); // Remove ANSI codes
     for (const pattern of this.promptPatterns) {
       if (pattern.test(cleanData)) {
@@ -1005,7 +1146,6 @@ class BlockManager {
         // Complete current block if exists
         if (this.currentBlock) {
           // Extract output before the prompt
-          // eslint-disable-next-line no-control-regex
           const cleanOutput = this.outputBuffer.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
           this.currentBlock.addOutput(cleanOutput);
           this.currentBlock.complete();
@@ -1040,7 +1180,6 @@ class BlockManager {
 
     // Clean output - remove ANSI codes for display
     const cleanOutput = block.output.join('')
-      // eslint-disable-next-line no-control-regex
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
@@ -1246,6 +1385,46 @@ const TERMINAL_THEMES = {
   },
 };
 
+// Layout presets for split views
+const LAYOUT_PRESETS = {
+  'two-columns': {
+    name: '2열 (좌/우)',
+    icon: '⬛⬛',
+    create: () => ({ type: 'vertical', ratio: 0.5, count: 2 })
+  },
+  'two-rows': {
+    name: '2행 (상/하)',
+    icon: '⬛\n⬛',
+    create: () => ({ type: 'horizontal', ratio: 0.5, count: 2 })
+  },
+  'three-columns': {
+    name: '3열',
+    icon: '⬛⬛⬛',
+    create: () => ({ type: 'vertical', ratio: 0.33, count: 3 })
+  },
+  'main-sidebar': {
+    name: '메인 + 사이드바',
+    icon: '⬛▐',
+    create: () => ({ type: 'vertical', ratio: 0.7, count: 2 })
+  },
+  'grid-2x2': {
+    name: '2x2 그리드',
+    icon: '⬛⬛\n⬛⬛',
+    create: () => ({ type: 'grid', rows: 2, cols: 2 })
+  }
+};
+
+// Available tab colors
+const TAB_COLORS = [
+  { name: 'Red', value: '#f14c4c' },
+  { name: 'Orange', value: '#cca700' },
+  { name: 'Yellow', value: '#e5e510' },
+  { name: 'Green', value: '#0dbc79' },
+  { name: 'Blue', value: '#2472c8' },
+  { name: 'Purple', value: '#bc3fbc' },
+  { name: 'None', value: null }
+];
+
 // State
 const state = {
   sessions: new Map(),
@@ -1290,6 +1469,12 @@ const state = {
   currentGitPath: null,       // 현재 Git 리포지토리 경로
 };
 
+// Sidebar collapse state
+const sidebarState = {
+  projectsCollapsed: false,
+  snippetsCollapsed: false
+};
+
 // DOM Elements - will be initialized after DOM loads
 let tabsList, terminalContainer, newTabBtn, projectList, addProjectBtn;
 let addProjectModal, closeAddProjectModal, cancelAddProject, confirmAddProject;
@@ -1299,7 +1484,6 @@ let cancelAddSnippet, confirmAddSnippet, snippetNameInput, snippetCommandInput;
 let settingsBtn, settingsModal, closeSettingsModal, cancelSettings, saveSettingsBtn;
 let settingsTheme, settingsFontSize, fontSizeValue, settingsFontFamily;
 let settingsEnableLogging, settingsEnableNotifications, clearLogsBtn;
-let settingsBackup = null;
 
 // ===== Settings Functions =====
 
@@ -1543,7 +1727,7 @@ function updateSessionIdsInTree(node, idMap) {
 async function saveSessionState() {
   try {
     const sessions = [];
-    state.sessions.forEach((session) => {
+    state.sessions.forEach((session, id) => {
       sessions.push({
         id: session.id,
         name: session.name,
@@ -1555,7 +1739,7 @@ async function saveSessionState() {
     });
 
     const tabGroups = [];
-    state.tabGroups.forEach((group) => {
+    state.tabGroups.forEach((group, id) => {
       tabGroups.push({
         id: group.id,
         name: group.name,
@@ -1796,6 +1980,34 @@ async function loadCategories() {
   }
 }
 
+async function addCategory(name, color = null) {
+  try {
+    await invoke('add_category', { name, color });
+    await loadCategories();
+    showToast(`카테고리 '${name}' 추가됨`, 'success');
+  } catch (error) {
+    showToast(`카테고리 추가 실패: ${error}`, 'error');
+  }
+}
+
+async function removeCategory(id) {
+  try {
+    await invoke('remove_category', { id });
+    await loadCategories();
+  } catch (error) {
+    showToast(`카테고리 삭제 실패: ${error}`, 'error');
+  }
+}
+
+async function setProjectCategory(projectId, categoryId) {
+  try {
+    await invoke('set_project_category', { projectId, categoryId });
+    await loadProjects();
+  } catch (error) {
+    showToast(`카테고리 설정 실패: ${error}`, 'error');
+  }
+}
+
 // ===== Project Functions =====
 
 async function loadProjects() {
@@ -1885,7 +2097,7 @@ function setupProjectListeners() {
     const envBtn = item.querySelector('.sidebar__item-env');
     envBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      showEnvVarsModal(projectPath);
+      showEnvVarsModal(projectId, projectPath);
     });
 
     const filterBtn = item.querySelector('.sidebar__item-filter');
@@ -1949,12 +2161,15 @@ function hideAddProjectModal() {
 
 // ===== Environment Variables Functions =====
 
+let currentEnvVarsProjectId = null;
 let currentEnvVarsProjectPath = null;
 
-async function showEnvVarsModal(projectPath) {
+async function showEnvVarsModal(projectId, projectPath) {
+  currentEnvVarsProjectId = projectId;
   currentEnvVarsProjectPath = projectPath;
 
   const modal = document.getElementById('envVarsModal');
+  const envVarsList = document.getElementById('envVarsList');
 
   try {
     const envVars = await invoke('load_project_env', { projectPath });
@@ -1970,6 +2185,7 @@ async function showEnvVarsModal(projectPath) {
 function hideEnvVarsModal() {
   const modal = document.getElementById('envVarsModal');
   modal.classList.remove('modal--visible');
+  currentEnvVarsProjectId = null;
   currentEnvVarsProjectPath = null;
 }
 
@@ -2069,9 +2285,7 @@ async function getProjectEnvVars(projectPath) {
 
 // ===== Session Functions =====
 
-async function createSession(name = null, workingDir = null, projectId = null, options = {}) {
-  const { activate = true } = options;
-
+async function createSession(name = null, workingDir = null, projectId = null) {
   // Check session limit
   if (state.sessions.size >= MAX_SESSIONS) {
     showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다. 기존 세션을 닫아주세요.`, 'warning');
@@ -2324,11 +2538,6 @@ async function createSession(name = null, workingDir = null, projectId = null, o
             updateAutocomplete(state.currentLineBuffer, id);
           }
 
-          const blockManager = state.blockManagers.get(id);
-          if (blockManager) {
-            blockManager.processUserInput(data);
-          }
-
           await invoke('write_pty', { sessionId: ptySessionId, data });
         } catch (error) {
           debug('Failed to write to PTY:', error);
@@ -2366,7 +2575,6 @@ async function createSession(name = null, workingDir = null, projectId = null, o
     color: null,      // Phase 3: Tab color
   };
   state.sessions.set(id, session);
-  state.blockManagers.set(id, new BlockManager(id));
 
   // Link session to project
   if (projectId) {
@@ -2379,9 +2587,7 @@ async function createSession(name = null, workingDir = null, projectId = null, o
   createTab(session);
 
   // Activate session
-  if (activate) {
-    activateSession(id);
-  }
+  activateSession(id);
 
   // Handle resize with debouncing
   let resizeTimeout = null;
@@ -2499,10 +2705,10 @@ function createTab(session) {
 
 function getStatusIcon(status) {
   switch (status) {
-    case SESSION_STATUS.CONNECTING: return '●';
-    case SESSION_STATUS.RUNNING: return '●';
-    case SESSION_STATUS.EXITED: return '○';
-    default: return '○';
+  case SESSION_STATUS.CONNECTING: return '●';
+  case SESSION_STATUS.RUNNING: return '●';
+  case SESSION_STATUS.EXITED: return '○';
+  default: return '○';
   }
 }
 
@@ -2598,7 +2804,6 @@ async function closeSession(id) {
   if (tab) tab.remove();
 
   state.sessions.delete(id);
-  state.blockManagers.delete(id);
 
   // Claude 세션 정리
   onClaudeSessionClose(id);
@@ -2740,35 +2945,35 @@ function showTabContextMenu(e, sessionId) {
     }
 
     switch (action) {
-      case 'duplicate': await duplicateSession(sessionId); break;
-      case 'rename': startTabRename(sessionId); break;
-      case 'pin': togglePinTab(sessionId); break;
-      case 'unpin': togglePinTab(sessionId); break;
-      case 'start-sharing': showSharingModal(sessionId); break;
-      case 'stop-sharing': await stopSharing(sessionId); break;
-      case 'close': await closeSession(sessionId); break;
-      case 'close-others': await closeOtherSessions(sessionId); break;
-      case 'restore-closed': await restoreLastClosedTab(); break;
-      case 'create-group': {
-        const groupName = prompt('Enter group name:');
-        if (groupName) createTabGroup(groupName, [sessionId]);
-        break;
-      }
-      case 'remove-from-group': removeTabFromGroup(sessionId); break;
-      case 'split-horizontal':
-        activateSession(sessionId);
-        splitHorizontal();
-        break;
-      case 'split-vertical':
-        activateSession(sessionId);
-        splitVertical();
-        break;
-      case 'swap-position':
-        startSwapMode(sessionId);
-        break;
-      case 'toggle-maximize':
-        toggleMaximize(sessionId);
-        break;
+    case 'duplicate': await duplicateSession(sessionId); break;
+    case 'rename': startTabRename(sessionId); break;
+    case 'pin': togglePinTab(sessionId); break;
+    case 'unpin': togglePinTab(sessionId); break;
+    case 'start-sharing': showSharingModal(sessionId); break;
+    case 'stop-sharing': await stopSharing(sessionId); break;
+    case 'close': await closeSession(sessionId); break;
+    case 'close-others': await closeOtherSessions(sessionId); break;
+    case 'restore-closed': await restoreLastClosedTab(); break;
+    case 'create-group': {
+      const groupName = prompt('Enter group name:');
+      if (groupName) createTabGroup(groupName, [sessionId]);
+      break;
+    }
+    case 'remove-from-group': removeTabFromGroup(sessionId); break;
+    case 'split-horizontal':
+      activateSession(sessionId);
+      splitHorizontal();
+      break;
+    case 'split-vertical':
+      activateSession(sessionId);
+      splitVertical();
+      break;
+    case 'swap-position':
+      startSwapMode(sessionId);
+      break;
+    case 'toggle-maximize':
+      toggleMaximize(sessionId);
+      break;
     }
     menu.remove();
   });
@@ -3056,7 +3261,7 @@ function filterTabsByQuery(query) {
   const lowerQuery = query.toLowerCase();
   const matches = [];
 
-  state.sessions.forEach((session) => {
+  state.sessions.forEach((session, sessionId) => {
     if (!query || session.name.toLowerCase().includes(lowerQuery)) {
       matches.push(session);
     }
@@ -3072,7 +3277,7 @@ function filterTabsByQuery(query) {
   `).join('');
 
   // Add click and keyboard handlers
-  resultsEl.querySelectorAll('.tab-search__result').forEach((result) => {
+  resultsEl.querySelectorAll('.tab-search__result').forEach((result, index) => {
     result.addEventListener('click', () => {
       activateSession(result.dataset.sessionId);
       hideTabSearch();
@@ -3634,6 +3839,7 @@ function hideAllSessionsResults() {
 // ===== Session Recording UI Functions =====
 
 // Recording controls state
+let recordingControlsVisible = false;
 let playerModal = null;
 let currentPlayer = null;
 
@@ -4013,33 +4219,19 @@ function formatTime(ms) {
 // ===== Split Pane Functions =====
 
 function initSplitMode() {
-  console.log('initSplitMode called, activeSessionId:', state.activeSessionId);
   if (!state.activeSessionId) return;
 
   state.splitMode = true;
   state.splitRoot = new SplitNode('leaf', state.activeSessionId);
-  console.log('splitRoot created:', state.splitRoot);
   renderSplitLayout();
-  console.log('renderSplitLayout completed');
 }
 
 function splitHorizontal() {
-  console.log('splitHorizontal called, activeSessionId:', state.activeSessionId);
-  if (!state.activeSessionId) {
-    showToast('먼저 터미널 세션을 생성하세요', 'warning');
-    return;
-  }
-  console.log('splitMode before init:', state.splitMode);
   if (!state.splitMode) initSplitMode();
-  console.log('splitMode after init:', state.splitMode, 'splitRoot:', state.splitRoot);
   splitActivePane('horizontal');
 }
 
 function splitVertical() {
-  if (!state.activeSessionId) {
-    showToast('먼저 터미널 세션을 생성하세요', 'warning');
-    return;
-  }
   if (!state.splitMode) initSplitMode();
   splitActivePane('vertical');
 }
@@ -4090,10 +4282,6 @@ function renderMaximizedView(sessionId) {
 }
 
 async function splitActivePane(direction) {
-  console.log('splitActivePane called, direction:', direction);
-  console.log('activeSessionId:', state.activeSessionId);
-  console.log('splitRoot:', state.splitRoot);
-
   if (!state.activeSessionId) return;
 
   // Prevent race condition - only one split operation at a time
@@ -4109,31 +4297,23 @@ async function splitActivePane(direction) {
 
     // Find the leaf node containing the active session
     const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
-    console.log('leafNode found:', leafNode);
     if (!leafNode) return;
 
     // Create a new session for the split
     const session = state.sessions.get(state.activeSessionId);
-    console.log('Creating new session for split, current session:', session);
     const newSession = await createSession(
       `${session.name} (split)`,
       session.projectPath,
-      session.projectId,
-      { activate: false }
+      session.projectId
     );
 
-    console.log('New session created:', newSession);
     if (!newSession) return;
 
     // Split the leaf node
-    console.log('Splitting leaf node with direction:', direction, 'newSessionId:', newSession.id);
     leafNode.split(direction, newSession.id);
-    state.activeSessionId = newSession.id;
 
     // Render the new layout
-    console.log('Calling renderSplitLayout after split');
     renderSplitLayout();
-    newSession.terminal.focus();
 
     showToast(`화면 ${direction === 'horizontal' ? '가로' : '세로'} 분할`, 'success', 2000);
   } finally {
@@ -4151,10 +4331,7 @@ function findLeafNode(node, sessionId) {
 }
 
 function renderSplitLayout() {
-  console.log('renderSplitLayout called');
-  console.log('splitMode:', state.splitMode, 'splitRoot:', state.splitRoot);
   const container = document.getElementById('terminalContainer');
-  console.log('terminalContainer:', container);
   if (!state.splitMode || !state.splitRoot) {
     // Reset to normal mode
     container.innerHTML = '';
@@ -4175,12 +4352,9 @@ function renderSplitLayout() {
 
   container.innerHTML = '';
   container.className = 'terminal-container terminal-container--split';
-  console.log('container className:', container.className);
 
   const layoutEl = renderSplitNode(state.splitRoot);
-  console.log('layoutEl created:', layoutEl);
   container.appendChild(layoutEl);
-  console.log('container innerHTML length:', container.innerHTML.length);
 
   // Fit all terminals
   setTimeout(() => {
@@ -4216,7 +4390,7 @@ function renderSplitNode(node) {
 
   const pane1 = document.createElement('div');
   pane1.className = 'split-pane';
-  pane1.style.flex = `1 1 ${node.ratio * 100}%`;
+  pane1.style.flex = node.ratio;
   pane1.appendChild(renderSplitNode(node.children[0]));
 
   const resizer = document.createElement('div');
@@ -4225,7 +4399,7 @@ function renderSplitNode(node) {
 
   const pane2 = document.createElement('div');
   pane2.className = 'split-pane';
-  pane2.style.flex = `1 1 ${(1 - node.ratio) * 100}%`;
+  pane2.style.flex = 1 - node.ratio;
   pane2.appendChild(renderSplitNode(node.children[1]));
 
   container.appendChild(pane1);
@@ -4264,7 +4438,7 @@ function closeSplitPane(sessionId) {
   if (!state.splitMode || !state.splitRoot) return false;
 
   // Find and remove the leaf node
-  const removed = removeLeafNode(state.splitRoot, sessionId);
+  const removed = removeLeafNode(state.splitRoot, sessionId, null);
 
   if (removed) {
     // Check if we should exit split mode
@@ -4279,7 +4453,7 @@ function closeSplitPane(sessionId) {
   return false;
 }
 
-function removeLeafNode(node, sessionId) {
+function removeLeafNode(node, sessionId, parent) {
   if (!node) return false;
 
   if (node.isLeaf()) {
@@ -4299,8 +4473,8 @@ function removeLeafNode(node, sessionId) {
     }
   }
 
-  return removeLeafNode(node.children[0], sessionId) ||
-         removeLeafNode(node.children[1], sessionId);
+  return removeLeafNode(node.children[0], sessionId, node) ||
+         removeLeafNode(node.children[1], sessionId, node);
 }
 
 function exitSplitMode() {
@@ -4367,17 +4541,13 @@ function getAllLeafNodes(node) {
 
 // Apply a layout preset
 async function applyLayoutPreset(presetKey) {
-  if (!state.activeSessionId) {
-    showToast('먼저 터미널 세션을 생성하세요', 'warning');
-    return;
-  }
-
   const preset = LAYOUT_PRESETS[presetKey];
   if (!preset) return;
 
   const config = preset.create();
 
   // Current active session is the base
+  if (!state.activeSessionId) return;
 
   // Reset existing split
   exitSplitMode();
@@ -4386,12 +4556,12 @@ async function applyLayoutPreset(presetKey) {
   if (config.type === 'grid') {
     await createGridLayout(config.rows, config.cols);
   } else {
-    await createLinearLayout(config.type, config.count);
+    await createLinearLayout(config.type, config.count, config.ratio);
   }
 }
 
 // Create linear split layout (horizontal or vertical)
-async function createLinearLayout(direction, count) {
+async function createLinearLayout(direction, count, ratio) {
   initSplitMode();
   for (let i = 1; i < count; i++) {
     await splitActivePane(direction);
@@ -4533,6 +4703,19 @@ function getProjectColor(projectId) {
   return colors[hash % colors.length];
 }
 
+// Delete a tab group (ungroups all tabs)
+function deleteTabGroup(groupId) {
+  const group = state.tabGroups.get(groupId);
+  if (!group) return;
+
+  group.tabIds.forEach(sessionId => {
+    state.tabToGroup.delete(sessionId);
+  });
+
+  state.tabGroups.delete(groupId);
+  renderTabGroups();
+}
+
 // Render tabs with grouping support
 function renderTabGroups() {
   const tabsList = document.getElementById('tabsList');
@@ -4556,7 +4739,7 @@ function renderTabGroups() {
   const unpinnedSessions = ungroupedSessions.filter(s => !s.pinned);
 
   // Render groups first
-  state.tabGroups.forEach((group) => {
+  state.tabGroups.forEach((group, groupId) => {
     const groupElement = createGroupElement(group);
     tabsList.appendChild(groupElement);
   });
@@ -4687,6 +4870,35 @@ function createTabElement(session, isGrouped = false) {
   return tab;
 }
 
+// Debounce utility
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Toggle sidebar section collapse
+function toggleSidebarSection(section) {
+  sidebarState[section + 'Collapsed'] = !sidebarState[section + 'Collapsed'];
+  const sectionEl = document.querySelector(`.sidebar__${section}`);
+  const list = sectionEl.querySelector('.sidebar__list');
+  const header = sectionEl.querySelector('.sidebar__section-header');
+
+  if (sidebarState[section + 'Collapsed']) {
+    list.style.display = 'none';
+    header.classList.add('sidebar__section-header--collapsed');
+  } else {
+    list.style.display = '';
+    header.classList.remove('sidebar__section-header--collapsed');
+  }
+}
+
 // ===== Project Filtering Functions =====
 
 function setProjectFilter(projectId) {
@@ -4810,263 +5022,9 @@ function updateProjectFilterButtons() {
   });
 }
 
-// ===== Command Palette =====
-
-// 커맨드 정의 (모든 앱 기능)
-const COMMANDS = [
-  { id: 'new-tab', name: '새 탭', shortcut: 'Ctrl+T', action: () => createSession() },
-  { id: 'close-tab', name: '탭 닫기', shortcut: 'Ctrl+W', action: () => state.activeSessionId && closeSession(state.activeSessionId) },
-  { id: 'restore-tab', name: '닫은 탭 복원', shortcut: 'Ctrl+Shift+T', action: () => restoreLastClosedTab() },
-  { id: 'split-horizontal', name: '가로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
-  { id: 'split-vertical', name: '세로 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
-  { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
-  { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
-  { id: 'search-tabs', name: '탭 검색', shortcut: 'Ctrl+Shift+F', action: () => showTabSearch() },
-  { id: 'settings', name: '설정 열기', shortcut: 'Ctrl+,', action: () => showSettingsModal() },
-  { id: 'add-project', name: '프로젝트 추가', shortcut: '', action: () => showAddProjectModal() },
-  { id: 'add-snippet', name: '스니펫 추가', shortcut: '', action: () => showAddSnippetModal() },
-  { id: 'toggle-recording', name: '녹화 시작/중지', shortcut: 'Ctrl+Shift+R', action: () => {
-    if (recordingManager.isRecording()) {
-      stopRecordingUI();
-    } else {
-      startRecordingUI();
-    }
-  }},
-  { id: 'clear-screen', name: '화면 지우기', shortcut: 'Ctrl+L', action: () => clearTerminalScreen() },
-  { id: 'clear-scrollback', name: '스크롤백 지우기', shortcut: 'Ctrl+K', action: () => clearTerminalScrollback() },
-  { id: 'start-claude', name: 'Claude Code 시작', shortcut: 'Ctrl+Shift+C', action: () => startClaudeSession() },
-  { id: 'fullscreen', name: '전체화면 전환', shortcut: 'F11', action: () => toggleFullscreen() },
-  { id: 'history', name: '명령어 히스토리', shortcut: 'Ctrl+R', action: () => showHistoryPanel(commandHistory, state, escapeHtml) },
-  { id: 'git-panel', name: 'Git 패널 토글', shortcut: 'Ctrl+G', action: () => toggleGitPanel() },
-  { id: 'next-tab', name: '다음 탭', shortcut: 'Ctrl+Tab', action: () => switchToNextTab() },
-  { id: 'prev-tab', name: '이전 탭', shortcut: 'Ctrl+Shift+Tab', action: () => switchToPreviousTab() },
-  { id: 'theme-dark', name: '테마: 다크', shortcut: '', action: () => changeTheme('dark') },
-  { id: 'theme-light', name: '테마: 라이트', shortcut: '', action: () => changeTheme('light') },
-  { id: 'theme-monokai', name: '테마: Monokai', shortcut: '', action: () => changeTheme('monokai') },
-  { id: 'theme-high-contrast', name: '테마: 고대비', shortcut: '', action: () => changeTheme('high-contrast') },
-];
-
-// 최근 사용 명령어 추적
-const recentCommands = [];
-const MAX_RECENT_COMMANDS = 5;
-
-// 커맨드 팔레트 상태
-let commandPaletteState = {
-  isVisible: false,
-  selectedIndex: 0,
-  filteredCommands: [...COMMANDS]
-};
-
-function showCommandPalette() {
-  commandPaletteState.isVisible = true;
-  commandPaletteState.selectedIndex = 0;
-
-  // 최근 명령어를 먼저 표시
-  const recentIds = new Set(recentCommands);
-  const recentCmds = COMMANDS.filter(cmd => recentIds.has(cmd.id));
-  const otherCmds = COMMANDS.filter(cmd => !recentIds.has(cmd.id));
-  commandPaletteState.filteredCommands = [...recentCmds, ...otherCmds];
-
-  renderCommandPalette();
-
-  // 입력 필드에 포커스
-  const input = document.querySelector('.command-palette__input');
-  if (input) {
-    input.focus();
-  }
-}
-
-function hideCommandPalette() {
-  commandPaletteState.isVisible = false;
-  const palette = document.querySelector('.command-palette');
-  if (palette) {
-    palette.remove();
-  }
-}
-
-function renderCommandPalette() {
-  // 기존 팔레트 제거
-  const existing = document.querySelector('.command-palette');
-  if (existing) {
-    existing.remove();
-  }
-
-  // 팔레트 생성
-  const palette = document.createElement('div');
-  palette.className = 'command-palette';
-  palette.innerHTML = `
-    <div class="command-palette__container">
-      <input type="text" class="command-palette__input" placeholder="명령어 검색..." />
-      <div class="command-palette__list" role="listbox"></div>
-    </div>
-  `;
-
-  document.body.appendChild(palette);
-
-  // 이벤트 리스너 설정
-  const input = palette.querySelector('.command-palette__input');
-
-  input.addEventListener('input', (e) => {
-    filterCommands(e.target.value);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    handleCommandPaletteKeydown(e);
-  });
-
-  // 오버레이 클릭시 닫기
-  palette.addEventListener('click', (e) => {
-    if (e.target === palette) {
-      hideCommandPalette();
-    }
-  });
-
-  // 명령어 목록 렌더링
-  renderCommandList();
-}
-
-function renderCommandList() {
-  const list = document.querySelector('.command-palette__list');
-  if (!list) return;
-
-  list.innerHTML = '';
-
-  commandPaletteState.filteredCommands.forEach((cmd, index) => {
-    const item = document.createElement('div');
-    item.className = 'command-palette__item';
-    if (index === commandPaletteState.selectedIndex) {
-      item.classList.add('command-palette__item--selected');
-    }
-
-    // 최근 사용 명령어 표시
-    const isRecent = recentCommands.includes(cmd.id);
-
-    item.innerHTML = `
-      <div class="command-palette__item-content">
-        ${isRecent ? '<span class="command-palette__recent-badge">최근</span>' : ''}
-        <span class="command-palette__item-name">${escapeHtml(cmd.name)}</span>
-      </div>
-      ${cmd.shortcut ? `<span class="command-palette__item-shortcut">${escapeHtml(cmd.shortcut)}</span>` : ''}
-    `;
-
-    item.addEventListener('click', () => {
-      executeCommand(cmd);
-    });
-
-    item.addEventListener('mouseenter', () => {
-      commandPaletteState.selectedIndex = index;
-      renderCommandList();
-    });
-
-    list.appendChild(item);
-  });
-
-  // 선택된 항목이 보이도록 스크롤
-  const selectedItem = list.querySelector('.command-palette__item--selected');
-  if (selectedItem) {
-    selectedItem.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-function filterCommands(query) {
-  if (!query.trim()) {
-    // 검색어가 없으면 최근 명령어를 먼저 표시
-    const recentIds = new Set(recentCommands);
-    const recentCmds = COMMANDS.filter(cmd => recentIds.has(cmd.id));
-    const otherCmds = COMMANDS.filter(cmd => !recentIds.has(cmd.id));
-    commandPaletteState.filteredCommands = [...recentCmds, ...otherCmds];
-  } else {
-    // Fuzzy match: 검색어의 각 문자가 순서대로 포함되어 있는지 확인
-    const lowerQuery = query.toLowerCase();
-    commandPaletteState.filteredCommands = COMMANDS.filter(cmd => {
-      const lowerName = cmd.name.toLowerCase();
-      let queryIndex = 0;
-
-      for (let i = 0; i < lowerName.length && queryIndex < lowerQuery.length; i++) {
-        if (lowerName[i] === lowerQuery[queryIndex]) {
-          queryIndex++;
-        }
-      }
-
-      return queryIndex === lowerQuery.length;
-    });
-  }
-
-  commandPaletteState.selectedIndex = 0;
-  renderCommandList();
-}
-
-function handleCommandPaletteKeydown(e) {
-  switch (e.key) {
-    case 'Escape':
-      e.preventDefault();
-      hideCommandPalette();
-      break;
-
-    case 'ArrowDown':
-      e.preventDefault();
-      commandPaletteState.selectedIndex =
-        (commandPaletteState.selectedIndex + 1) % commandPaletteState.filteredCommands.length;
-      renderCommandList();
-      break;
-
-    case 'ArrowUp':
-      e.preventDefault();
-      commandPaletteState.selectedIndex =
-        (commandPaletteState.selectedIndex - 1 + commandPaletteState.filteredCommands.length)
-        % commandPaletteState.filteredCommands.length;
-      renderCommandList();
-      break;
-
-    case 'Enter':
-      e.preventDefault();
-      {
-        const selectedCmd = commandPaletteState.filteredCommands[commandPaletteState.selectedIndex];
-        if (selectedCmd) {
-          executeCommand(selectedCmd);
-        }
-      }
-      break;
-  }
-}
-
-function executeCommand(cmd) {
-  try {
-    cmd.action();
-
-    // 최근 사용 명령어에 추가
-    const index = recentCommands.indexOf(cmd.id);
-    if (index > -1) {
-      recentCommands.splice(index, 1);
-    }
-    recentCommands.unshift(cmd.id);
-    if (recentCommands.length > MAX_RECENT_COMMANDS) {
-      recentCommands.pop();
-    }
-
-    hideCommandPalette();
-  } catch (error) {
-    debug('Command execution error:', error);
-    showToast(`명령 실행 실패: ${error.message}`, 'error');
-  }
-}
-
-function changeTheme(theme) {
-  // 테마 변경 함수
-  const root = document.documentElement;
-  root.className = `theme-${theme}`;
-
-  // 설정에 저장
-  if (typeof settingsTheme !== 'undefined' && settingsTheme) {
-    settingsTheme.value = theme;
-  }
-
-  showToast(`테마가 ${theme}로 변경되었습니다`, 'success');
-}
-
 function handleKeyboardShortcuts(e) {
   // Ctrl+Shift+P - Command Palette
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyP') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'P') {
     e.preventDefault();
     showCommandPalette();
     return;
@@ -5092,32 +5050,32 @@ function handleKeyboardShortcuts(e) {
     }
     return;
   }
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyT') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
     e.preventDefault();
     // Phase 3: Restore last closed tab (Ctrl+Shift+T)
     restoreLastClosedTab();
     return;
   }
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyF') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'F') {
     e.preventDefault();
     // Phase 3: Show tab search (Ctrl+Shift+F)
     showTabSearch();
     return;
   }
   // Ctrl+Shift+D - Horizontal split
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'D') {
     e.preventDefault();
     splitHorizontal();
     return;
   }
   // Ctrl+Shift+E - Vertical split
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyE') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'E') {
     e.preventDefault();
     splitVertical();
     return;
   }
   // Ctrl+Shift+R - Toggle recording
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyR') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'R') {
     e.preventDefault();
     if (recordingManager.isRecording()) {
       stopRecordingUI();
@@ -5127,7 +5085,7 @@ function handleKeyboardShortcuts(e) {
     return;
   }
   // Ctrl+Shift+M - Toggle maximize pane
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'M') {
     e.preventDefault();
     toggleMaximize();
     return;
@@ -5170,23 +5128,9 @@ function handleKeyboardShortcuts(e) {
   }
 
   // Ctrl+Shift+C - Start Claude Code session
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
     e.preventDefault();
     startClaudeSession();
-    return;
-  }
-
-  // Ctrl+R - Show history panel
-  if (e.ctrlKey && e.key === 'r') {
-    e.preventDefault();
-    showHistoryPanel(commandHistory, state, escapeHtml);
-    return;
-  }
-
-  // Ctrl+G - Toggle Git panel
-  if (e.ctrlKey && e.key === 'g') {
-    e.preventDefault();
-    toggleGitPanel();
     return;
   }
 
@@ -5200,22 +5144,22 @@ function handleKeyboardShortcuts(e) {
   // Ctrl+Alt+Arrow - Focus pane by direction
   if (e.ctrlKey && e.altKey) {
     switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        focusPaneByDirection('left');
-        return;
-      case 'ArrowRight':
-        e.preventDefault();
-        focusPaneByDirection('right');
-        return;
-      case 'ArrowUp':
-        e.preventDefault();
-        focusPaneByDirection('up');
-        return;
-      case 'ArrowDown':
-        e.preventDefault();
-        focusPaneByDirection('down');
-        return;
+    case 'ArrowLeft':
+      e.preventDefault();
+      focusPaneByDirection('left');
+      return;
+    case 'ArrowRight':
+      e.preventDefault();
+      focusPaneByDirection('right');
+      return;
+    case 'ArrowUp':
+      e.preventDefault();
+      focusPaneByDirection('up');
+      return;
+    case 'ArrowDown':
+      e.preventDefault();
+      focusPaneByDirection('down');
+      return;
     }
   }
 }
@@ -5404,6 +5348,33 @@ function focusPaneByDirection(direction) {
   activateSession(leaves[nextIndex].sessionId);
 }
 
+// Get keyboard shortcuts info
+function getKeyboardShortcuts() {
+  return [
+    { keys: 'Ctrl+T', action: '새 탭' },
+    { keys: 'Ctrl+W', action: '탭 닫기' },
+    { keys: 'Ctrl+Tab', action: '다음 탭' },
+    { keys: 'Ctrl+Shift+Tab', action: '이전 탭' },
+    { keys: 'Ctrl+1-9', action: '탭 전환' },
+    { keys: 'Ctrl+Shift+T', action: '마지막 닫은 탭 복원' },
+    { keys: 'Ctrl+Shift+F', action: '탭 검색' },
+    { keys: 'Ctrl+Shift+D', action: '가로 분할' },
+    { keys: 'Ctrl+Shift+E', action: '세로 분할' },
+    { keys: 'Ctrl+Shift+M', action: '현재 창 최대화 토글' },
+    { keys: 'Ctrl+Alt+Arrow', action: '분할 창 포커스 이동' },
+    { keys: 'Ctrl+F', action: '터미널 검색' },
+    { keys: 'F3 / Shift+F3', action: '다음/이전 검색 결과' },
+    { keys: 'Alt+C', action: '검색: 대소문자 구분' },
+    { keys: 'Alt+W', action: '검색: 전체 단어' },
+    { keys: 'Alt+R', action: '검색: 정규식' },
+    { keys: 'Alt+A', action: '검색: 전체 세션' },
+    { keys: 'Ctrl+L', action: '화면 지우기' },
+    { keys: 'Ctrl+K', action: '스크롤백 지우기' },
+    { keys: 'Ctrl+,', action: '설정' },
+    { keys: 'F11', action: '전체화면 토글' },
+  ];
+}
+
 function switchToNextTab() {
   const sessionIds = Array.from(state.sessions.keys());
   if (sessionIds.length === 0) return;
@@ -5462,7 +5433,7 @@ function highlightDropZone(e) {
   }
 }
 
-function unhighlightDropZone() {
+function unhighlightDropZone(e) {
   document.getElementById('terminalContainer').classList.remove('terminal-container--drop-active');
 }
 
@@ -6015,11 +5986,6 @@ async function initialize() {
   setupAccessibility();
   setupFileDragDrop();
   createRecordingControls();
-  initializeHistoryPanel();  // 히스토리 패널 초기화
-  setupSplitToolbar();       // 분할 툴바 초기화
-
-  // 명령어 히스토리 로드
-  commandHistory.load();
 
   try {
     await loadSettings();
@@ -6120,6 +6086,15 @@ function showSharingModal(sessionId) {
 
   // 공유 시작
   startSharing(sessionId);
+}
+
+// 공유 모달 숨기기
+function hideSharingModal() {
+  const modal = document.getElementById('sharingModal');
+  if (modal) {
+    modal.classList.add('sharing-modal-overlay--hiding');
+    setTimeout(() => modal.remove(), 200);
+  }
 }
 
 // 세션 공유 시작
@@ -6244,259 +6219,4 @@ function updateTabSharingIndicator(sessionId, isSharing) {
   }
 }
 
-// ===== Git Panel Functions =====
-
-// Git 패널 토글
-function toggleGitPanel() {
-  state.gitPanelVisible = !state.gitPanelVisible;
-  const gitPanel = document.getElementById('gitPanel');
-
-  if (gitPanel) {
-    gitPanel.style.display = state.gitPanelVisible ? 'block' : 'none';
-
-    if (state.gitPanelVisible) {
-      refreshGitStatus();
-    }
-  }
-}
-
-// Git 상태 새로고침
-async function refreshGitStatus() {
-  const gitPanel = document.getElementById('gitPanel');
-  if (!gitPanel) return;
-
-  // 현재 활성 세션의 프로젝트 경로 가져오기
-  let gitPath = state.currentGitPath;
-
-  if (!gitPath && state.activeSessionId) {
-    const session = state.sessions.get(state.activeSessionId);
-    if (session && session.projectPath) {
-      gitPath = session.projectPath;
-    }
-  }
-
-  if (!gitPath) {
-    gitPanel.innerHTML = `
-      <div class="git-panel__empty">
-        <p>프로젝트 폴더를 선택하세요</p>
-      </div>
-    `;
-    return;
-  }
-
-  state.currentGitPath = gitPath;
-
-  // 로딩 표시
-  gitPanel.innerHTML = `
-    <div class="git-panel__loading">
-      Git 상태 확인 중...
-    </div>
-  `;
-
-  try {
-    // Git 상태 가져오기
-    const gitStatus = await invoke('get_git_status', { path: gitPath });
-
-    if (!gitStatus.is_repo) {
-      gitPanel.innerHTML = `
-        <div class="git-panel__empty">
-          <p>Git 저장소가 아닙니다</p>
-        </div>
-      `;
-      return;
-    }
-
-    renderGitPanel(gitPanel, gitStatus, gitPath);
-  } catch (error) {
-    debug('Git 상태 확인 실패:', error);
-    gitPanel.innerHTML = `
-      <div class="git-panel__error">
-        Git 상태를 확인할 수 없습니다: ${escapeHtml(error.toString())}
-      </div>
-    `;
-  }
-}
-
-// Git 패널 렌더링
-function renderGitPanel(panel, status, gitPath) {
-  const files = status.files || [];
-  const hasChanges = files.length > 0;
-
-  panel.innerHTML = `
-    <div class="git-panel__branch">
-      <span class="git-panel__branch-icon">⎇</span>
-      <span class="git-panel__branch-name">${escapeHtml(status.branch || 'HEAD')}</span>
-    </div>
-
-    ${hasChanges ? `
-      <div class="git-panel__files">
-        ${files.map((file, index) => `
-          <div class="git-panel__file" data-index="${index}">
-            <input type="checkbox" class="git-panel__file-checkbox"
-                   data-file="${escapeHtml(file.path)}"
-                   ${file.staged ? 'checked' : ''} />
-            <span class="git-panel__file-status git-panel__file-status--${file.status}">${file.status}</span>
-            <span class="git-panel__file-name" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</span>
-          </div>
-        `).join('')}
-      </div>
-
-      <textarea class="git-panel__commit-input"
-                id="gitCommitMessage"
-                placeholder="커밋 메시지..."
-                rows="2"></textarea>
-
-      <div class="git-panel__actions">
-        <button class="git-panel__btn" id="gitStageAllBtn">Stage All</button>
-        <button class="git-panel__btn git-panel__btn--primary" id="gitCommitBtn">Commit</button>
-        <button class="git-panel__btn" id="gitPullBtn">Pull</button>
-        <button class="git-panel__btn" id="gitPushBtn">Push</button>
-      </div>
-    ` : `
-      <div class="git-panel__empty">
-        <p>변경된 파일이 없습니다</p>
-      </div>
-      <div class="git-panel__actions">
-        <button class="git-panel__btn" id="gitPullBtn">Pull</button>
-        <button class="git-panel__btn" id="gitPushBtn">Push</button>
-      </div>
-    `}
-
-    <div class="git-panel__actions" style="margin-top: 8px;">
-      <button class="git-panel__btn" id="gitRefreshBtn">새로고침</button>
-    </div>
-  `;
-
-  // 이벤트 리스너 추가
-  setupGitPanelListeners(panel, gitPath);
-}
-
-// Git 패널 이벤트 리스너 설정
-function setupGitPanelListeners(panel, gitPath) {
-  // 새로고침 버튼
-  const refreshBtn = panel.querySelector('#gitRefreshBtn');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => refreshGitStatus());
-  }
-
-  // Stage All 버튼
-  const stageAllBtn = panel.querySelector('#gitStageAllBtn');
-  if (stageAllBtn) {
-    stageAllBtn.addEventListener('click', async () => {
-      try {
-        await invoke('git_stage_all', { path: gitPath });
-        showToast('모든 파일이 스테이징되었습니다', 'success');
-        refreshGitStatus();
-      } catch (error) {
-        showToast('스테이징 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // Commit 버튼
-  const commitBtn = panel.querySelector('#gitCommitBtn');
-  if (commitBtn) {
-    commitBtn.addEventListener('click', async () => {
-      const messageInput = panel.querySelector('#gitCommitMessage');
-      const message = messageInput ? messageInput.value.trim() : '';
-
-      if (!message) {
-        showToast('커밋 메시지를 입력하세요', 'warning');
-        return;
-      }
-
-      try {
-        await invoke('git_commit', { path: gitPath, message });
-        showToast('커밋이 완료되었습니다', 'success');
-        if (messageInput) messageInput.value = '';
-        refreshGitStatus();
-      } catch (error) {
-        showToast('커밋 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // Pull 버튼
-  const pullBtn = panel.querySelector('#gitPullBtn');
-  if (pullBtn) {
-    pullBtn.addEventListener('click', async () => {
-      try {
-        showToast('Pull 중...', 'info');
-        await invoke('git_pull', { path: gitPath });
-        showToast('Pull 완료', 'success');
-        refreshGitStatus();
-      } catch (error) {
-        showToast('Pull 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // Push 버튼
-  const pushBtn = panel.querySelector('#gitPushBtn');
-  if (pushBtn) {
-    pushBtn.addEventListener('click', async () => {
-      try {
-        showToast('Push 중...', 'info');
-        await invoke('git_push', { path: gitPath });
-        showToast('Push 완료', 'success');
-      } catch (error) {
-        showToast('Push 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // 개별 파일 체크박스 (stage/unstage)
-  const checkboxes = panel.querySelectorAll('.git-panel__file-checkbox');
-  checkboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', async (e) => {
-      const filePath = e.target.dataset.file;
-      const shouldStage = e.target.checked;
-
-      try {
-        if (shouldStage) {
-          await invoke('git_stage_file', { path: gitPath, file: filePath });
-        } else {
-          await invoke('git_unstage_file', { path: gitPath, file: filePath });
-        }
-      } catch (error) {
-        showToast(`파일 ${shouldStage ? '스테이징' : '언스테이징'} 실패: ` + error, 'error');
-        e.target.checked = !shouldStage; // 원래 상태로 복원
-      }
-    });
-  });
-}
-
-// History 패널 초기화 (app.js에서 createHistoryPanel 호출)
-function initializeHistoryPanel() {
-  // history-panel.js에서 가져온 createHistoryPanel 호출
-  createHistoryPanel(commandHistory, state, showToast, escapeHtml);
-}
-
-// Split Toolbar 초기화
-function setupSplitToolbar() {
-  console.log('Setting up split toolbar...');
-  // Split buttons
-  document.getElementById('splitHorizontalBtn')?.addEventListener('click', splitHorizontal);
-  document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
-
-  // Preset buttons
-  document.getElementById('presetTwoColBtn')?.addEventListener('click', () => applyLayoutPreset('two-columns'));
-  document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-rows'));
-  document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid-2x2'));
-  document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-columns'));
-
-  // Control buttons
-  document.getElementById('swapPanesBtn')?.addEventListener('click', () => {
-    if (state.activeSessionId) {
-      startSwapMode(state.activeSessionId);
-    }
-  });
-  document.getElementById('maximizePaneBtn')?.addEventListener('click', () => toggleMaximize());
-  document.getElementById('closeSplitBtn')?.addEventListener('click', () => {
-    exitSplitMode();
-    showToast('분할 모드 종료', 'info');
-  });
-
-  debug('Split toolbar setup complete');
-  console.log('Split toolbar setup complete');
-}
+export { showSharingModal, hideSharingModal, startSharing, stopSharing, updateTabSharingIndicator };

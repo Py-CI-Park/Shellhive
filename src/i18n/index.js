@@ -93,6 +93,14 @@ const translations = {
     'theme.light': 'Light',
     'theme.monokai': 'Monokai',
     'theme.highContrast': 'High Contrast',
+
+    // AI Mode
+    'ai.modeEnable': 'Enable AI Mode (Ctrl+Space)',
+    'ai.modeDisable': 'Disable AI Mode (Ctrl+Space)',
+    'ai.modeEnabled': 'AI mode enabled',
+    'ai.modeDisabled': 'AI mode disabled',
+    'ai.commandAccepted': 'Command executed',
+    'ai.commandFailed': 'Failed to execute command',
   },
 
   ko: {
@@ -187,6 +195,14 @@ const translations = {
     'theme.light': '라이트',
     'theme.monokai': '모노카이',
     'theme.highContrast': '고대비',
+
+    // AI Mode
+    'ai.modeEnable': 'AI 모드 활성화 (Ctrl+Space)',
+    'ai.modeDisable': 'AI 모드 비활성화 (Ctrl+Space)',
+    'ai.modeEnabled': 'AI 모드가 활성화되었습니다',
+    'ai.modeDisabled': 'AI 모드가 비활성화되었습니다',
+    'ai.commandAccepted': '명령어가 실행되었습니다',
+    'ai.commandFailed': '명령어 실행 실패',
   }
 };
 

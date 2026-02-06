@@ -158,7 +158,7 @@ pub async fn list_session_logs() -> Result<Vec<SessionLogInfo>, String> {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "log") {
+        if path.extension().is_some_and(|ext| ext == "log") {
             if let Ok(metadata) = entry.metadata() {
                 let file_name = path
                     .file_name()
@@ -172,7 +172,7 @@ pub async fn list_session_logs() -> Result<Vec<SessionLogInfo>, String> {
                     .unwrap_or("unknown")
                     .to_string();
 
-                let modified_at = metadata.modified().ok().map(|t| DateTime::<Utc>::from(t));
+                let modified_at = metadata.modified().ok().map(DateTime::<Utc>::from);
 
                 logs.push(SessionLogInfo {
                     session_id,
@@ -215,10 +215,8 @@ pub async fn clear_all_logs() -> Result<u32, String> {
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "log") {
-            if fs::remove_file(&path).is_ok() {
-                deleted_count += 1;
-            }
+        if path.extension().is_some_and(|ext| ext == "log") && fs::remove_file(&path).is_ok() {
+            deleted_count += 1;
         }
     }
 
