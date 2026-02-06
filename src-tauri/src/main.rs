@@ -12,8 +12,9 @@ mod snippet;
 
 use std::env;
 use std::fs;
-use tauri::Manager;
 use serde::{Deserialize, Serialize};
+#[cfg(debug_assertions)]
+use tauri::Manager;
 
 #[derive(Serialize, Deserialize)]
 struct FileMetadata {
@@ -45,10 +46,10 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(pty::PtyManager::new())
         .manage(sharing::SharingState::new())
-        .setup(|app| {
+        .setup(|_app| {
             #[cfg(debug_assertions)]
             {
-                let window = app.get_webview_window("main").unwrap();
+                let window = _app.get_webview_window("main").unwrap();
                 window.open_devtools();
             }
             Ok(())

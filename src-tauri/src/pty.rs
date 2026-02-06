@@ -1,18 +1,10 @@
 use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PtySession {
-    pub id: String,
-    pub working_dir: String,
-    pub shell: String,
-}
 
 // Store both the master PTY handle and the writer
 struct PtySessionData {

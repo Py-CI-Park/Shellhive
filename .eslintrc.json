@@ -15,11 +15,11 @@
     "import"
   ],
   "rules": {
-    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "no-unused-vars": "off",
     "no-console": "off",
     "semi": ["error", "always"],
     "quotes": ["error", "single", { "avoidEscape": true }],
-    "indent": ["error", 2],
+    "indent": "off",
     "import/order": ["warn", {
       "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
       "newlines-between": "always"

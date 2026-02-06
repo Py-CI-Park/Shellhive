@@ -15,18 +15,13 @@ pub struct TranslationResult {
 }
 
 /// 쉘 타입
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ShellType {
+    #[default]
     PowerShell,
     Cmd,
     Bash,
     Zsh,
-}
-
-impl Default for ShellType {
-    fn default() -> Self {
-        ShellType::PowerShell
-    }
 }
 
 /// 로컬 패턴 매칭을 위한 패턴 정의

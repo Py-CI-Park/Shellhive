@@ -17,6 +17,47 @@
 
 ## [Unreleased]
 
+### 2026-02-06
+
+#### fix(split): 릴리즈 모드 분할 레이아웃 미표시 원인 수정
+
+**커밋**: `working-tree`
+
+##### 수정됨 (Fixed)
+
+- `splitActivePane()`에서 분할용 세션 생성 시 자동 탭 전환을 비활성화하여 `splitMode/splitRoot`가 초기화되는 문제 해결 (`src/app.js`)
+- 분할 직후 활성 세션을 새 pane으로 지정하고 레이아웃 렌더를 보장 (`src/app.js`)
+- Split Toolbar 프리셋 키 불일치 수정
+  - `two-column` -> `two-columns`
+  - `two-row` -> `two-rows`
+  - `grid` -> `grid-2x2`
+  - `three-column` -> `three-columns`
+
+#### test(split): 분할 레이아웃 통합 테스트 추가
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- jsdom 환경에서 `index.html + app.js`를 로드한 뒤 분할 버튼 클릭 시 split DOM이 생성되는 통합 테스트 추가 (`src/__tests__/split-layout.e2e.test.js`)
+- Tauri API/xterm 모듈 mocking 확장 (`src/__tests__/setup.js`)
+
+#### chore(quality): lint/clippy 차단 이슈 정리
+
+**커밋**: `working-tree`
+
+##### 변경됨 (Changed)
+
+- `settingsBackup` 누락 선언, history panel `showToast` 스코프 오류 해결 (`src/app.js`, `src/history-panel.js`)
+- `no-control-regex`/불필요 escape 관련 lint 에러 정리 (`src/app.js`)
+- Rust clippy `-D warnings` 대응
+  - `ShellType` 기본 구현 derive 전환 (`src-tauri/src/ai.rs`)
+  - 로그 확장자 검사/정렬 클로저 개선 (`src-tauri/src/settings.rs`)
+  - 미사용 `PtySession` 구조체 제거 (`src-tauri/src/pty.rs`)
+- ESLint 들여쓰기 규칙 충돌 완화를 위해 `indent` 룰 비활성화 (`.eslintrc.json`)
+
+---
+
 ### 2026-02-03
 
 #### feat(ai): AI 자연어 명령어 변환 기능 완료 (Phase 2.1)

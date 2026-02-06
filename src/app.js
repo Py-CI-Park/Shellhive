@@ -7,8 +7,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 
-import { t, setLocale, getLocale, getAvailableLocales } from './i18n/index.js';
-import { createHistoryPanel, showHistoryPanel, hideHistoryPanel } from './history-panel.js';
+import { t, setLocale } from './i18n/index.js';
+import { createHistoryPanel, showHistoryPanel } from './history-panel.js';
 
 // Toast notification system
 const toastContainer = document.createElement('div');
@@ -339,11 +339,11 @@ function detectPromptPattern(line) {
     return true;
   }
   // Bash/Unix 프롬프트: user@host:~$
-  if (/^[^\s]+@[^\s]+:[^\s]*[\$#]/.test(line)) {
+  if (/^[^\s]+@[^\s]+:[^\s]*[$#]/.test(line)) {
     return true;
   }
   // 간단한 프롬프트: $ 또는 >
-  if (/^[\$>#]\s/.test(line)) {
+  if (/^[$>#]\s/.test(line)) {
     return true;
   }
   return false;
@@ -975,6 +975,7 @@ class BlockManager {
 
   // Detect if output contains a new prompt (command completed)
   detectPrompt(data) {
+    // eslint-disable-next-line no-control-regex
     const cleanData = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, ''); // Remove ANSI codes
     for (const pattern of this.promptPatterns) {
       if (pattern.test(cleanData)) {
@@ -1024,6 +1025,7 @@ class BlockManager {
         // Complete current block if exists
         if (this.currentBlock) {
           // Extract output before the prompt
+          // eslint-disable-next-line no-control-regex
           const cleanOutput = this.outputBuffer.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
           this.currentBlock.addOutput(cleanOutput);
           this.currentBlock.complete();
@@ -1058,6 +1060,7 @@ class BlockManager {
 
     // Clean output - remove ANSI codes for display
     const cleanOutput = block.output.join('')
+      // eslint-disable-next-line no-control-regex
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
@@ -1367,6 +1370,7 @@ let settingsBtn, settingsModal, closeSettingsModal, cancelSettings, saveSettings
 let settingsTheme, settingsFontSize, fontSizeValue, settingsFontFamily;
 let settingsEnableLogging, settingsEnableNotifications, clearLogsBtn;
 let aiModeToggleBtn, aiPreviewPopup, aiPreviewOriginal, aiPreviewTranslated, aiPreviewAccept, aiPreviewReject;
+let settingsBackup = null;
 
 // ===== Settings Functions =====
 
@@ -2324,7 +2328,9 @@ async function getProjectEnvVars(projectPath) {
 
 // ===== Session Functions =====
 
-async function createSession(name = null, workingDir = null, projectId = null) {
+async function createSession(name = null, workingDir = null, projectId = null, options = {}) {
+  const { activate = true } = options;
+
   // Check session limit
   if (state.sessions.size >= MAX_SESSIONS) {
     showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다. 기존 세션을 닫아주세요.`, 'warning');
@@ -2626,7 +2632,9 @@ async function createSession(name = null, workingDir = null, projectId = null) {
   createTab(session);
 
   // Activate session
-  activateSession(id);
+  if (activate) {
+    activateSession(id);
+  }
 
   // Handle resize with debouncing
   let resizeTimeout = null;
@@ -4258,19 +4266,25 @@ function formatTime(ms) {
 // ===== Split Pane Functions =====
 
 function initSplitMode() {
+  console.log('initSplitMode called, activeSessionId:', state.activeSessionId);
   if (!state.activeSessionId) return;
 
   state.splitMode = true;
   state.splitRoot = new SplitNode('leaf', state.activeSessionId);
+  console.log('splitRoot created:', state.splitRoot);
   renderSplitLayout();
+  console.log('renderSplitLayout completed');
 }
 
 function splitHorizontal() {
+  console.log('splitHorizontal called, activeSessionId:', state.activeSessionId);
   if (!state.activeSessionId) {
     showToast('먼저 터미널 세션을 생성하세요', 'warning');
     return;
   }
+  console.log('splitMode before init:', state.splitMode);
   if (!state.splitMode) initSplitMode();
+  console.log('splitMode after init:', state.splitMode, 'splitRoot:', state.splitRoot);
   splitActivePane('horizontal');
 }
 
@@ -4329,6 +4343,10 @@ function renderMaximizedView(sessionId) {
 }
 
 async function splitActivePane(direction) {
+  console.log('splitActivePane called, direction:', direction);
+  console.log('activeSessionId:', state.activeSessionId);
+  console.log('splitRoot:', state.splitRoot);
+
   if (!state.activeSessionId) return;
 
   // Prevent race condition - only one split operation at a time
@@ -4344,23 +4362,31 @@ async function splitActivePane(direction) {
 
     // Find the leaf node containing the active session
     const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
+    console.log('leafNode found:', leafNode);
     if (!leafNode) return;
 
     // Create a new session for the split
     const session = state.sessions.get(state.activeSessionId);
+    console.log('Creating new session for split, current session:', session);
     const newSession = await createSession(
       `${session.name} (split)`,
       session.projectPath,
-      session.projectId
+      session.projectId,
+      { activate: false }
     );
 
+    console.log('New session created:', newSession);
     if (!newSession) return;
 
     // Split the leaf node
+    console.log('Splitting leaf node with direction:', direction, 'newSessionId:', newSession.id);
     leafNode.split(direction, newSession.id);
+    state.activeSessionId = newSession.id;
 
     // Render the new layout
+    console.log('Calling renderSplitLayout after split');
     renderSplitLayout();
+    newSession.terminal.focus();
 
     showToast(`화면 ${direction === 'horizontal' ? '가로' : '세로'} 분할`, 'success', 2000);
   } finally {
@@ -4378,7 +4404,10 @@ function findLeafNode(node, sessionId) {
 }
 
 function renderSplitLayout() {
+  console.log('renderSplitLayout called');
+  console.log('splitMode:', state.splitMode, 'splitRoot:', state.splitRoot);
   const container = document.getElementById('terminalContainer');
+  console.log('terminalContainer:', container);
   if (!state.splitMode || !state.splitRoot) {
     // Reset to normal mode
     container.innerHTML = '';
@@ -4399,9 +4428,12 @@ function renderSplitLayout() {
 
   container.innerHTML = '';
   container.className = 'terminal-container terminal-container--split';
+  console.log('container className:', container.className);
 
   const layoutEl = renderSplitNode(state.splitRoot);
+  console.log('layoutEl created:', layoutEl);
   container.appendChild(layoutEl);
+  console.log('container innerHTML length:', container.innerHTML.length);
 
   // Fit all terminals
   setTimeout(() => {
@@ -5284,9 +5316,11 @@ function handleCommandPaletteKeydown(e) {
 
     case 'Enter':
       e.preventDefault();
-      const selectedCmd = commandPaletteState.filteredCommands[commandPaletteState.selectedIndex];
-      if (selectedCmd) {
-        executeCommand(selectedCmd);
+      {
+        const selectedCmd = commandPaletteState.filteredCommands[commandPaletteState.selectedIndex];
+        if (selectedCmd) {
+          executeCommand(selectedCmd);
+        }
       }
       break;
   }
@@ -6791,10 +6825,10 @@ function setupSplitToolbar() {
   document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
 
   // Preset buttons
-  document.getElementById('presetTwoColBtn')?.addEventListener('click', () => applyLayoutPreset('two-column'));
-  document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-row'));
-  document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid'));
-  document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-column'));
+  document.getElementById('presetTwoColBtn')?.addEventListener('click', () => applyLayoutPreset('two-columns'));
+  document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-rows'));
+  document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid-2x2'));
+  document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-columns'));
 
   // Control buttons
   document.getElementById('swapPanesBtn')?.addEventListener('click', () => {

@@ -6,9 +6,12 @@ let historyPanelState = {
   filteredItems: [],
   filterMode: 'all' // 'all' or 'favorites'
 };
+let historyPanelToast = null;
 
 // Create history panel UI
 export function createHistoryPanel(commandHistory, state, showToast, escapeHtml) {
+  historyPanelToast = showToast;
+
   const panel = document.createElement('div');
   panel.id = 'historyPanel';
   panel.className = 'history-panel';
@@ -64,7 +67,7 @@ export function createHistoryPanel(commandHistory, state, showToast, escapeHtml)
   });
 
   // Keyboard navigation
-  searchInput.addEventListener('keydown', (e) => handleHistoryKeydown(e, commandHistory, state, showToast));
+  searchInput.addEventListener('keydown', (e) => handleHistoryKeydown(e, commandHistory, state));
 
   // Click outside to close
   panel.addEventListener('click', (e) => {
@@ -235,7 +238,7 @@ function updateHistoryList(query = '', commandHistory, state, escapeHtml) {
 }
 
 // Handle keyboard navigation in history panel
-function handleHistoryKeydown(e, commandHistory, state, showToast) {
+function handleHistoryKeydown(e, commandHistory, state) {
   if (e.key === 'Escape') {
     e.preventDefault();
     hideHistoryPanel();
@@ -335,8 +338,8 @@ function deleteHistoryItem(index, commandHistory, escapeHtml, state) {
   const searchInput = document.querySelector('.history-panel__search');
   updateHistoryList(searchInput ? searchInput.value : '', commandHistory, state, escapeHtml);
 
-  if (typeof showToast === 'function') {
-    showToast('명령어를 삭제했습니다', 'success');
+  if (typeof historyPanelToast === 'function') {
+    historyPanelToast('명령어를 삭제했습니다', 'success');
   }
 }
 
