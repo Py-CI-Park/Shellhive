@@ -958,6 +958,102 @@ html, body {
   background: var(--bg-tertiary);
 }
 
+.sidebar__item--project {
+  flex-wrap: wrap;
+}
+
+.sidebar__cmd-tree {
+  display: none;
+  width: 100%;
+  margin-top: 6px;
+  margin-left: 22px;
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+}
+
+.sidebar__cmd-tree--visible {
+  display: block;
+}
+
+.sidebar__cmd-tree-header {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  letter-spacing: 0.03em;
+}
+
+.sidebar__cmd-tree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar__cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.sidebar__cmd-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.sidebar__cmd-item--active {
+  background: rgba(14, 99, 156, 0.2);
+}
+
+.sidebar__cmd-status {
+  font-size: 9px;
+  width: 10px;
+  text-align: center;
+}
+
+.sidebar__cmd-status--running {
+  color: #4ec9b0;
+}
+
+.sidebar__cmd-status--connecting {
+  color: #dcdcaa;
+}
+
+.sidebar__cmd-status--exited {
+  color: var(--text-secondary);
+}
+
+.sidebar__cmd-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__cmd-close {
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.sidebar__cmd-item:hover .sidebar__cmd-close {
+  display: inline-flex;
+}
+
+.sidebar__cmd-close:hover {
+  color: #f14c4c;
+  background: var(--bg-hover);
+}
+
 /* Tab Groups */
 /* Tab Group - 가로 레이아웃으로 수정 */
 .tab-group {

@@ -1923,12 +1923,13 @@ function renderProjectList(projects) {
 
 function renderProjectItems(projects) {
   return projects.map(p => `
-    <li class="sidebar__item" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
+    <li class="sidebar__item sidebar__item--project" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
       <button class="sidebar__item-env" data-project-id="${p.id}" data-project-path='${JSON.stringify(p.path)}' title="Environment Variables">⚙</button>
       <button class="sidebar__item-filter" data-project-id="${p.id}" title="Filter tabs">🔍</button>
       <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
+      <div class="sidebar__cmd-tree" data-project-cmd-tree="${p.id}"></div>
     </li>
   `).join('');
 }
@@ -1940,11 +1941,9 @@ function setupProjectListeners() {
     const projectName = item.querySelector('.sidebar__item-name').textContent;
 
     item.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('sidebar__item-delete') &&
-          !e.target.classList.contains('sidebar__item-filter') &&
-          !e.target.classList.contains('sidebar__item-env')) {
-        createSessionInDirectory(projectPath, projectName, projectId);
-      }
+      const blocked = e.target.closest('.sidebar__item-delete, .sidebar__item-filter, .sidebar__item-env, .sidebar__cmd-tree');
+      if (blocked) return;
+      createSessionInDirectory(projectPath, projectName, projectId);
     });
 
     const envBtn = item.querySelector('.sidebar__item-env');
@@ -1978,6 +1977,8 @@ function setupProjectListeners() {
 
     updateProjectTabCount(projectId);
   });
+
+  renderProjectCmdTrees();
 }
 
 async function addProject(name, path) {
@@ -2624,6 +2625,8 @@ function activateSession(id) {
     session.fitAddon.fit();
     session.terminal.focus();
   }, 50);
+
+  renderProjectCmdTrees();
 }
 
 async function closeSession(id) {
@@ -4905,6 +4908,7 @@ function linkSessionToProject(sessionId, projectId) {
   }
   state.projectTabMap.get(projectId).add(sessionId);
   updateProjectTabCount(projectId);
+  renderProjectCmdTrees();
 }
 
 function unlinkSessionFromProject(sessionId) {
@@ -4917,6 +4921,7 @@ function unlinkSessionFromProject(sessionId) {
       updateProjectTabCount(projectId);
     }
   }
+  renderProjectCmdTrees();
 }
 
 function updateProjectTabCount(projectId) {
@@ -4970,6 +4975,62 @@ function updateProjectFilterButtons() {
     } else {
       btn.classList.remove('sidebar__item-filter--active');
     }
+  });
+}
+
+function renderProjectCmdTrees() {
+  document.querySelectorAll('[data-project-cmd-tree]').forEach((treeEl) => {
+    const projectId = treeEl.dataset.projectCmdTree;
+    const sessionSet = state.projectTabMap.get(projectId);
+    const sessionIds = sessionSet ? Array.from(sessionSet) : [];
+    const sessions = sessionIds
+      .map((sessionId) => state.sessions.get(sessionId))
+      .filter(Boolean);
+
+    if (sessions.length === 0) {
+      treeEl.innerHTML = '';
+      treeEl.classList.remove('sidebar__cmd-tree--visible');
+      return;
+    }
+
+    const cmdItems = sessions.map((session) => {
+      const activeClass = session.id === state.activeSessionId ? ' sidebar__cmd-item--active' : '';
+      const statusClass = `sidebar__cmd-status--${session.status}`;
+      return `
+        <div class="sidebar__cmd-item${activeClass}" data-session-id="${session.id}" title="${escapeHtml(session.name)}">
+          <span class="sidebar__cmd-status ${statusClass}">${getStatusIcon(session.status)}</span>
+          <span class="sidebar__cmd-name">${escapeHtml(session.name)}</span>
+          <button class="sidebar__cmd-close" data-session-id="${session.id}" aria-label="세션 닫기">&times;</button>
+        </div>
+      `;
+    }).join('');
+
+    treeEl.innerHTML = `
+      <div class="sidebar__cmd-tree-header">CMD ${sessions.length}</div>
+      <div class="sidebar__cmd-tree-list">${cmdItems}</div>
+    `;
+    treeEl.classList.add('sidebar__cmd-tree--visible');
+  });
+
+  document.querySelectorAll('.sidebar__cmd-item').forEach((item) => {
+    item.onclick = (e) => {
+      if (e.target.closest('.sidebar__cmd-close')) return;
+      e.stopPropagation();
+      const { sessionId } = item.dataset;
+      if (sessionId && state.sessions.has(sessionId)) {
+        activateSession(sessionId);
+      }
+    };
+  });
+
+  document.querySelectorAll('.sidebar__cmd-close').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const { sessionId } = btn.dataset;
+      if (sessionId && state.sessions.has(sessionId)) {
+        closeSession(sessionId);
+      }
+    };
   });
 }
 

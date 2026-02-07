@@ -19,6 +19,36 @@
 
 ### 2026-02-07
 
+#### feat(project-cmd-tree): 프로젝트 하위 CMD 트리 뷰 및 세션 제어 추가
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `src/app.js`
+  - 프로젝트 목록 항목에 하위 CMD 트리 컨테이너 추가
+  - 프로젝트 하위 세션 렌더러 `renderProjectCmdTrees()` 구현
+    - 프로젝트별 활성 세션 목록 표시
+    - 현재 활성 세션 강조
+    - 트리 항목 클릭 시 세션 활성화
+    - 트리 항목 내 닫기 버튼으로 세션 종료
+  - 프로젝트 항목 클릭 핸들러 보강
+    - 트리/필터/환경변수/삭제 버튼 클릭 시 신규 세션 생성 오동작 방지
+  - 세션 라이프사이클 연동
+    - `linkSessionToProject`, `unlinkSessionFromProject`, `activateSession`에서 트리 즉시 갱신
+- `src/style.css`
+  - 프로젝트 하위 CMD 트리 UI 스타일 추가
+    - `.sidebar__cmd-tree*`
+    - `.sidebar__cmd-item*`
+    - `.sidebar__cmd-status*`
+    - `.sidebar__cmd-close`
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run`
+- `cargo check`
+
 #### feat(split-dnd): 탭을 분할 패널로 직접 배치하는 드롭 동작 구현
 
 **커밋**: `working-tree`
