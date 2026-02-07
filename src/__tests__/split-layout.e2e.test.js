@@ -100,6 +100,32 @@ describe('Split Layout E2E', () => {
     expect(createPtyCalls.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('splits terminal with VSCode-style default shortcut Ctrl+\\', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+
+    const defaultSplitButton = document.getElementById('splitDefaultBtn');
+    expect(defaultSplitButton).toBeTruthy();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: '\\',
+      code: 'Backslash',
+      ctrlKey: true,
+      bubbles: true
+    }));
+
+    await waitFor(() => !!document.querySelector('#terminalContainer .split-container'));
+
+    const terminalContainer = document.getElementById('terminalContainer');
+    expect(terminalContainer.classList.contains('terminal-container--split')).toBe(true);
+    expect(terminalContainer.querySelectorAll('.split-pane').length).toBe(2);
+  });
+
   it('supports dragging a tab into a split pane drop zone', async () => {
     await import('../app.js');
 

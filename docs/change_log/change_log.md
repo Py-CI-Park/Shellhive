@@ -19,6 +19,31 @@
 
 ### 2026-02-07
 
+#### feat(split-default): VSCode 스타일 기본 분할(오른쪽) 흐름 추가
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `index.html`
+  - 분할 툴바에 기본 분할 버튼 `splitDefaultBtn` 추가
+  - 분할 버튼 라벨/툴팁을 방향 의미 중심으로 정리
+    - `아래로 분할`, `오른쪽 분할`, `기본 분할: 오른쪽`
+- `src/app.js`
+  - `splitDefault()` 추가 (기본 분할은 오른쪽 분할로 동작)
+  - 단축키 `Ctrl+\\` 추가
+  - 컨텍스트 메뉴에 `기본 분할 (오른쪽)` 추가
+  - 커맨드 팔레트에 `기본 분할 (오른쪽)` 명령 추가
+  - 툴바 버튼 이벤트 연결 추가
+- `src/__tests__/split-layout.e2e.test.js`
+  - `Ctrl+\\` 단축키로 분할되는 회귀 테스트 추가
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 17 tests)
+- `cargo check`
+
 #### feat(split-ux): VSCode 스타일 분할/합치기 흐름 및 패널 구분 강화
 
 **커밋**: `working-tree`

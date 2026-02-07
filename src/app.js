@@ -2783,8 +2783,9 @@ function showTabContextMenu(e, sessionId) {
     <div class="context-menu__item" data-action="create-group">Create Group from Tab</div>
     ${isInGroup ? '<div class="context-menu__item" data-action="remove-from-group">Remove from Group</div>' : ''}
     <div class="context-menu__separator"></div>
-    <div class="context-menu__item" data-action="split-horizontal">Split Horizontal</div>
-    <div class="context-menu__item" data-action="split-vertical">Split Vertical</div>
+    <div class="context-menu__item" data-action="split-default">기본 분할 (오른쪽)</div>
+    <div class="context-menu__item" data-action="split-horizontal">아래로 분할</div>
+    <div class="context-menu__item" data-action="split-vertical">오른쪽 분할</div>
     ${state.splitMode ? '<div class="context-menu__item" data-action="merge-pane">창 합치기</div>' : ''}
     ${state.splitMode ? '<div class="context-menu__item" data-action="swap-position">Swap Position</div>' : ''}
     ${state.splitMode ? `<div class="context-menu__item" data-action="toggle-maximize">${state.maximizedSession === sessionId ? 'Restore Pane' : 'Maximize Pane'}</div>` : ''}
@@ -2842,6 +2843,10 @@ function showTabContextMenu(e, sessionId) {
       case 'split-horizontal':
         activateSession(sessionId);
         splitHorizontal();
+        break;
+      case 'split-default':
+        activateSession(sessionId);
+        splitDefault();
         break;
       case 'split-vertical':
         activateSession(sessionId);
@@ -4125,6 +4130,10 @@ function splitVertical() {
   splitActivePane('vertical');
 }
 
+function splitDefault() {
+  splitVertical();
+}
+
 // Toggle maximize for a split pane
 function toggleMaximize(sessionId = state.activeSessionId) {
   if (!sessionId) {
@@ -5152,8 +5161,9 @@ const COMMANDS = [
   { id: 'new-tab', name: '새 탭', shortcut: 'Ctrl+T', action: () => createSession() },
   { id: 'close-tab', name: '탭 닫기', shortcut: 'Ctrl+W', action: () => state.activeSessionId && closeSession(state.activeSessionId) },
   { id: 'restore-tab', name: '닫은 탭 복원', shortcut: 'Ctrl+Shift+T', action: () => restoreLastClosedTab() },
-  { id: 'split-horizontal', name: '가로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
-  { id: 'split-vertical', name: '세로 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
+  { id: 'split-default', name: '기본 분할 (오른쪽)', shortcut: 'Ctrl+\\', action: () => splitDefault() },
+  { id: 'split-horizontal', name: '아래로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
+  { id: 'split-vertical', name: '오른쪽 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
   { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
   { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
   { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
@@ -5437,6 +5447,12 @@ function handleKeyboardShortcuts(e) {
     e.preventDefault();
     // Phase 3: Show tab search (Ctrl+Shift+F)
     showTabSearch();
+    return;
+  }
+  // Ctrl+\ - Default split (right)
+  if (e.ctrlKey && !e.shiftKey && e.code === 'Backslash') {
+    e.preventDefault();
+    splitDefault();
     return;
   }
   // Ctrl+Shift+D - Horizontal split
@@ -6834,6 +6850,7 @@ function initializeHistoryPanel() {
 function setupSplitToolbar() {
   // Split buttons
   document.getElementById('splitHorizontalBtn')?.addEventListener('click', splitHorizontal);
+  document.getElementById('splitDefaultBtn')?.addEventListener('click', splitDefault);
   document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
 
   // Preset buttons
