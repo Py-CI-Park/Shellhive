@@ -94,6 +94,7 @@ describe('Split Layout E2E', () => {
     expect(terminalContainer.classList.contains('terminal-container--split')).toBe(true);
     expect(terminalContainer.querySelectorAll('.split-pane').length).toBe(2);
     expect(terminalContainer.querySelectorAll('.terminal-wrapper--split').length).toBeGreaterThanOrEqual(2);
+    expect(terminalContainer.querySelectorAll('.split-pane-header').length).toBeGreaterThanOrEqual(2);
 
     const createPtyCalls = invokeMock.mock.calls.filter(([command]) => command === 'create_pty');
     expect(createPtyCalls.length).toBeGreaterThanOrEqual(2);
@@ -156,5 +157,26 @@ describe('Split Layout E2E', () => {
 
     expect(sessionState.tab_layouts).toBeTruthy();
     expect(Object.keys(sessionState.tab_layouts).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('merges active split pane from toolbar button', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelector('#terminalContainer .split-container'));
+
+    const mergeButton = document.getElementById('mergePaneBtn');
+    expect(mergeButton).toBeTruthy();
+    mergeButton.click();
+
+    await waitFor(() => !document.querySelector('#terminalContainer .split-container'));
+    const terminalContainer = document.getElementById('terminalContainer');
+    expect(terminalContainer.classList.contains('terminal-container--split')).toBe(false);
+    expect(document.querySelector('.split-pane-header')).toBeNull();
   });
 });

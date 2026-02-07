@@ -2785,6 +2785,7 @@ function showTabContextMenu(e, sessionId) {
     <div class="context-menu__separator"></div>
     <div class="context-menu__item" data-action="split-horizontal">Split Horizontal</div>
     <div class="context-menu__item" data-action="split-vertical">Split Vertical</div>
+    ${state.splitMode ? '<div class="context-menu__item" data-action="merge-pane">창 합치기</div>' : ''}
     ${state.splitMode ? '<div class="context-menu__item" data-action="swap-position">Swap Position</div>' : ''}
     ${state.splitMode ? `<div class="context-menu__item" data-action="toggle-maximize">${state.maximizedSession === sessionId ? 'Restore Pane' : 'Maximize Pane'}</div>` : ''}
     <div class="context-menu__item context-menu__item--submenu" data-action="layout-presets">
@@ -2845,6 +2846,9 @@ function showTabContextMenu(e, sessionId) {
       case 'split-vertical':
         activateSession(sessionId);
         splitVertical();
+        break;
+      case 'merge-pane':
+        mergePane(sessionId);
         break;
       case 'swap-position':
         startSwapMode(sessionId);
@@ -4230,6 +4234,7 @@ function renderSplitLayout() {
     state.sessions.forEach((session) => {
       container.appendChild(session.wrapper);
       session.wrapper.classList.remove('terminal-wrapper--split');
+      removeSplitPaneHeader(session.wrapper);
     });
     return;
   }
@@ -4262,6 +4267,7 @@ function renderSplitNode(node) {
     session.wrapper.classList.add('terminal-wrapper--split');
     session.wrapper.classList.toggle('terminal-wrapper--active',
       node.sessionId === state.activeSessionId);
+    ensureSplitPaneHeader(session);
 
     // Add click handler for focus or swap
     session.wrapper.onclick = () => {
@@ -4296,7 +4302,12 @@ function renderSplitNode(node) {
 
       const dropPosition = getPaneDropPosition(session.wrapper, e);
       if (dropPosition === 'center') {
-        activateSession(draggedSessionId);
+        const merged = mergePane(draggedSessionId, { fallbackSessionId: node.sessionId, silent: true });
+        if (!merged) {
+          activateSession(draggedSessionId);
+        } else {
+          showToast('분할 창을 합쳤습니다', 'info', 1200);
+        }
         return;
       }
 
@@ -4409,9 +4420,64 @@ function removeLeafNode(node, sessionId) {
 }
 
 function exitSplitMode() {
+  state.maximizedSession = null;
   state.splitMode = false;
   state.splitRoot = null;
   renderSplitLayout();
+}
+
+function mergePane(sessionId = state.activeSessionId, options = {}) {
+  const { fallbackSessionId = null, silent = false } = options;
+
+  if (!state.splitMode || !state.splitRoot || !sessionId) {
+    if (!silent) showToast('분할 모드에서만 사용할 수 있습니다', 'warning');
+    return false;
+  }
+
+  const leaves = getAllLeafNodes(state.splitRoot);
+  if (leaves.length <= 1) {
+    if (!silent) showToast('합칠 수 있는 분할 창이 없습니다', 'info');
+    return false;
+  }
+
+  const removed = removeLeafNode(state.splitRoot, sessionId);
+  if (!removed) return false;
+
+  if (state.maximizedSession === sessionId || !findLeafNode(state.splitRoot, state.maximizedSession)) {
+    state.maximizedSession = null;
+  }
+
+  state.tabLayouts.delete(sessionId);
+
+  const remainingLeaves = getAllLeafNodes(state.splitRoot);
+  if (remainingLeaves.length === 0) {
+    exitSplitMode();
+    return true;
+  }
+
+  const preferred = fallbackSessionId && state.sessions.has(fallbackSessionId)
+    ? fallbackSessionId
+    : remainingLeaves[0].sessionId;
+  state.activeSessionId = preferred;
+
+  if (state.splitRoot.isLeaf()) {
+    exitSplitMode();
+  } else {
+    renderSplitLayout();
+  }
+  renderTabGroups();
+
+  const session = state.sessions.get(preferred);
+  if (session) {
+    session.wrapper.classList.add('terminal-wrapper--active');
+    setTimeout(() => {
+      session.fitAddon.fit();
+      session.terminal.focus();
+    }, 30);
+  }
+
+  if (!silent) showToast('활성 창을 합쳤습니다', 'success', 1200);
+  return true;
 }
 
 // Swap two panes
@@ -4458,6 +4524,52 @@ function completeSwap(sessionId) {
     swapPanes(state.swapTargetSession, sessionId);
   }
   state.swapTargetSession = null;
+}
+
+function canMergePane(sessionId) {
+  if (!state.splitMode || !state.splitRoot || !sessionId) return false;
+  if (!findLeafNode(state.splitRoot, sessionId)) return false;
+  return getAllLeafNodes(state.splitRoot).length > 1;
+}
+
+function removeSplitPaneHeader(wrapper) {
+  if (!wrapper) return;
+  wrapper.querySelector('.split-pane-header')?.remove();
+}
+
+function ensureSplitPaneHeader(session) {
+  if (!session?.wrapper) return;
+
+  let header = session.wrapper.querySelector('.split-pane-header');
+  if (!header) {
+    header = document.createElement('div');
+    header.className = 'split-pane-header';
+    header.innerHTML = `
+      <span class="split-pane-header__status"></span>
+      <span class="split-pane-header__title"></span>
+      <button class="split-pane-header__btn split-pane-header__btn--merge" type="button">합치기</button>
+    `;
+    session.wrapper.appendChild(header);
+  }
+
+  const statusEl = header.querySelector('.split-pane-header__status');
+  const titleEl = header.querySelector('.split-pane-header__title');
+  const mergeBtn = header.querySelector('.split-pane-header__btn--merge');
+
+  if (statusEl) {
+    statusEl.textContent = getStatusIcon(session.status);
+    statusEl.className = `split-pane-header__status split-pane-header__status--${session.status}`;
+  }
+  if (titleEl) {
+    titleEl.textContent = session.name;
+  }
+  if (mergeBtn) {
+    mergeBtn.disabled = !canMergePane(session.id);
+    mergeBtn.onclick = (e) => {
+      e.stopPropagation();
+      mergePane(session.id);
+    };
+  }
 }
 
 function getPaneDropPosition(wrapper, event) {
@@ -5042,6 +5154,7 @@ const COMMANDS = [
   { id: 'restore-tab', name: '닫은 탭 복원', shortcut: 'Ctrl+Shift+T', action: () => restoreLastClosedTab() },
   { id: 'split-horizontal', name: '가로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
   { id: 'split-vertical', name: '세로 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
+  { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
   { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
   { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
   { id: 'search-tabs', name: '탭 검색', shortcut: 'Ctrl+Shift+F', action: () => showTabSearch() },
@@ -5336,6 +5449,12 @@ function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && e.shiftKey && e.code === 'KeyE') {
     e.preventDefault();
     splitVertical();
+    return;
+  }
+  // Ctrl+Shift+J - Merge active split pane
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyJ') {
+    e.preventDefault();
+    mergePane();
     return;
   }
   // Ctrl+Shift+R - Toggle recording
@@ -6729,6 +6848,7 @@ function setupSplitToolbar() {
       startSwapMode(state.activeSessionId);
     }
   });
+  document.getElementById('mergePaneBtn')?.addEventListener('click', () => mergePane());
   document.getElementById('maximizePaneBtn')?.addEventListener('click', () => toggleMaximize());
   document.getElementById('closeSplitBtn')?.addEventListener('click', () => {
     exitSplitMode();

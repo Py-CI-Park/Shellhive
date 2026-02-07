@@ -19,6 +19,37 @@
 
 ### 2026-02-07
 
+#### feat(split-ux): VSCode 스타일 분할/합치기 흐름 및 패널 구분 강화
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `index.html`
+  - 분할 툴바에 `활성 창 합치기` 버튼(`mergePaneBtn`) 추가
+- `src/app.js`
+  - 분할 패널 합치기 로직 `mergePane()` 추가
+    - 툴바 버튼, 컨텍스트 메뉴, 단축키(`Ctrl+Shift+J`)에서 공통 사용
+    - 분할 트리에서 선택 패널 제거 후 남은 패널로 포커스 이동
+  - 분할 패널 중앙 드롭 동작 개선
+    - 기존 활성화만 수행하던 흐름을 "패널 합치기" 우선 동작으로 변경
+  - 분할 패널 헤더 UI 동적 생성
+    - 상태 아이콘 + 세션명 + 합치기 버튼 제공
+  - 컨텍스트 메뉴에 `창 합치기` 항목 추가
+  - 커맨드 팔레트에 `활성 창 합치기` 명령 추가
+- `src/style.css`
+  - 분할 패널 헤더 스타일(`.split-pane-header*`) 추가
+  - 활성 패널 식별성과 메인 작업 영역 구분감 강화
+- `src/__tests__/split-layout.e2e.test.js`
+  - 분할 헤더 표시 검증 추가
+  - 툴바 `합치기` 버튼 동작 검증 추가
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 16 tests)
+- `cargo check`
+
 #### test(split-tab): 분할/탭/프로젝트 트리 회귀 테스트 확장
 
 **커밋**: `working-tree`
