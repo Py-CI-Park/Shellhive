@@ -35,16 +35,6 @@
           <!-- Git panel will be rendered here -->
         </div>
       </div>
-      <div class="sidebar__claude">
-        <div class="sidebar__section-header">
-          <span>Claude Code</span>
-          <span class="claude-status" id="claudeStatus" title="Claude Code 상태"></span>
-        </div>
-        <button class="sidebar__claude-btn" id="claudeBtn" aria-label="Claude Code 시작">
-          <span class="claude-icon">🤖</span>
-          <span class="claude-text">Start Claude</span>
-        </button>
-      </div>
       <div class="sidebar__footer">
         <button class="sidebar__settings-btn" id="settingsBtn" aria-label="설정 열기">Settings</button>
       </div>
@@ -78,77 +68,7 @@
         </div>
       </div>
       <div class="terminal-container" id="terminalContainer"></div>
-      <!-- AI Mode Input Bar -->
-      <div class="ai-input-bar" id="aiInputBar">
-        <button class="ai-input-bar__toggle" id="aiModeToggle" title="AI Mode (Ctrl+Space)">
-          <span class="ai-input-bar__icon">AI</span>
-        </button>
-        <div class="ai-input-bar__input-container">
-          <input type="text" class="ai-input-bar__input" id="aiInput" placeholder="자연어로 명령어를 입력하세요... (예: js 파일 찾아줘)" disabled />
-          <button class="ai-input-bar__send" id="aiSendBtn" disabled>변환</button>
-        </div>
-        <button class="ai-input-bar__help" id="aiHelpBtn" title="AI 도움말">?</button>
-      </div>
     </main>
-  </div>
-
-  <!-- AI Command Preview Modal -->
-  <div class="modal" id="aiPreviewModal" role="dialog" aria-labelledby="aiPreviewModalTitle" aria-modal="true">
-    <div class="modal__content">
-      <div class="modal__header">
-        <h2 class="modal__title" id="aiPreviewModalTitle">AI 명령어 변환</h2>
-        <button class="modal__close" id="closeAiPreviewModal" aria-label="닫기">&times;</button>
-      </div>
-      <div class="modal__body">
-        <div class="ai-preview">
-          <div class="ai-preview__input">
-            <span class="ai-preview__label">입력:</span>
-            <span class="ai-preview__text" id="aiPreviewInput"></span>
-          </div>
-          <div class="ai-preview__arrow">↓</div>
-          <div class="ai-preview__output">
-            <span class="ai-preview__label">변환된 명령어:</span>
-            <code class="ai-preview__command" id="aiPreviewCommand"></code>
-          </div>
-          <div class="ai-preview__description" id="aiPreviewDescription"></div>
-          <div class="ai-preview__confidence" id="aiPreviewConfidence"></div>
-          <div class="ai-preview__alternatives" id="aiPreviewAlternatives"></div>
-        </div>
-      </div>
-      <div class="modal__footer">
-        <button class="btn btn--secondary" id="cancelAiPreview">취소</button>
-        <button class="btn btn--secondary" id="copyAiCommand">복사</button>
-        <button class="btn btn--primary" id="executeAiCommand">실행</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI Help Modal -->
-  <div class="modal" id="aiHelpModal" role="dialog" aria-labelledby="aiHelpModalTitle" aria-modal="true">
-    <div class="modal__content modal__content--wide">
-      <div class="modal__header">
-        <h2 class="modal__title" id="aiHelpModalTitle">AI 명령어 변환 도움말</h2>
-        <button class="modal__close" id="closeAiHelpModal" aria-label="닫기">&times;</button>
-      </div>
-      <div class="modal__body">
-        <p class="ai-help__intro">자연어로 원하는 작업을 설명하면 쉘 명령어로 변환해 드립니다.</p>
-        <div class="ai-help__patterns" id="aiHelpPatterns">
-          <!-- Patterns will be inserted here -->
-        </div>
-        <div class="ai-help__tips">
-          <h4>사용 팁</h4>
-          <ul>
-            <li><strong>Ctrl+Space</strong>: AI 모드 켜기/끄기</li>
-            <li><strong>Enter</strong>: 명령어 변환</li>
-            <li>따옴표로 파일명이나 검색어를 감싸면 더 정확합니다</li>
-            <li>예: "test.js 파일 삭제해줘", "'에러' 텍스트 검색"</li>
-          </ul>
-        </div>
-      </div>
-      <div class="modal__footer">
-        <button class="btn btn--primary" id="closeAiHelp">확인</button>
-      </div>
-    </div>
   </div>
 
   <!-- Add Project Modal -->

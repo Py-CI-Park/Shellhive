@@ -96,7 +96,7 @@ describe('Phase5 Regression E2E', () => {
     logSpy?.mockRestore();
   });
 
-  it('hides AI UI in current release defaults', async () => {
+  it('removes AI UI in current release defaults', async () => {
     invokeMock.mockImplementation(createInvokeImplementation());
     await import('../app.js');
 
@@ -109,10 +109,8 @@ describe('Phase5 Regression E2E', () => {
     const claudeSection = document.querySelector('.sidebar__claude');
     const aiInputBar = document.getElementById('aiInputBar');
 
-    expect(claudeSection).toBeTruthy();
-    expect(aiInputBar).toBeTruthy();
-    expect(claudeSection.style.display).toBe('none');
-    expect(aiInputBar.style.display).toBe('none');
+    expect(claudeSection).toBeNull();
+    expect(aiInputBar).toBeNull();
   });
 
   it('uses renamed git commands and stages files via git_stage', async () => {

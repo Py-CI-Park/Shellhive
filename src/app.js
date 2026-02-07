@@ -166,7 +166,7 @@ function showErrorExplanation(sessionId, errorPattern, errorText) {
   panel.innerHTML = `
     <div class="error-explanation__header">
       <span class="error-explanation__icon">💡</span>
-      <span class="error-explanation__title">AI 에러 설명</span>
+      <span class="error-explanation__title">에러 설명</span>
       <button class="error-explanation__close" aria-label="닫기">&times;</button>
     </div>
     <div class="error-explanation__content">
@@ -293,9 +293,6 @@ const SESSION_STATUS = {
   RUNNING: 'running',
   EXITED: 'exited'
 };
-
-// Performance constants
-const MAX_SESSIONS = 20;
 
 // TabGroup class for organizing tabs
 class TabGroup {
@@ -2133,12 +2130,6 @@ async function getProjectEnvVars(projectPath) {
 
 async function createSession(name = null, workingDir = null, projectId = null, options = {}) {
   const { activate = true } = options;
-
-  // Check session limit
-  if (state.sessions.size >= MAX_SESSIONS) {
-    showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다. 기존 세션을 닫아주세요.`, 'warning');
-    return null;
-  }
 
   const id = `session-${++state.sessionCounter}`;
   const sessionName = name || `Terminal ${state.sessionCounter}`;
@@ -4172,12 +4163,6 @@ async function splitActivePane(direction) {
   state.splitInProgress = true;
 
   try {
-    // Check session limit
-    if (state.sessions.size >= MAX_SESSIONS) {
-      showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다`, 'warning');
-      return;
-    }
-
     // Find the leaf node containing the active session
     const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
     console.log('leafNode found:', leafNode);
@@ -5239,15 +5224,6 @@ function handleKeyboardShortcuts(e) {
     return;
   }
 
-  // Ctrl+Shift+C - Start Claude Code session
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-    if (isAiFeaturesEnabled()) {
-      e.preventDefault();
-      startClaudeSession();
-      return;
-    }
-  }
-
   // Ctrl+R - Show history panel
   if (e.ctrlKey && e.key === 'r') {
     e.preventDefault();
@@ -5401,7 +5377,7 @@ function updateClaudeButton() {
 }
 
 // Claude 세션 시작
-async function startClaudeSession(projectPath = null) {
+async function _startClaudeSession(projectPath = null) {
   if (!isAiFeaturesEnabled()) {
     showToast('현재 버전에서는 AI 기능이 비활성화되어 있습니다', 'info');
     return;
@@ -5741,12 +5717,6 @@ function setupEventListeners() {
   settingsBtn.addEventListener('click', () => showSettingsModal());
   closeSettingsModal.addEventListener('click', () => cancelSettingsModal());
   cancelSettings.addEventListener('click', () => cancelSettingsModal());
-
-  // Claude Code 버튼
-  const claudeBtn = document.getElementById('claudeBtn');
-  if (claudeBtn && isAiFeaturesEnabled()) {
-    claudeBtn.addEventListener('click', () => startClaudeSession());
-  }
 
   // Real-time preview for theme changes
   settingsTheme.addEventListener('change', () => {

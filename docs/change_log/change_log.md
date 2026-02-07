@@ -19,6 +19,30 @@
 
 ### 2026-02-07
 
+#### fix(ui): AI/Claude GUI 제거 및 탭 최대 제한 해제
+
+**커밋**: `working-tree`
+
+##### 수정됨 (Fixed)
+
+- `index.html`
+  - 사이드바 Claude Code 섹션 제거(`.sidebar__claude`, `#claudeBtn`, `#claudeStatus`)
+  - 하단 AI 입력바 제거(`#aiInputBar`, `#aiModeToggle`, `#aiInput`, `#aiSendBtn`, `#aiHelpBtn`)
+  - AI 미리보기/도움말 모달 제거(`#aiPreviewModal`, `#aiHelpModal` 및 하위 버튼)
+- `src/app.js`
+  - 세션 최대치 상수(`MAX_SESSIONS`) 및 생성/분할 시 제한 검사 제거
+  - `Ctrl+Shift+C` Claude 시작 단축키 제거
+  - Claude 버튼 클릭 이벤트 바인딩 제거
+  - 사용자 노출 문구 `AI 에러 설명` -> `에러 설명`으로 변경
+- `src/__tests__/phase5-regression.e2e.test.js`
+  - AI UI 회귀 검증 기준을 "비노출(display:none)"에서 "요소 제거(null)"로 갱신
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run`
+- `cargo check`
+
 #### test(regression): 5단계 정합화 회귀 테스트 추가
 
 **커밋**: `working-tree`
