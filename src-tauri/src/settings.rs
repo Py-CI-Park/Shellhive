@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -280,10 +281,32 @@ impl Default for WindowState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SplitNodeState {
+    #[serde(rename = "type")]
+    pub node_type: String,
+    #[serde(default)]
+    pub ratio: Option<f64>,
+    #[serde(default, rename = "sessionId")]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub children: Option<Vec<SplitNodeState>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TabLayoutState {
+    #[serde(default, rename = "splitMode")]
+    pub split_mode: bool,
+    #[serde(default, rename = "splitRoot")]
+    pub split_root: Option<SplitNodeState>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct SessionState {
     pub sessions: Vec<SessionInfo>,
     pub active_session_id: Option<String>,
     pub tab_groups: Vec<TabGroupInfo>,
+    pub tab_layouts: HashMap<String, TabLayoutState>,
     pub window_state: WindowState,
 }
 

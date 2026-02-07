@@ -19,6 +19,31 @@
 
 ### 2026-02-07
 
+#### fix(session-state): 분할 레이아웃 저장 계약(tab_layouts) 복구
+
+**커밋**: `working-tree`
+
+##### 수정됨 (Fixed)
+
+- `src-tauri/src/settings.rs`
+  - `SessionState`에 `tab_layouts` 필드 추가 (`HashMap<String, TabLayoutState>`)
+  - 분할 트리 직렬화 구조체 추가
+    - `SplitNodeState` (`type`, `ratio`, `sessionId`, `children`)
+    - `TabLayoutState` (`splitMode`, `splitRoot`)
+  - `SessionState`에 `#[serde(default)]` 적용으로 구버전 상태 파일 로드 호환성 강화
+- `src/app.js`
+  - 세션 복원 시 `tab_groups`/`sessions`를 배열 여부 검증 후 처리
+  - `tab_layouts` 복원 시 camelCase/snake_case 키를 모두 허용
+    - `splitRoot` 또는 `split_root`
+    - `splitMode` 또는 `split_mode`
+  - 결과적으로 탭별 분할 레이아웃이 저장 후 재실행에서 유실되지 않도록 복원 경로 안정화
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run`
+- `cargo check`
+
 #### docs(research): GUI 분할/탭 개선 연구 문서 스펙 동기화
 
 **커밋**: `working-tree`
