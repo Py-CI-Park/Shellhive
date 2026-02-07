@@ -19,6 +19,41 @@
 
 ### 2026-02-07
 
+#### fix(dev): run-dev.bat 실행 경로/인자 처리 수정
+
+**커밋**: `working-tree`
+
+##### 수정됨 (Fixed)
+
+- `run-dev.bat`
+  - 스크립트 시작 시 저장소 루트로 강제 이동(`cd /d "%~dp0"`)
+  - Tauri 개발 실행 인자를 npm 표준 형태로 수정
+    - 기존: `npm run tauri dev`
+    - 변경: `npm run tauri -- dev`
+  - `setlocal`/`endlocal` 범위 정리
+
+#### feat(usability): 분할 유지 선택 모델 + 레이아웃 선택 UX 개선
+
+**커밋**: `working-tree`
+
+##### 변경됨 (Changed)
+
+- 분할 패널 클릭/패널 이동 시 분할 레이아웃이 유지되도록 세션 활성화 경로 개선
+  - 분할 컨텍스트에서 `activateSession(..., { preserveSplitLayout: true })` 사용
+- 기본 분할을 "오른쪽 분할"로 표준화
+  - 단축키 `Ctrl+\\`
+  - 툴바 `기본` 버튼
+  - 컨텍스트 메뉴/커맨드 팔레트 진입 추가
+- 레이아웃 프리셋 선택 UX 개선
+  - 툴바 `레이아웃 선택(select) + 적용` 추가
+  - 단축키 `Ctrl+Shift+S`로 선택기 포커스
+
+##### 문서화됨 (Documentation)
+
+- `docs/research/RESEARCH_SPLIT_TAB_USABILITY_2026-02-07.md` 추가
+  - 문제 원인 분석
+  - 개선 원칙/반영 내용/후속 추천 정리
+
 #### feat(split-default): VSCode 스타일 기본 분할(오른쪽) 흐름 추가
 
 **커밋**: `working-tree`

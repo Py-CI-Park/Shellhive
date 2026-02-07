@@ -1,6 +1,10 @@
 @echo off
+setlocal EnableExtensions
 REM Shellhive Development Mode Launcher
 REM This script runs the application in development mode with hot-reload
+
+REM Always run from repository root (directory of this script)
+cd /d "%~dp0"
 
 echo ========================================
 echo    Shellhive - Development Mode
@@ -54,7 +58,7 @@ echo [INFO] Press Ctrl+C to stop the development server
 echo.
 
 REM Run Tauri dev mode
-call npm run tauri dev
+call npm run tauri -- dev
 
 if %errorlevel% neq 0 (
     echo.
@@ -64,3 +68,4 @@ if %errorlevel% neq 0 (
 )
 
 pause
+endlocal

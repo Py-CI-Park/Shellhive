@@ -205,4 +205,54 @@ describe('Split Layout E2E', () => {
     expect(terminalContainer.classList.contains('terminal-container--split')).toBe(false);
     expect(document.querySelector('.split-pane-header')).toBeNull();
   });
+
+  it('keeps split layout when clicking another split pane', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 2);
+
+    const splitWrappers = Array.from(document.querySelectorAll('#terminalContainer .terminal-wrapper--split'));
+    splitWrappers[0].click();
+
+    await waitFor(() => document.querySelector('#terminalContainer .split-container'));
+    const terminalContainer = document.getElementById('terminalContainer');
+    expect(terminalContainer.classList.contains('terminal-container--split')).toBe(true);
+    expect(terminalContainer.querySelectorAll('.terminal-wrapper--split').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('focuses layout preset selector with Ctrl+Shift+S and applies selected layout', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'S',
+      code: 'KeyS',
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true
+    }));
+
+    const selector = document.getElementById('layoutPresetSelect');
+    expect(selector).toBeTruthy();
+    expect(document.activeElement).toBe(selector);
+
+    selector.value = 'grid-2x2';
+    document.getElementById('applyLayoutPresetBtn').click();
+
+    await waitFor(
+      () => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 4,
+      10000
+    );
+  });
 });

@@ -376,6 +376,23 @@ html, body {
   background: var(--border);
 }
 
+.split-toolbar__select {
+  min-width: 116px;
+  height: 28px;
+  padding: 0 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+
+.split-toolbar__select:hover,
+.split-toolbar__select:focus {
+  border-color: var(--accent);
+}
+
 /* Terminal container */
 .terminal-container {
   flex: 1;

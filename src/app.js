@@ -2592,9 +2592,11 @@ function updateTabStatus(sessionId, status) {
   }
 }
 
-function activateSession(id) {
+function activateSession(id, options = {}) {
+  const { preserveSplitLayout = false } = options;
   const session = state.sessions.get(id);
   if (!session) return;
+  const keepCurrentSplit = preserveSplitLayout && state.splitMode && !!state.splitRoot;
 
   // Cancel any pending swap operation
   if (state.swapTargetSession) {
@@ -2606,7 +2608,7 @@ function activateSession(id) {
   }
 
   // Save current tab's layout before switching
-  if (state.activeSessionId && state.activeSessionId !== id) {
+  if (!keepCurrentSplit && state.activeSessionId && state.activeSessionId !== id) {
     saveTabLayout(state.activeSessionId);
   }
 
@@ -2626,7 +2628,11 @@ function activateSession(id) {
   state.activeSessionId = id;
 
   // Restore new tab's layout after switching
-  restoreTabLayout(id);
+  if (keepCurrentSplit) {
+    renderSplitLayout();
+  } else {
+    restoreTabLayout(id);
+  }
 
   setTimeout(() => {
     session.fitAddon.fit();
@@ -4134,6 +4140,13 @@ function splitDefault() {
   splitVertical();
 }
 
+function focusLayoutPresetSelector() {
+  const presetSelect = document.getElementById('layoutPresetSelect');
+  if (!presetSelect) return;
+  presetSelect.focus();
+  showToast('레이아웃 프리셋을 선택하세요', 'info', 1200);
+}
+
 // Toggle maximize for a split pane
 function toggleMaximize(sessionId = state.activeSessionId) {
   if (!sessionId) {
@@ -4283,7 +4296,7 @@ function renderSplitNode(node) {
       if (state.swapTargetSession) {
         completeSwap(node.sessionId);
       } else {
-        activateSession(node.sessionId);
+        activateSession(node.sessionId, { preserveSplitLayout: true });
       }
     };
 
@@ -4313,7 +4326,7 @@ function renderSplitNode(node) {
       if (dropPosition === 'center') {
         const merged = mergePane(draggedSessionId, { fallbackSessionId: node.sessionId, silent: true });
         if (!merged) {
-          activateSession(draggedSessionId);
+          activateSession(draggedSessionId, { preserveSplitLayout: true });
         } else {
           showToast('분할 창을 합쳤습니다', 'info', 1200);
         }
@@ -5164,6 +5177,7 @@ const COMMANDS = [
   { id: 'split-default', name: '기본 분할 (오른쪽)', shortcut: 'Ctrl+\\', action: () => splitDefault() },
   { id: 'split-horizontal', name: '아래로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
   { id: 'split-vertical', name: '오른쪽 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
+  { id: 'layout-preset-selector', name: '레이아웃 선택기 열기', shortcut: 'Ctrl+Shift+S', action: () => focusLayoutPresetSelector() },
   { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
   { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
   { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
@@ -5453,6 +5467,12 @@ function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && !e.shiftKey && e.code === 'Backslash') {
     e.preventDefault();
     splitDefault();
+    return;
+  }
+  // Ctrl+Shift+S - Focus layout preset selector
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyS') {
+    e.preventDefault();
+    focusLayoutPresetSelector();
     return;
   }
   // Ctrl+Shift+D - Horizontal split
@@ -5760,7 +5780,7 @@ function focusPaneByDirection(direction) {
     nextIndex = (currentIndex - 1 + leaves.length) % leaves.length;
   }
 
-  activateSession(leaves[nextIndex].sessionId);
+  activateSession(leaves[nextIndex].sessionId, { preserveSplitLayout: true });
 }
 
 function switchToNextTab() {
@@ -6858,6 +6878,14 @@ function setupSplitToolbar() {
   document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-rows'));
   document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid-2x2'));
   document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-columns'));
+  document.getElementById('applyLayoutPresetBtn')?.addEventListener('click', () => {
+    const preset = document.getElementById('layoutPresetSelect')?.value;
+    if (!preset) {
+      showToast('레이아웃 프리셋을 먼저 선택하세요', 'warning', 1200);
+      return;
+    }
+    applyLayoutPreset(preset);
+  });
 
   // Control buttons
   document.getElementById('swapPanesBtn')?.addEventListener('click', () => {
