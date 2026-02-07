@@ -19,6 +19,30 @@
 
 ### 2026-02-07
 
+#### test(split-tab): 분할/탭/프로젝트 트리 회귀 테스트 확장
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/split-layout.e2e.test.js`
+  - 탭을 분할 패널에 드롭 배치하는 시나리오 검증 추가
+  - `beforeunload` 시 `save_session_state` payload에 `tab_layouts`가 포함되는지 검증 추가
+- `src/__tests__/phase5-regression.e2e.test.js`
+  - 프로젝트 하위 CMD 트리 렌더링/활성 상태 갱신 검증 추가
+
+##### 수정됨 (Fixed)
+
+- `src/app.js`
+  - 세션 상태 저장 시 현재 활성 분할 레이아웃(`splitRoot`)을 `tab_layouts`에 포함하도록 보강
+  - 분할 상태를 저장 직전 스냅샷으로 반영해 재실행 복원 신뢰성 향상
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 15 tests)
+- `cargo check`
+
 #### perf(split): 분할 리사이즈 렌더 배칭 및 디버그 노이즈 정리
 
 **커밋**: `working-tree`

@@ -1634,6 +1634,12 @@ async function saveSessionState() {
         splitRoot: serializeSplitTree(layout.splitRoot)
       };
     });
+    if (state.activeSessionId && state.splitMode && state.splitRoot) {
+      tabLayoutsObj[state.activeSessionId] = {
+        splitMode: true,
+        splitRoot: serializeSplitTree(state.splitRoot)
+      };
+    }
 
     const sessionState = {
       sessions,

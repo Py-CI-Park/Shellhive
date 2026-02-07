@@ -180,4 +180,42 @@ describe('Phase5 Regression E2E', () => {
     expect(blockContainer).toBeTruthy();
     expect(blockContainer.style.display).toBe('block');
   });
+
+  it('renders project cmd tree and updates it as sessions are created', async () => {
+    invokeMock.mockImplementation(createInvokeImplementation({
+      projects: [
+        {
+          id: 'p1',
+          name: 'demo',
+          path: 'C:\\repo',
+          category_id: null
+        }
+      ]
+    }));
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelector('#projectList .sidebar__item'));
+    const projectItem = document.querySelector('#projectList .sidebar__item');
+    projectItem.click();
+    projectItem.click();
+
+    await waitFor(() => {
+      const tree = document.querySelector('[data-project-cmd-tree="p1"]');
+      return tree && tree.classList.contains('sidebar__cmd-tree--visible');
+    });
+
+    const cmdItems = document.querySelectorAll('[data-project-cmd-tree="p1"] .sidebar__cmd-item');
+    expect(cmdItems.length).toBeGreaterThanOrEqual(2);
+
+    const targetSessionId = cmdItems[0].dataset.sessionId;
+    cmdItems[0].click();
+    await waitFor(() => {
+      const activeItem = document.querySelector(`[data-project-cmd-tree="p1"] .sidebar__cmd-item[data-session-id="${targetSessionId}"]`);
+      return activeItem?.classList.contains('sidebar__cmd-item--active');
+    });
+  });
 });
