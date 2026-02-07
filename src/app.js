@@ -2693,6 +2693,10 @@ function handleTabDragStart(e) {
   state.draggedTab = e.currentTarget;
   e.currentTarget.classList.add('tab--dragging');
   e.dataTransfer.effectAllowed = 'move';
+  const sessionId = e.currentTarget.dataset.sessionId;
+  if (sessionId) {
+    e.dataTransfer.setData('text/plain', sessionId);
+  }
 }
 
 function handleTabDragEnter(e) {
@@ -2732,6 +2736,7 @@ function handleTabDragEnd(e) {
   document.querySelectorAll('.tab--drop-target').forEach(tab => {
     tab.classList.remove('tab--drop-target');
   });
+  clearPaneDropIndicators();
   state.draggedTab = null;
 }
 
@@ -4270,6 +4275,42 @@ function renderSplitNode(node) {
       }
     };
 
+    session.wrapper.ondragover = (e) => {
+      const draggedSessionId = state.draggedTab?.dataset.sessionId || e.dataTransfer.getData('text/plain');
+      if (!draggedSessionId || !state.sessions.has(draggedSessionId)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dropPosition = getPaneDropPosition(session.wrapper, e);
+      setPaneDropIndicator(session.wrapper, dropPosition);
+    };
+
+    session.wrapper.ondragleave = (e) => {
+      if (!session.wrapper.contains(e.relatedTarget)) {
+        clearPaneDropIndicators();
+      }
+    };
+
+    session.wrapper.ondrop = (e) => {
+      const draggedSessionId = state.draggedTab?.dataset.sessionId || e.dataTransfer.getData('text/plain');
+      if (!draggedSessionId || !state.sessions.has(draggedSessionId)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearPaneDropIndicators();
+
+      const dropPosition = getPaneDropPosition(session.wrapper, e);
+      if (dropPosition === 'center') {
+        activateSession(draggedSessionId);
+        return;
+      }
+
+      const moved = moveSessionToSplitPane(draggedSessionId, node.sessionId, dropPosition);
+      if (moved) {
+        showToast('탭을 분할 패널에 배치했습니다', 'success', 1200);
+      } else {
+        showToast('분할 패널 배치에 실패했습니다', 'warning', 1200);
+      }
+    };
+
     return session.wrapper;
   }
 
@@ -4415,6 +4456,66 @@ function completeSwap(sessionId) {
     swapPanes(state.swapTargetSession, sessionId);
   }
   state.swapTargetSession = null;
+}
+
+function getPaneDropPosition(wrapper, event) {
+  const rect = wrapper.getBoundingClientRect();
+  const xRatio = (event.clientX - rect.left) / Math.max(rect.width, 1);
+  const yRatio = (event.clientY - rect.top) / Math.max(rect.height, 1);
+  const threshold = 0.25;
+
+  if (yRatio <= threshold) return 'top';
+  if (yRatio >= 1 - threshold) return 'bottom';
+  if (xRatio <= threshold) return 'left';
+  if (xRatio >= 1 - threshold) return 'right';
+  return 'center';
+}
+
+function clearPaneDropIndicators() {
+  document.querySelectorAll('.terminal-wrapper--drop-target').forEach(el => {
+    el.classList.remove(
+      'terminal-wrapper--drop-target',
+      'terminal-wrapper--drop-left',
+      'terminal-wrapper--drop-right',
+      'terminal-wrapper--drop-top',
+      'terminal-wrapper--drop-bottom',
+      'terminal-wrapper--drop-center'
+    );
+  });
+}
+
+function setPaneDropIndicator(wrapper, dropPosition) {
+  clearPaneDropIndicators();
+  wrapper.classList.add('terminal-wrapper--drop-target');
+  wrapper.classList.add(`terminal-wrapper--drop-${dropPosition}`);
+}
+
+function moveSessionToSplitPane(draggedSessionId, targetSessionId, dropPosition) {
+  if (!state.splitMode || !state.splitRoot) return false;
+  if (draggedSessionId === targetSessionId) return false;
+
+  const direction = (dropPosition === 'left' || dropPosition === 'right') ? 'vertical' : 'horizontal';
+  const placeDraggedFirst = dropPosition === 'left' || dropPosition === 'top';
+
+  if (findLeafNode(state.splitRoot, draggedSessionId)) {
+    const removed = removeLeafNode(state.splitRoot, draggedSessionId);
+    if (!removed) return false;
+  }
+
+  const targetNode = findLeafNode(state.splitRoot, targetSessionId);
+  if (!targetNode || !targetNode.isLeaf()) return false;
+
+  const oldSessionId = targetNode.sessionId;
+  targetNode.type = direction;
+  targetNode.sessionId = null;
+  targetNode.ratio = 0.5;
+  targetNode.children = placeDraggedFirst
+    ? [new SplitNode('leaf', draggedSessionId), new SplitNode('leaf', oldSessionId)]
+    : [new SplitNode('leaf', oldSessionId), new SplitNode('leaf', draggedSessionId)];
+
+  state.activeSessionId = draggedSessionId;
+  renderSplitLayout();
+  return true;
 }
 
 // Get all leaf nodes from split tree

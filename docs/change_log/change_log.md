@@ -19,6 +19,34 @@
 
 ### 2026-02-07
 
+#### feat(split-dnd): 탭을 분할 패널로 직접 배치하는 드롭 동작 구현
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `src/app.js`
+  - 탭 드래그 시작 시 `sessionId`를 `dataTransfer`에 기록
+  - 분할 패널(leaf)에서 탭 드롭을 처리하는 핸들러 추가
+    - 드롭 위치 감지: `left`, `right`, `top`, `bottom`, `center`
+    - 가장자리 드롭 시 대상 패널을 기준으로 분할 트리 재구성
+    - 중앙 드롭 시 해당 세션 활성화 처리
+  - 분할 패널 드롭 전용 유틸 함수 추가
+    - `getPaneDropPosition`
+    - `setPaneDropIndicator`
+    - `clearPaneDropIndicators`
+    - `moveSessionToSplitPane`
+- `src/style.css`
+  - 분할 패널 드롭 가이드 시각화 스타일 추가
+    - `.terminal-wrapper--drop-target`
+    - `.terminal-wrapper--drop-left/right/top/bottom/center`
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run`
+- `cargo check`
+
 #### fix(session-state): 분할 레이아웃 저장 계약(tab_layouts) 복구
 
 **커밋**: `working-tree`
