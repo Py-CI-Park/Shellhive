@@ -316,3 +316,39 @@
 - `npm run test -- --run`: 통과 (3 files, 9 tests)
 - `cargo check`: 통과
 - 주의: 위 검증은 정적/단위 중심이며, Git 패널 명령명 불일치 같은 런타임 통합 문제는 테스트에서 포착되지 않았습니다.
+
+## 8. 단계별 개발 진행 현황 (2026-02-07 1차)
+
+### 8.1 완료된 단계
+
+1. 1단계 완료: Git 패널 커맨드 정합성 수정
+   - `get_git_status` -> `git_status`
+   - `git_stage_all` -> `git_stage(files[])`
+   - `git_stage_file`/`git_unstage_file` -> `git_stage`/`git_unstage` 단건 배열 전달
+   - 반영 파일: `src/app.js`
+2. 2단계 완료: 설정 스키마 통합
+   - `Settings` 확장: `enable_notifications`, `enable_snippet_suggestions`, `snippet_suggestion_threshold`, `enable_block_mode`, `enable_ai_features`
+   - 구버전 설정 파일 호환: `#[serde(default)]` 적용
+   - 블록 모드 체크박스 저장/복원 연결
+   - 반영 파일: `src-tauri/src/settings.rs`, `src/app.js`
+3. 3단계 완료: AI 기능 비활성화 기본 적용
+   - 프론트에서 AI 기능 기본 `false` 고정
+   - Claude 버튼/AI 입력바/AI 모달 비노출 처리
+   - AI 관련 리스너/단축키는 `aiEnabled` 조건일 때만 등록
+   - 반영 파일: `src/app.js`
+4. 4단계 완료: 백엔드 AI invoke 경로 차단
+   - `main.rs`에서 `claude::*`, `ai::*` 커맨드 등록 제거
+   - 반영 파일: `src-tauri/src/main.rs`
+
+### 8.2 남은 단계
+
+1. 5단계 일부 남음: 문서/테스트/QA 정합화
+   - AI 제외 기준으로 `IMPLEMENTATION_COMPLETE.md`, 로드맵 문서 상태 표기 정리
+   - Git 패널 및 블록 모드 동작에 대한 회귀 테스트 추가
+   - 수동 QA 체크리스트에 "AI 비노출" 항목 추가
+
+### 8.3 1차 구현 후 재검증 결과
+
+- `npm run lint`: 통과
+- `npm run test -- --run`: 통과 (3 files, 9 tests)
+- `cargo check`: 통과

@@ -1258,7 +1258,11 @@ const state = {
     fontSize: 14,
     fontFamily: 'Consolas',
     enableLogging: true,
+    enableNotifications: true,
+    enableSnippetSuggestions: true,
+    snippetSuggestionThreshold: 3,
     enableBlockMode: false,  // Warp-style block output
+    enableAiFeatures: false,
     locale: 'ko',
   },
   blockManagers: new Map(),  // Map<sessionId, BlockManager>
@@ -1298,64 +1302,116 @@ let snippetList, addSnippetBtn, addSnippetModal, closeAddSnippetModal;
 let cancelAddSnippet, confirmAddSnippet, snippetNameInput, snippetCommandInput;
 let settingsBtn, settingsModal, closeSettingsModal, cancelSettings, saveSettingsBtn;
 let settingsTheme, settingsFontSize, fontSizeValue, settingsFontFamily;
-let settingsEnableLogging, settingsEnableNotifications, clearLogsBtn;
+let settingsEnableLogging, settingsEnableNotifications, settingsBlockMode, clearLogsBtn;
 let settingsBackup = null;
 
 // ===== Settings Functions =====
+
+function normalizeSettings(settings) {
+  return {
+    theme: settings.theme || 'dark',
+    fontSize: settings.font_size ?? 14,
+    fontFamily: settings.font_family || 'Consolas',
+    enableLogging: settings.enable_logging ?? true,
+    enableNotifications: settings.enable_notifications ?? true,
+    enableSnippetSuggestions: settings.enable_snippet_suggestions ?? true,
+    snippetSuggestionThreshold: settings.snippet_suggestion_threshold ?? 3,
+    enableBlockMode: settings.enable_block_mode ?? false,
+    // AI 기능은 현재 릴리즈 범위에서 제외
+    enableAiFeatures: false,
+    locale: settings.locale || 'ko',
+  };
+}
+
+function isAiFeaturesEnabled() {
+  return state.settings.enableAiFeatures === true;
+}
+
+function applyAiFeatureVisibility() {
+  const aiEnabled = isAiFeaturesEnabled();
+  const claudeSection = document.querySelector('.sidebar__claude');
+  const aiInputBar = document.getElementById('aiInputBar');
+  const aiPreviewModal = document.getElementById('aiPreviewModal');
+  const aiHelpModal = document.getElementById('aiHelpModal');
+
+  if (claudeSection) {
+    claudeSection.style.display = aiEnabled ? '' : 'none';
+  }
+  if (aiInputBar) {
+    aiInputBar.style.display = aiEnabled ? '' : 'none';
+  }
+  if (aiPreviewModal) {
+    aiPreviewModal.style.display = aiEnabled ? '' : 'none';
+    if (!aiEnabled) {
+      aiPreviewModal.classList.remove('modal--visible');
+    }
+  }
+  if (aiHelpModal) {
+    aiHelpModal.style.display = aiEnabled ? '' : 'none';
+    if (!aiEnabled) {
+      aiHelpModal.classList.remove('modal--visible');
+    }
+  }
+}
+
+function applyBlockModeToSessions(enableBlockMode) {
+  state.sessions.forEach((session, sessionId) => {
+    if (session.wrapper) {
+      session.wrapper.classList.toggle('terminal-wrapper--block-mode', enableBlockMode);
+    }
+    if (session.blockContainer) {
+      session.blockContainer.style.display = enableBlockMode ? 'block' : 'none';
+    }
+    const blockManager = state.blockManagers.get(sessionId);
+    if (blockManager && session.blockContainer) {
+      blockManager.setContainer(session.blockContainer);
+    }
+  });
+}
 
 async function loadSettings() {
   try {
     const settings = await invoke('get_settings');
     debug('Settings loaded:', settings);
-
-    // Normalize settings (handle snake_case from backend)
-    state.settings = {
-      theme: settings.theme,
-      fontSize: settings.fontSize || settings.font_size || 14,
-      fontFamily: settings.fontFamily || settings.font_family || 'Consolas',
-      enableLogging: settings.enableLogging ?? settings.enable_logging ?? true,
-      enableNotifications: settings.enableNotifications ?? settings.enable_notifications ?? true,
-      locale: settings.locale || 'ko',
-      enableSnippetSuggestions: settings.enableSnippetSuggestions ?? settings.enable_snippet_suggestions ?? true,
-      snippetSuggestionThreshold: settings.snippetSuggestionThreshold || settings.snippet_suggestion_threshold || 3,
-    };
+    state.settings = normalizeSettings(settings);
 
     applyTheme(state.settings.theme);
 
-    // Apply locale setting
     if (state.settings.locale) {
       setLocale(state.settings.locale);
     }
 
-    // Update command history threshold
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
+    applyAiFeatureVisibility();
+    applyBlockModeToSessions(state.settings.enableBlockMode);
 
     return state.settings;
   } catch (error) {
     debug('Failed to load settings:', error);
+    applyAiFeatureVisibility();
     return state.settings;
   }
 }
 
 async function saveSettings(settings) {
   try {
-    await invoke('save_settings', { settings });
-
-    // Normalize settings for frontend use
-    state.settings = {
+    const backendSettings = {
       theme: settings.theme,
-      fontSize: settings.fontSize || settings.font_size || 14,
-      fontFamily: settings.fontFamily || settings.font_family || 'Consolas',
-      enableLogging: settings.enableLogging ?? settings.enable_logging ?? true,
-      enableNotifications: settings.enableNotifications ?? settings.enable_notifications ?? true,
-      locale: settings.locale || 'ko',
-      enableSnippetSuggestions: settings.enableSnippetSuggestions ?? settings.enable_snippet_suggestions ?? true,
-      snippetSuggestionThreshold: settings.snippetSuggestionThreshold || settings.snippet_suggestion_threshold || 3,
+      font_size: settings.fontSize,
+      font_family: settings.fontFamily,
+      enable_logging: settings.enableLogging,
+      enable_notifications: settings.enableNotifications,
+      enable_snippet_suggestions: settings.enableSnippetSuggestions,
+      snippet_suggestion_threshold: settings.snippetSuggestionThreshold,
+      enable_block_mode: settings.enableBlockMode,
+      enable_ai_features: false,
+      locale: settings.locale,
     };
+    await invoke('save_settings', { settings: backendSettings });
+    state.settings = { ...settings };
 
     applyTheme(state.settings.theme);
 
-    // Apply locale setting
     if (state.settings.locale) {
       setLocale(state.settings.locale);
     }
@@ -1365,8 +1421,9 @@ async function saveSettings(settings) {
       updateTerminalSettings(session.terminal, state.settings);
     });
 
-    // Update command history threshold
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
+    applyAiFeatureVisibility();
+    applyBlockModeToSessions(state.settings.enableBlockMode);
 
     debug('Settings saved');
     showToast('설정이 저장되었습니다', 'success');
@@ -1390,8 +1447,8 @@ function applyTheme(theme) {
 function updateTerminalSettings(terminal, settings) {
   const theme = TERMINAL_THEMES[settings.theme] || TERMINAL_THEMES.dark;
   terminal.options.theme = theme;
-  terminal.options.fontSize = settings.fontSize || settings.font_size || 14;
-  terminal.options.fontFamily = `${settings.fontFamily || settings.font_family || 'Consolas'}, "Courier New", monospace`;
+  terminal.options.fontSize = settings.fontSize || 14;
+  terminal.options.fontFamily = `${settings.fontFamily || 'Consolas'}, "Courier New", monospace`;
 }
 
 function showSettingsModal() {
@@ -1400,22 +1457,27 @@ function showSettingsModal() {
   // Backup current settings for cancel functionality
   settingsBackup = {
     theme: state.settings.theme,
-    fontSize: state.settings.fontSize || state.settings.font_size || 14,
-    fontFamily: state.settings.fontFamily || state.settings.font_family || 'Consolas',
-    enableLogging: state.settings.enableLogging ?? state.settings.enable_logging ?? true,
-    enableNotifications: state.settings.enableNotifications ?? state.settings.enable_notifications ?? true,
-    locale: state.settings.locale || 'ko',
+    fontSize: state.settings.fontSize || 14,
+    fontFamily: state.settings.fontFamily || 'Consolas',
+    enableLogging: state.settings.enableLogging ?? true,
+    enableNotifications: state.settings.enableNotifications ?? true,
     enableSnippetSuggestions: state.settings.enableSnippetSuggestions ?? true,
-    snippetSuggestionThreshold: state.settings.snippetSuggestionThreshold || 3
+    snippetSuggestionThreshold: state.settings.snippetSuggestionThreshold || 3,
+    enableBlockMode: state.settings.enableBlockMode ?? false,
+    enableAiFeatures: state.settings.enableAiFeatures ?? false,
+    locale: state.settings.locale || 'ko',
   };
 
   settingsModal.classList.add('modal--visible');
   settingsTheme.value = state.settings.theme;
-  settingsFontSize.value = state.settings.fontSize || state.settings.font_size || 14;
+  settingsFontSize.value = state.settings.fontSize || 14;
   fontSizeValue.textContent = `${settingsFontSize.value}px`;
-  settingsFontFamily.value = state.settings.fontFamily || state.settings.font_family || 'Consolas';
-  settingsEnableLogging.checked = state.settings.enableLogging ?? state.settings.enable_logging ?? true;
-  settingsEnableNotifications.checked = state.settings.enableNotifications ?? state.settings.enable_notifications ?? true;
+  settingsFontFamily.value = state.settings.fontFamily || 'Consolas';
+  settingsEnableLogging.checked = state.settings.enableLogging ?? true;
+  settingsEnableNotifications.checked = state.settings.enableNotifications ?? true;
+  if (settingsBlockMode) {
+    settingsBlockMode.checked = state.settings.enableBlockMode ?? false;
+  }
 
   const settingsLocale = document.getElementById('settingsLocale');
   if (settingsLocale) {
@@ -2088,10 +2150,15 @@ async function createSession(name = null, workingDir = null, projectId = null, o
   wrapper.id = `terminal-${id}`;
   terminalContainer.appendChild(wrapper);
 
+  const blockContainer = document.createElement('div');
+  blockContainer.className = 'command-blocks-container';
+  blockContainer.style.display = state.settings.enableBlockMode ? 'block' : 'none';
+  wrapper.appendChild(blockContainer);
+
   // Get theme for terminal
   const theme = TERMINAL_THEMES[state.settings.theme] || TERMINAL_THEMES.dark;
-  const fontSize = state.settings.fontSize || state.settings.font_size || 14;
-  const fontFamily = state.settings.fontFamily || state.settings.font_family || 'Consolas';
+  const fontSize = state.settings.fontSize || 14;
+  const fontFamily = state.settings.fontFamily || 'Consolas';
 
   // Initialize xterm.js
   const terminal = new Terminal({
@@ -2214,7 +2281,7 @@ async function createSession(name = null, workingDir = null, projectId = null, o
     // Listen for PTY output
     unlistenPtyData = await listen(`pty-data:${ptySessionId}`, (event) => {
       terminal.write(event.payload);
-      if (state.settings.enableLogging || state.settings.enable_logging) {
+      if (state.settings.enableLogging) {
         logSessionOutput(ptySessionId, event.payload);
       }
       // Capture output for recording if active
@@ -2362,11 +2429,15 @@ async function createSession(name = null, workingDir = null, projectId = null, o
     projectName: name,
     projectId: projectId,
     projectPath: workingDir,
+    blockContainer,
     pinned: false,    // Phase 3: Tab pinning
     color: null,      // Phase 3: Tab color
   };
   state.sessions.set(id, session);
-  state.blockManagers.set(id, new BlockManager(id));
+  const blockManager = new BlockManager(id);
+  blockManager.setContainer(blockContainer);
+  state.blockManagers.set(id, blockManager);
+  wrapper.classList.toggle('terminal-wrapper--block-mode', state.settings.enableBlockMode);
 
   // Link session to project
   if (projectId) {
@@ -4834,7 +4905,6 @@ const COMMANDS = [
   }},
   { id: 'clear-screen', name: '화면 지우기', shortcut: 'Ctrl+L', action: () => clearTerminalScreen() },
   { id: 'clear-scrollback', name: '스크롤백 지우기', shortcut: 'Ctrl+K', action: () => clearTerminalScrollback() },
-  { id: 'start-claude', name: 'Claude Code 시작', shortcut: 'Ctrl+Shift+C', action: () => startClaudeSession() },
   { id: 'fullscreen', name: '전체화면 전환', shortcut: 'F11', action: () => toggleFullscreen() },
   { id: 'history', name: '명령어 히스토리', shortcut: 'Ctrl+R', action: () => showHistoryPanel(commandHistory, state, escapeHtml) },
   { id: 'git-panel', name: 'Git 패널 토글', shortcut: 'Ctrl+G', action: () => toggleGitPanel() },
@@ -5171,9 +5241,11 @@ function handleKeyboardShortcuts(e) {
 
   // Ctrl+Shift+C - Start Claude Code session
   if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-    e.preventDefault();
-    startClaudeSession();
-    return;
+    if (isAiFeaturesEnabled()) {
+      e.preventDefault();
+      startClaudeSession();
+      return;
+    }
   }
 
   // Ctrl+R - Show history panel
@@ -5264,6 +5336,11 @@ const claudeState = {
 
 // Claude Code 설치 확인
 async function checkClaudeInstalled() {
+  if (!isAiFeaturesEnabled()) {
+    claudeState.installed = false;
+    updateClaudeButton();
+    return;
+  }
   if (claudeState.checking) return;
 
   claudeState.checking = true;
@@ -5325,6 +5402,10 @@ function updateClaudeButton() {
 
 // Claude 세션 시작
 async function startClaudeSession(projectPath = null) {
+  if (!isAiFeaturesEnabled()) {
+    showToast('현재 버전에서는 AI 기능이 비활성화되어 있습니다', 'info');
+    return;
+  }
   if (!claudeState.installed) {
     showToast('Claude Code가 설치되어 있지 않습니다', 'error');
     return;
@@ -5564,6 +5645,7 @@ function initializeDOMElements() {
   settingsFontFamily = document.getElementById('settingsFontFamily');
   settingsEnableLogging = document.getElementById('settingsEnableLogging');
   settingsEnableNotifications = document.getElementById('settingsEnableNotifications');
+  settingsBlockMode = document.getElementById('settingsBlockMode');
   clearLogsBtn = document.getElementById('clearLogsBtn');
 
   debug('DOM elements initialized');
@@ -5662,7 +5744,7 @@ function setupEventListeners() {
 
   // Claude Code 버튼
   const claudeBtn = document.getElementById('claudeBtn');
-  if (claudeBtn) {
+  if (claudeBtn && isAiFeaturesEnabled()) {
     claudeBtn.addEventListener('click', () => startClaudeSession());
   }
 
@@ -5698,13 +5780,15 @@ function setupEventListeners() {
 
     await saveSettings({
       theme: settingsTheme.value,
-      font_size: parseInt(settingsFontSize.value),
-      font_family: settingsFontFamily.value,
-      enable_logging: settingsEnableLogging.checked,
-      enable_notifications: settingsEnableNotifications.checked,
+      fontSize: parseInt(settingsFontSize.value),
+      fontFamily: settingsFontFamily.value,
+      enableLogging: settingsEnableLogging.checked,
+      enableNotifications: settingsEnableNotifications.checked,
+      enableBlockMode: settingsBlockMode?.checked ?? false,
       locale: settingsLocale?.value || 'ko',
-      enable_snippet_suggestions: settingsEnableSnippetSuggestions?.checked ?? true,
-      snippet_suggestion_threshold: settingsSnippetThreshold ? parseInt(settingsSnippetThreshold.value) : 3,
+      enableSnippetSuggestions: settingsEnableSnippetSuggestions?.checked ?? true,
+      snippetSuggestionThreshold: settingsSnippetThreshold ? parseInt(settingsSnippetThreshold.value) : 3,
+      enableAiFeatures: false,
     });
 
     // Update command history settings
@@ -5763,11 +5847,12 @@ function setupEventListeners() {
   const closeAiHelpModal = document.getElementById('closeAiHelpModal');
   const closeAiHelp = document.getElementById('closeAiHelp');
 
+  const aiEnabled = isAiFeaturesEnabled();
   let aiModeActive = false;
   let currentAiTranslation = null;
 
   // AI 모드 토글
-  if (aiModeToggle) {
+  if (aiEnabled && aiModeToggle) {
     aiModeToggle.addEventListener('click', () => {
       aiModeActive = !aiModeActive;
       aiModeToggle.classList.toggle('ai-input-bar__toggle--active', aiModeActive);
@@ -5904,13 +5989,13 @@ function setupEventListeners() {
   }
 
   // AI 이벤트 리스너
-  if (aiSendBtn) {
+  if (aiEnabled && aiSendBtn) {
     aiSendBtn.addEventListener('click', () => {
       translateCommand(aiInput.value);
     });
   }
 
-  if (aiInput) {
+  if (aiEnabled && aiInput) {
     aiInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -5922,40 +6007,44 @@ function setupEventListeners() {
     });
   }
 
-  if (aiHelpBtn) {
+  if (aiEnabled && aiHelpBtn) {
     aiHelpBtn.addEventListener('click', showAiHelp);
   }
 
-  if (closeAiPreviewModal) {
+  if (aiEnabled && closeAiPreviewModal) {
     closeAiPreviewModal.addEventListener('click', hideAiPreview);
   }
 
-  if (cancelAiPreview) {
+  if (aiEnabled && cancelAiPreview) {
     cancelAiPreview.addEventListener('click', hideAiPreview);
   }
 
-  if (copyAiCommand) {
+  if (aiEnabled && copyAiCommand) {
     copyAiCommand.addEventListener('click', copyAiTranslatedCommand);
   }
 
-  if (executeAiCommand) {
+  if (aiEnabled && executeAiCommand) {
     executeAiCommand.addEventListener('click', executeAiTranslatedCommand);
   }
 
-  if (closeAiHelpModal) {
+  if (aiEnabled && closeAiHelpModal) {
     closeAiHelpModal.addEventListener('click', () => {
       aiHelpModal.classList.remove('modal--visible');
     });
   }
 
-  if (closeAiHelp) {
+  if (aiEnabled && closeAiHelp) {
     closeAiHelp.addEventListener('click', () => {
       aiHelpModal.classList.remove('modal--visible');
     });
   }
 
+  const modalTargets = aiEnabled
+    ? [addProjectModal, addSnippetModal, settingsModal, envVarsModal, aiPreviewModal, aiHelpModal]
+    : [addProjectModal, addSnippetModal, settingsModal, envVarsModal];
+
   // Close modals when clicking outside
-  [addProjectModal, addSnippetModal, settingsModal, envVarsModal, aiPreviewModal, aiHelpModal].forEach(modal => {
+  modalTargets.forEach(modal => {
     if (modal) {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.classList.remove('modal--visible');
@@ -5966,14 +6055,14 @@ function setupEventListeners() {
   // Keyboard events
   document.addEventListener('keydown', (e) => {
     // Ctrl+Space: AI 모드 토글
-    if (e.ctrlKey && e.code === 'Space') {
+    if (aiEnabled && e.ctrlKey && e.code === 'Space') {
       e.preventDefault();
       if (aiModeToggle) aiModeToggle.click();
       return;
     }
 
     if (e.key === 'Escape') {
-      [addProjectModal, addSnippetModal, settingsModal, envVarsModal, aiPreviewModal, aiHelpModal].forEach(m => {
+      modalTargets.forEach(m => {
         if (m) m.classList.remove('modal--visible');
       });
       return;
@@ -6011,6 +6100,14 @@ async function initialize() {
   debug('Tauri available:', typeof window.__TAURI__ !== 'undefined');
 
   initializeDOMElements();
+  commandHistory.load();
+
+  try {
+    await loadSettings();
+  } catch (error) {
+    debug('Error loading settings:', error);
+  }
+
   setupEventListeners();
   setupAccessibility();
   setupFileDragDrop();
@@ -6018,14 +6115,12 @@ async function initialize() {
   initializeHistoryPanel();  // 히스토리 패널 초기화
   setupSplitToolbar();       // 분할 툴바 초기화
 
-  // 명령어 히스토리 로드
-  commandHistory.load();
-
   try {
-    await loadSettings();
     await loadCategories();
     await loadSnippets();
-    await checkClaudeInstalled();
+    if (isAiFeaturesEnabled()) {
+      await checkClaudeInstalled();
+    }
   } catch (error) {
     debug('Error loading data:', error);
   }
@@ -6295,7 +6390,7 @@ async function refreshGitStatus() {
 
   try {
     // Git 상태 가져오기
-    const gitStatus = await invoke('get_git_status', { path: gitPath });
+    const gitStatus = await invoke('git_status', { path: gitPath });
 
     if (!gitStatus.is_repo) {
       gitPanel.innerHTML = `
@@ -6384,7 +6479,14 @@ function setupGitPanelListeners(panel, gitPath) {
   if (stageAllBtn) {
     stageAllBtn.addEventListener('click', async () => {
       try {
-        await invoke('git_stage_all', { path: gitPath });
+        const files = Array.from(panel.querySelectorAll('.git-panel__file-checkbox'))
+          .map(checkbox => checkbox.dataset.file)
+          .filter(Boolean);
+        if (files.length === 0) {
+          showToast('스테이징할 파일이 없습니다', 'info');
+          return;
+        }
+        await invoke('git_stage', { path: gitPath, files });
         showToast('모든 파일이 스테이징되었습니다', 'success');
         refreshGitStatus();
       } catch (error) {
@@ -6454,9 +6556,9 @@ function setupGitPanelListeners(panel, gitPath) {
 
       try {
         if (shouldStage) {
-          await invoke('git_stage_file', { path: gitPath, file: filePath });
+          await invoke('git_stage', { path: gitPath, files: [filePath] });
         } else {
-          await invoke('git_unstage_file', { path: gitPath, file: filePath });
+          await invoke('git_unstage', { path: gitPath, files: [filePath] });
         }
       } catch (error) {
         showToast(`파일 ${shouldStage ? '스테이징' : '언스테이징'} 실패: ` + error, 'error');

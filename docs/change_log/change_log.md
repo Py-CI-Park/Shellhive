@@ -19,6 +19,58 @@
 
 ### 2026-02-07
 
+#### fix(git-panel): 프론트-백엔드 Git 커맨드명 정합성 수정
+
+**커밋**: `working-tree`
+
+##### 수정됨 (Fixed)
+
+- Git 패널 `invoke` 호출명을 백엔드 Tauri 커맨드에 맞게 정렬
+  - `get_git_status` -> `git_status`
+  - `git_stage_all` -> `git_stage` (파일 배열 전달)
+  - `git_stage_file` -> `git_stage` (단건 배열)
+  - `git_unstage_file` -> `git_unstage` (단건 배열)
+- Stage All 동작에서 패널 체크박스 기준 파일 목록을 수집하여 전달하도록 개선
+
+#### feat(settings): 설정 스키마 확장 및 블록 모드 저장/복원 연결
+
+**커밋**: `working-tree`
+
+##### 변경됨 (Changed)
+
+- 백엔드 `Settings` 모델 확장 (`src-tauri/src/settings.rs`)
+  - `enable_notifications`
+  - `enable_snippet_suggestions`
+  - `snippet_suggestion_threshold`
+  - `enable_block_mode`
+  - `enable_ai_features`
+- 구버전 설정 파일 호환을 위해 `#[serde(default)]` 적용
+- 임계값(`snippet_suggestion_threshold`) 유효 범위 검증(2~10) 추가
+- 프론트 설정 로드/저장 경로를 단일 스키마 기준으로 정리
+- 설정 모달의 블록 모드 체크박스를 실제 상태와 양방향 연결
+- 세션별 블록 컨테이너 연결 및 블록 모드 on/off 즉시 반영 로직 추가
+
+#### changed(ai-scope): 현재 릴리즈에서 AI 기능 경로 비활성화
+
+**커밋**: `working-tree`
+
+##### 변경됨 (Changed)
+
+- 프론트에서 AI 기능 플래그를 기본 비활성 상태로 강제
+- Claude 섹션/AI 입력바/AI 모달 비노출 처리
+- AI 관련 이벤트 리스너/단축키는 활성 조건에서만 등록
+- 백엔드 `invoke_handler`에서 `claude::*`, `ai::*` 커맨드 등록 제거 (`src-tauri/src/main.rs`)
+
+#### docs(review): 단계별 개발 진행 현황(1차) 반영
+
+**커밋**: `working-tree`
+
+##### 문서화됨 (Documentation)
+
+- `docs/review/merge-review-547a7b2-vs-3f49650.md`에 단계별 개발 진행 현황(완료/잔여 단계) 및 1차 재검증 결과 추가
+
+---
+
 #### docs(review): 주요 이슈 해결안 및 AI 제외 실행계획 상세화
 
 **커밋**: `working-tree`
