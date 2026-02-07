@@ -317,7 +317,7 @@
 - `cargo check`: 통과
 - 주의: 위 검증은 정적/단위 중심이며, Git 패널 명령명 불일치 같은 런타임 통합 문제는 테스트에서 포착되지 않았습니다.
 
-## 8. 단계별 개발 진행 현황 (2026-02-07 1차)
+## 8. 단계별 개발 진행 현황 (2026-02-07 2차)
 
 ### 8.1 완료된 단계
 
@@ -339,16 +339,26 @@
 4. 4단계 완료: 백엔드 AI invoke 경로 차단
    - `main.rs`에서 `claude::*`, `ai::*` 커맨드 등록 제거
    - 반영 파일: `src-tauri/src/main.rs`
+5. 5단계 완료: 문서/테스트/QA 정합화
+   - 문서 정합화
+     - `IMPLEMENTATION_COMPLETE.md`를 이력 문서로 상태 정정
+     - `docs/research/feature-improvement-roadmap-2024.md`에 AI 보류 운영 주석/우선순위 조정 반영
+   - 테스트 보강
+     - `src/__tests__/phase5-regression.e2e.test.js` 추가
+     - 검증 항목: AI UI 비노출, Git 패널 커맨드 경로(`git_status`/`git_stage`), 블록 모드 반영
+   - QA 문서 보강
+     - `docs/qa/run-release-split-manual-checklist.md`에 TC-07(AI 비노출) 추가
+     - `docs/qa/run-release-split-qa-log-2026-02-06.md`에 TC-07 로그 항목 추가
 
 ### 8.2 남은 단계
 
-1. 5단계 일부 남음: 문서/테스트/QA 정합화
-   - AI 제외 기준으로 `IMPLEMENTATION_COMPLETE.md`, 로드맵 문서 상태 표기 정리
-   - Git 패널 및 블록 모드 동작에 대한 회귀 테스트 추가
-   - 수동 QA 체크리스트에 "AI 비노출" 항목 추가
+1. 수동 QA 실행
+   - TC-02~TC-07에 대한 실제 GUI 수동 검증 및 증빙(스크린샷/영상) 확보
+2. 선택적 후속
+   - Git 패널 관련 추가 E2E 시나리오(개별 파일 stage/unstage 실패 복원 경로) 보강
 
-### 8.3 1차 구현 후 재검증 결과
+### 8.3 2차 구현 후 재검증 결과
 
 - `npm run lint`: 통과
-- `npm run test -- --run`: 통과 (3 files, 9 tests)
+- `npm run test -- --run`: 통과 (4 files, 12 tests)
 - `cargo check`: 통과

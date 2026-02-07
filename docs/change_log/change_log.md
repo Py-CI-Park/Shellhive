@@ -19,6 +19,41 @@
 
 ### 2026-02-07
 
+#### test(regression): 5단계 정합화 회귀 테스트 추가
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/phase5-regression.e2e.test.js` 추가
+  - AI UI 기본 비노출(Claude 섹션/AI 입력바) 검증
+  - Git 패널의 새 커맨드 경로(`git_status`, `git_stage`) 검증
+  - 블록 모드 설정 적용 시 wrapper/overlay 반영 검증
+- `src/__tests__/setup.js`의 설정 mock을 현재 스키마에 맞게 확장
+
+#### docs(alignment): 5단계 문서/QA 정합화 완료
+
+**커밋**: `working-tree`
+
+##### 문서화됨 (Documentation)
+
+- `IMPLEMENTATION_COMPLETE.md`
+  - 현행 릴리즈 기준으로 이력 문서(Archived) 상태로 정정
+  - "현재 운영 기능"과 "과거 구현 기록"을 명확히 분리
+- `docs/research/feature-improvement-roadmap-2024.md`
+  - 2026-02-07 운영 주석 추가 (AI 기능 보류)
+  - 우선순위 조정(비AI 코어 안정화 우선) 반영
+  - 결론 섹션을 현행 운영 정책에 맞게 업데이트
+- `docs/qa/run-release-split-manual-checklist.md`
+  - TC-07 "AI 기능 비노출 확인" 추가
+- `docs/qa/run-release-split-qa-log-2026-02-06.md`
+  - TC-07 항목 및 리스크 범위(TC-02~TC-07) 업데이트
+- `docs/review/merge-review-547a7b2-vs-3f49650.md`
+  - 단계별 개발 진행 현황을 2차 기준으로 갱신
+  - 5단계 완료 및 잔여(수동 QA) 항목 명시
+
+---
+
 #### fix(git-panel): 프론트-백엔드 Git 커맨드명 정합성 수정
 
 **커밋**: `working-tree`

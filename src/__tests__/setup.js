@@ -11,6 +11,10 @@ export const invokeMock = vi.fn(async (command) => {
         font_family: 'Consolas',
         enable_logging: true,
         enable_notifications: true,
+        enable_snippet_suggestions: true,
+        snippet_suggestion_threshold: 3,
+        enable_block_mode: false,
+        enable_ai_features: false,
         locale: 'ko'
       };
     case 'list_categories':
