@@ -19,6 +19,20 @@
 
 ### 2026-02-07
 
+#### docs(research): GUI 분할/탭 개선 연구 문서 스펙 동기화
+
+**커밋**: `working-tree`
+
+##### 문서화됨 (Documentation)
+
+- `docs/research/RESEARCH_GUI_SPLIT_TAB_ENHANCEMENT_2026-02-07.md`
+  - 제품 설명의 AI 중심 표현을 현재 운영 정책(비AI 코어 중심)과 일치하도록 정리
+  - 사용자 시나리오 1을 AI 도구 비교에서 일반 CLI 병렬 작업 시나리오로 교체
+  - 단축키 표를 현재 코드 동작과 정렬
+    - 수직 분할: `Ctrl+Shift+\\` -> `Ctrl+Shift+E`
+    - 패널 이동: `Alt+화살표` -> `Ctrl+Alt+화살표`
+  - 결론 섹션의 가치 설명을 AI 특화 문구에서 일반 CLI 워크플로우 특화로 수정
+
 #### fix(ui): AI/Claude GUI 제거 및 탭 최대 제한 해제
 
 **커밋**: `working-tree`
