@@ -40,52 +40,268 @@
 | 3.5.2 | 세션 녹화/재생 | 완료 | 녹화/재생/내보내기 구현 (`src/app.js:334`, `src/app.js:3640`, `src/app.js:3863`) |
 | 3.5.3 | 공유 스니펫 라이브러리 | 미구현 | 스니펫은 로컬 JSON CRUD만 구현 (`src-tauri/src/snippet.rs:14`, `src-tauri/src/snippet.rs:60`) |
 
-## 4. 주요 이슈 (심각도 순)
+## 4. 주요 이슈 해결안 (심각도 순)
 
-### 4.1 높음: Git 패널 즉시 오동작
+### 4.1 높음: Git 패널 즉시 오동작 해결안
 
-- 원인: 프론트의 `invoke` 명령명이 백엔드 Tauri 커맨드명과 다릅니다.
-- 영향: Git 패널 핵심 기능(상태 조회, 스테이징)이 런타임에서 실패합니다.
+#### 문제 요약
+
+- 원인: 프론트의 `invoke` 명령명과 백엔드 Tauri 커맨드명이 불일치합니다.
+- 영향: Git 상태 조회/스테이징/언스테이징 동작 실패.
 - 근거
   - 프론트: `src/app.js:6298`, `src/app.js:6387`, `src/app.js:6457`
   - 백엔드 등록: `src-tauri/src/main.rs:91`
-  - 실제 구현명: `src-tauri/src/git.rs:58`, `src-tauri/src/git.rs:203`, `src-tauri/src/git.rs:221`
+  - 실제 구현: `src-tauri/src/git.rs:58`, `src-tauri/src/git.rs:203`, `src-tauri/src/git.rs:221`
 
-### 4.2 높음: 설정 스키마 불일치로 일부 기능 설정 비영속
+#### 해결 전략
 
-- 원인: 프론트는 `enable_notifications`, `enable_snippet_suggestions` 등을 저장하지만, 백엔드 `Settings` 구조체는 해당 필드가 없습니다.
-- 영향: 설정이 저장되지 않거나 재시작 시 유실됩니다.
+- 전략 A(권장): 프론트 호출명을 백엔드 커맨드명에 맞춰 정합성 확보
+- 전략 B(비권장): 백엔드에 프론트 호출명 alias 커맨드 추가
+- 채택: 전략 A (중복 API 증가 방지, 유지보수 단순화)
+
+#### 상세 수정 항목
+
+| 위치 | 현재 | 수정 |
+|---|---|---|
+| `src/app.js` | `invoke('get_git_status', { path })` | `invoke('git_status', { path })` |
+| `src/app.js` | `invoke('git_stage_all', { path })` | `invoke('git_stage', { path, files })` (전체 파일 배열 전달) |
+| `src/app.js` | `invoke('git_stage_file', { path, file })` | `invoke('git_stage', { path, files: [file] })` |
+| `src/app.js` | `invoke('git_unstage_file', { path, file })` | `invoke('git_unstage', { path, files: [file] })` |
+
+#### 구현 주의사항
+
+- `stage all`은 UI에 표시된 파일 목록에서 경로를 수집해 `files: string[]`로 전달.
+- `git_status`의 `file.staged`와 체크박스 상태를 동기화하여 스테이징/언스테이징 토글 오류 방지.
+- Git 저장소가 아닐 때 버튼 비활성화 유지(`is_repo=false` 처리).
+
+#### 검증 계획
+
+1. 수동 검증
+   - `Ctrl+G`로 패널 열기
+   - 상태 조회 성공 여부
+   - 파일 단건 stage/unstage
+   - stage all + commit + refresh
+2. 자동 검증
+   - 프론트 통합 테스트: invoke 호출명이 실제 커맨드명과 일치하는지 스파이 검증
+   - Rust 단위 테스트: `git_stage`, `git_unstage` 빈 배열/복수 파일 케이스
+
+#### 완료 기준(DoD)
+
+- Git 패널 모든 버튼이 런타임 에러 없이 동작
+- stage/unstage 후 즉시 상태 반영
+- `lint/test/cargo check` 통과
+
+---
+
+### 4.2 높음: 설정 스키마 불일치 해결안
+
+#### 문제 요약
+
+- 프론트 저장 키와 백엔드 `Settings` 구조체 필드가 불일치하여 일부 설정이 영속 저장되지 않습니다.
 - 근거
-  - 프론트 저장: `src/app.js:5704`, `src/app.js:5706`
+  - 프론트 저장: `src/app.js:5704`, `src/app.js:5706`, `index.html:347`
   - 백엔드 스키마: `src-tauri/src/settings.rs:8`
 
-### 4.3 중간: 문서상 "구현 완료" 항목 중 실제 미구현/부분구현 존재
+#### 해결 전략
 
-- 대표 항목: 빌드/테스트 시스템 알림, 스니펫 자동 생성, GPU 가속, 공유 스니펫 라이브러리
-- 영향: 로드맵 신뢰도 하락, 릴리즈 범위 판단 오류 가능
+- 단일 스키마 원칙 채택: 백엔드 `Settings`를 정식 소스 오브 트루스로 확장하고 프론트는 snake_case만 송수신.
 
-## 5. 사용자 요청 반영: AI 기능 제외 권고안
+#### 상세 수정 항목
 
-### 5.1 현재 릴리즈에서 제외 권고 기능
+1. 백엔드(`src-tauri/src/settings.rs`)
+   - `Settings` 구조체에 다음 필드 추가
+     - `enable_notifications: bool`
+     - `enable_snippet_suggestions: bool`
+     - `snippet_suggestion_threshold: u8`
+     - `enable_block_mode: bool`
+   - `Default` 구현에 기본값 반영
+     - 알림: `true`
+     - 스니펫 제안: `true`
+     - 임계값: `3`
+     - 블록 모드: `false`
+   - `save_settings` 검증 로직 추가
+     - `snippet_suggestion_threshold` 범위 검증(`2..=10`)
+2. 프론트(`src/app.js`)
+   - `loadSettings()/saveSettings()`에서 camelCase fallback 제거(단일 키 사용)
+   - `settingsBlockMode` DOM을 실제 `state.settings.enable_block_mode`와 양방향 연결
+   - `state.settings.enableBlockMode` 중복 필드 제거 또는 백엔드 키와 일치화
+3. UI(`index.html`)
+   - 기존 설정 항목은 유지하되, 저장/로드 시 실제로 반영되도록 이벤트 연결 보강
 
-- Claude Code 통합 UI/단축키/백엔드 커맨드
-- 자연어 명령어 변환 바/도움말/프리뷰 모달
+#### 데이터 마이그레이션 방안
+
+- 기존 `settings.json`에 신규 필드가 없으면 `serde(default)`로 기본값 자동 주입.
+- 파일 포맷 파손 방지를 위해 읽기 실패 시 백업(`settings.json.bak`) 후 기본값으로 재생성 고려.
+
+#### 검증 계획
+
+1. 설정 저장 후 앱 재시작 시 값 유지 확인
+2. 블록 모드 on/off에 따라 출력 모드 즉시 변경 확인
+3. 스니펫 임계값 변경 시 `commandHistory.minUsageCount` 동기화 확인
+
+#### 완료 기준(DoD)
+
+- 설정 항목이 저장/재시작 후 100% 재현
+- 스키마 불일치 경고/오동작 제거
+
+---
+
+### 4.3 중간: 문서-코드 정합성 미스매치 해결안
+
+#### 문제 요약
+
+- "구현 완료"로 표기된 항목 중 실제는 미구현/부분구현이 존재합니다.
+- 대상: 빌드/테스트 알림, 스니펫 자동 생성, GPU 가속, 공유 스니펫 라이브러리
+
+#### 해결 전략
+
+- 문서 상태 표기를 4단계로 표준화
+  - `완료`
+  - `부분 구현`
+  - `프로토타입`
+  - `미구현`
+- 각 항목에 코드 근거 라인 + 테스트 근거를 의무 첨부
+
+#### 상세 수정 항목
+
+1. `IMPLEMENTATION_COMPLETE.md`
+   - "전체 구현 완료" 표현 삭제
+   - 항목별 실제 상태 재분류
+2. `docs/research/feature-improvement-roadmap-2024.md`
+   - 연구 문서 성격(제안/계획)과 구현 완료 문구를 명확히 분리
+3. `docs/change_log/change_log.md`
+   - 과장 표현이 있는 항목에 후속 정정 커밋 연결
+
+#### 완료 기준(DoD)
+
+- 핵심 문서 3종(`research`, `implementation`, `change_log`) 상태 표기 일관
+- 릴리즈 판단 시 문서만 읽어도 현재 구현상태가 오해 없이 전달
+
+## 5. AI 기능 제외 반영을 위한 상세 실행 계획
+
+### 5.1 적용 원칙
+
+- 원칙 1: 코드 삭제보다 "기능 플래그 기반 비활성화" 우선(향후 재도입 대비)
+- 원칙 2: 사용자 노출(UI/단축키/메뉴)부터 먼저 제거
+- 원칙 3: 런타임 호출 경로 차단 후, 최종적으로 백엔드 커맨드 등록 축소
+
+### 5.2 범위 정의 (이번 스프린트)
+
+#### 제외 범위(즉시)
+
+- Claude Code 사이드바 섹션/버튼/단축키
+- AI 입력 바/AI 도움말/AI 미리보기 모달
+- AI 자연어 변환 실행 경로(`translate_natural_language`, `get_ai_patterns`)
 - AI 에러 설명 패널
-- AI 기반 스니펫 자동 생성(현재도 실질 미구현 상태)
 
-### 5.2 AI 제외 시 유지 권고 코어
+#### 유지 범위(즉시)
 
-- PTY/멀티세션/탭 분할/프로젝트 관리
-- 환경 변수(.shellhive.env) 기능
-- 기본 스니펫 CRUD
-- 검색/히스토리/세션 저장복원
+- PTY, 프로젝트, 탭/분할, 검색, 히스토리, 기본 스니펫 CRUD, 환경변수
 
-### 5.3 AI 제외와 함께 후순위(나중 개발) 권고 기능
+#### 보류 범위(후순위)
 
-- 실시간 터미널 공유(서버/전송계층 필요)
-- 공유 스니펫 라이브러리(동기화/권한 설계 필요)
-- GPU 가속 렌더링(WebGL/WebGPU 성능 검증 필요)
-- 세션 녹화/재생 고도화(현재 로컬 기능은 유지 가능)
+- 협업 공유, GPU 가속, 공유 스니펫 라이브러리
+
+### 5.3 단계별 실행 계획
+
+#### Phase A - 기능 플래그 도입 (1일)
+
+1. 백엔드 설정에 플래그 추가
+   - `enable_ai_features: bool` (기본값 `false`)
+2. 프론트 초기화 시 플래그 주입
+   - `state.flags.enable_ai_features` 설정
+3. 초기 가드
+   - AI 관련 초기화 함수 진입 차단
+
+수정 대상 파일
+- `src-tauri/src/settings.rs`
+- `src/app.js`
+
+완료 기준
+- AI 기능 플래그가 `false`일 때 AI 관련 이벤트 리스너가 등록되지 않음
+
+#### Phase B - UI/단축키/명령 경로 비노출 (1일)
+
+1. UI 비노출
+   - `index.html`의 Claude 섹션, AI 입력 바, AI 모달 제거 또는 조건부 렌더
+2. 단축키 제거
+   - `Ctrl+Shift+C`, `Ctrl+Space` 등 AI 관련 키 매핑 제거
+3. 커맨드 팔레트 정리
+   - AI 메뉴 항목 제거
+
+수정 대상 파일
+- `index.html`
+- `src/app.js`
+- `src/style.css` (미사용 AI 스타일 정리)
+
+완료 기준
+- 화면/키보드/명령팔레트 어디에서도 AI 엔트리 노출 없음
+
+#### Phase C - 백엔드 커맨드 등록 축소 (1일)
+
+1. `main.rs` invoke handler에서 AI/Claude 커맨드 등록 제거
+   - `claude::*`, `ai::*`
+2. 미사용 모듈 경고/참조 정리
+
+수정 대상 파일
+- `src-tauri/src/main.rs`
+- 필요 시 `src-tauri/src/claude.rs`, `src-tauri/src/ai.rs`(보존하되 미등록)
+
+완료 기준
+- 프론트에서 AI 커맨드 호출 시도가 없음
+- 백엔드가 AI 커맨드 미등록 상태에서도 정상 구동
+
+#### Phase D - 문서/테스트/QA 정합화 (1일)
+
+1. 문서 정합화
+   - 로드맵에 AI 기능 "보류" 명시
+   - 구현 문서에서 AI 완료 표현 제거
+2. 테스트 정합화
+   - AI UI 의존 테스트 제거/수정
+   - 핵심 회귀 테스트(PTY/탭/분할/프로젝트/Git) 보강
+3. 릴리즈 QA 체크리스트 추가
+   - "AI 노출 없음" 검증 항목 포함
+
+수정 대상 파일
+- `docs/research/feature-improvement-roadmap-2024.md`
+- `IMPLEMENTATION_COMPLETE.md`
+- `docs/change_log/change_log.md`
+- `src/__tests__/*`
+- `docs/qa/*`
+
+완료 기준
+- 문서, 코드, 테스트의 AI 범위 표현이 일치
+
+### 5.4 작업 분해(WBS)
+
+| ID | 작업 | 난이도 | 선행 작업 | 산출물 |
+|---|---|---|---|---|
+| W1 | settings 스키마 확장 + 플래그 추가 | 중 | 없음 | 빌드 통과 설정 모델 |
+| W2 | AI UI 숨김/삭제 | 중 | W1 | AI 비노출 UI |
+| W3 | AI 단축키/명령 팔레트 제거 | 중 | W2 | 입력 경로 차단 |
+| W4 | 백엔드 AI invoke 등록 제거 | 하 | W3 | 런타임 경로 차단 |
+| W5 | 문서 정합화 | 하 | W4 | 보고/가이드 문서 |
+| W6 | 테스트/QA 반영 | 중 | W4 | 회귀 안전망 |
+
+### 5.5 위험 요소 및 대응
+
+1. 위험: AI 제거 중 공통 코드 훼손
+   - 대응: 기능 플래그 + 점진 제거, 단계별 커밋 분리
+2. 위험: 스타일 삭제 후 레이아웃 깨짐
+   - 대응: `index.html` 구조 변경 후 스냅샷/수동 QA 병행
+3. 위험: 문서와 실제 구현 불일치 재발
+   - 대응: 변경로그 템플릿에 "코드 근거 라인" 필수화
+
+### 5.6 최종 완료 기준 (Release Gate)
+
+- 기능
+  - AI 기능 UI/단축키/커맨드 경로 완전 비활성화
+  - 코어 기능(PTY/탭/분할/프로젝트/스니펫/검색) 정상 동작
+- 품질
+  - `npm run lint`, `npm run test`, `cargo check` 통과
+  - 수동 QA 체크리스트 100% 통과
+- 문서
+  - 로드맵/구현문서/변경로그 상태 일치
 
 ## 6. 권장 실행 순서
 
@@ -100,4 +316,3 @@
 - `npm run test -- --run`: 통과 (3 files, 9 tests)
 - `cargo check`: 통과
 - 주의: 위 검증은 정적/단위 중심이며, Git 패널 명령명 불일치 같은 런타임 통합 문제는 테스트에서 포착되지 않았습니다.
-
