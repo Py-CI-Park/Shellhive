@@ -19,6 +19,32 @@
 
 ### 2026-02-07
 
+#### perf(split): 분할 리사이즈 렌더 배칭 및 디버그 노이즈 정리
+
+**커밋**: `working-tree`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - 분할 리사이즈 시 `mousemove`마다 즉시 전체 레이아웃 렌더링하던 경로를 `requestAnimationFrame` 배칭으로 변경
+    - `scheduleSplitRender()` 추가
+    - 상태에 `splitRenderRaf` 핸들 저장
+    - `mouseup`에서 마지막 렌더를 보장하여 비율 반영 누락 방지
+  - 분할 관련 과도한 `console.log` 출력 제거
+    - `initSplitMode`, `splitHorizontal`, `splitActivePane`, `renderSplitLayout`, `setupSplitToolbar`
+  - 디버그 출력은 공용 `debug()` 경로만 사용하도록 정리
+
+##### 효과
+
+- 분할 바 드래그 중 렌더 호출 폭주 완화
+- 콘솔 노이즈 감소로 실제 경고/오류 식별성 개선
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run`
+- `cargo check`
+
 #### feat(project-cmd-tree): 프로젝트 하위 CMD 트리 뷰 및 세션 제어 추가
 
 **커밋**: `working-tree`

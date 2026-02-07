@@ -1282,6 +1282,7 @@ const state = {
   swapTargetSession: null,    // Swap target session ID
   maximizedSession: null,     // Maximized session ID (for split mode)
   splitInProgress: false,     // Prevent race condition in splitActivePane
+  splitRenderRaf: null,       // requestAnimationFrame handle for split render batching
   autocompleteVisible: false, // Autocomplete popup visible state
   autocompleteQuery: '',      // Current input for autocomplete
   autocompleteSelected: 0,    // Selected suggestion index
@@ -4089,25 +4090,19 @@ function formatTime(ms) {
 // ===== Split Pane Functions =====
 
 function initSplitMode() {
-  console.log('initSplitMode called, activeSessionId:', state.activeSessionId);
   if (!state.activeSessionId) return;
 
   state.splitMode = true;
   state.splitRoot = new SplitNode('leaf', state.activeSessionId);
-  console.log('splitRoot created:', state.splitRoot);
   renderSplitLayout();
-  console.log('renderSplitLayout completed');
 }
 
 function splitHorizontal() {
-  console.log('splitHorizontal called, activeSessionId:', state.activeSessionId);
   if (!state.activeSessionId) {
     showToast('먼저 터미널 세션을 생성하세요', 'warning');
     return;
   }
-  console.log('splitMode before init:', state.splitMode);
   if (!state.splitMode) initSplitMode();
-  console.log('splitMode after init:', state.splitMode, 'splitRoot:', state.splitRoot);
   splitActivePane('horizontal');
 }
 
@@ -4166,10 +4161,6 @@ function renderMaximizedView(sessionId) {
 }
 
 async function splitActivePane(direction) {
-  console.log('splitActivePane called, direction:', direction);
-  console.log('activeSessionId:', state.activeSessionId);
-  console.log('splitRoot:', state.splitRoot);
-
   if (!state.activeSessionId) return;
 
   // Prevent race condition - only one split operation at a time
@@ -4179,12 +4170,10 @@ async function splitActivePane(direction) {
   try {
     // Find the leaf node containing the active session
     const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
-    console.log('leafNode found:', leafNode);
     if (!leafNode) return;
 
     // Create a new session for the split
     const session = state.sessions.get(state.activeSessionId);
-    console.log('Creating new session for split, current session:', session);
     const newSession = await createSession(
       `${session.name} (split)`,
       session.projectPath,
@@ -4192,16 +4181,13 @@ async function splitActivePane(direction) {
       { activate: false }
     );
 
-    console.log('New session created:', newSession);
     if (!newSession) return;
 
     // Split the leaf node
-    console.log('Splitting leaf node with direction:', direction, 'newSessionId:', newSession.id);
     leafNode.split(direction, newSession.id);
     state.activeSessionId = newSession.id;
 
     // Render the new layout
-    console.log('Calling renderSplitLayout after split');
     renderSplitLayout();
     newSession.terminal.focus();
 
@@ -4220,11 +4206,16 @@ function findLeafNode(node, sessionId) {
          findLeafNode(node.children[1], sessionId);
 }
 
+function scheduleSplitRender() {
+  if (state.splitRenderRaf) return;
+  state.splitRenderRaf = requestAnimationFrame(() => {
+    state.splitRenderRaf = null;
+    renderSplitLayout();
+  });
+}
+
 function renderSplitLayout() {
-  console.log('renderSplitLayout called');
-  console.log('splitMode:', state.splitMode, 'splitRoot:', state.splitRoot);
   const container = document.getElementById('terminalContainer');
-  console.log('terminalContainer:', container);
   if (!state.splitMode || !state.splitRoot) {
     // Reset to normal mode
     container.innerHTML = '';
@@ -4245,12 +4236,9 @@ function renderSplitLayout() {
 
   container.innerHTML = '';
   container.className = 'terminal-container terminal-container--split';
-  console.log('container className:', container.className);
 
   const layoutEl = renderSplitNode(state.splitRoot);
-  console.log('layoutEl created:', layoutEl);
   container.appendChild(layoutEl);
-  console.log('container innerHTML length:', container.innerHTML.length);
 
   // Fit all terminals
   setTimeout(() => {
@@ -4354,10 +4342,15 @@ function startSplitResize(e, node) {
     const currentPos = isHorizontal ? e.clientY : e.clientX;
     const delta = (currentPos - startPos) / containerSize;
     node.ratio = Math.max(0.1, Math.min(0.9, startRatio + delta));
-    renderSplitLayout();
+    scheduleSplitRender();
   }
 
   function onMouseUp() {
+    if (state.splitRenderRaf) {
+      cancelAnimationFrame(state.splitRenderRaf);
+      state.splitRenderRaf = null;
+    }
+    renderSplitLayout();
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
   }
@@ -6714,7 +6707,6 @@ function initializeHistoryPanel() {
 
 // Split Toolbar 초기화
 function setupSplitToolbar() {
-  console.log('Setting up split toolbar...');
   // Split buttons
   document.getElementById('splitHorizontalBtn')?.addEventListener('click', splitHorizontal);
   document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
@@ -6738,5 +6730,4 @@ function setupSplitToolbar() {
   });
 
   debug('Split toolbar setup complete');
-  console.log('Split toolbar setup complete');
 }
