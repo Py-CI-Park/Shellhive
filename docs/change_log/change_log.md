@@ -19,6 +19,23 @@
 
 ### 2026-02-07
 
+#### fix(release): run-release.bat 실행 경로 고정 및 실행 환경 정리
+
+**커밋**: `working-tree`
+
+##### 수정됨 (Fixed)
+
+- `run-release.bat`
+  - 스크립트 시작 시 저장소 루트로 강제 이동하도록 `cd /d "%~dp0"` 추가
+  - `setlocal EnableExtensions` / `endlocal` 범위를 추가해 배치 실행 환경을 지역화
+  - 실행 파일 경로 변수 할당을 `set "RELEASE_EXE=..."` 형태로 정리해 인용부호 처리 안정성 보강
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 19 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+
 #### fix(dev): run-dev.bat 실행 경로/인자 처리 수정
 
 **커밋**: `working-tree`
