@@ -4373,6 +4373,7 @@ function renderMaximizedView(sessionId) {
   container.className = 'terminal-container terminal-container--maximized';
   container.appendChild(session.wrapper);
   renderSplitMinimap();
+  updateSplitToolbarState();
 
   // Fit terminal after render
   setTimeout(() => session.fitAddon.fit(), 50);
@@ -4445,6 +4446,7 @@ function renderSplitLayout() {
       removeSplitPaneHeader(session.wrapper);
     });
     renderSplitMinimap();
+    updateSplitToolbarState();
     return;
   }
 
@@ -4460,6 +4462,7 @@ function renderSplitLayout() {
   const layoutEl = renderSplitNode(state.splitRoot);
   container.appendChild(layoutEl);
   renderSplitMinimap();
+  updateSplitToolbarState();
 
   // Fit all terminals
   setTimeout(() => {
@@ -4760,15 +4763,15 @@ function ensureSplitPaneHeader(session) {
         <span class="split-pane-header__title"></span>
         <span class="split-pane-header__subtitle"></span>
       </div>
-      <button class="split-pane-header__btn split-pane-header__btn--merge" type="button">합치기</button>
     `;
-    session.wrapper.appendChild(header);
+  }
+  if (session.wrapper.firstChild !== header) {
+    session.wrapper.prepend(header);
   }
 
   const statusEl = header.querySelector('.split-pane-header__status');
   const titleEl = header.querySelector('.split-pane-header__title');
   const subtitleEl = header.querySelector('.split-pane-header__subtitle');
-  const mergeBtn = header.querySelector('.split-pane-header__btn--merge');
 
   if (statusEl) {
     statusEl.textContent = getStatusIcon(session.status);
@@ -4781,13 +4784,6 @@ function ensureSplitPaneHeader(session) {
   if (subtitleEl) {
     subtitleEl.textContent = getSplitPaneSubtitle(session);
     subtitleEl.title = session.projectPath || '로컬 셸';
-  }
-  if (mergeBtn) {
-    mergeBtn.disabled = !canMergePane(session.id);
-    mergeBtn.onclick = (e) => {
-      e.stopPropagation();
-      mergePane(session.id);
-    };
   }
 }
 
@@ -4881,6 +4877,55 @@ function renderSplitMinimap() {
 function setSplitMinimapVisibility(visible) {
   state.splitMinimapVisible = visible;
   renderSplitMinimap();
+  updateSplitToolbarState();
+}
+
+function updateSplitToolbarState() {
+  const hasActiveSession = Boolean(state.activeSessionId);
+  const splitActive = state.splitMode && !!state.splitRoot;
+  const canMergeActivePane = canMergePane(state.activeSessionId);
+
+  [
+    document.getElementById('splitDefaultBtn'),
+    document.getElementById('splitHorizontalBtn'),
+    document.getElementById('splitVerticalBtn'),
+    document.getElementById('layoutPresetSelect'),
+    document.getElementById('openLayoutGalleryBtn')
+  ].forEach((control) => {
+    if (control) {
+      control.disabled = !hasActiveSession;
+    }
+  });
+
+  const minimapBtn = document.getElementById('toggleSplitMinimapBtn');
+  if (minimapBtn) {
+    minimapBtn.disabled = !splitActive;
+    minimapBtn.classList.toggle('split-toolbar__btn--active', splitActive && state.splitMinimapVisible);
+  }
+
+  const swapBtn = document.getElementById('swapPanesBtn');
+  if (swapBtn) {
+    swapBtn.disabled = !splitActive;
+  }
+
+  const mergeBtn = document.getElementById('mergePaneBtn');
+  if (mergeBtn) {
+    mergeBtn.disabled = !canMergeActivePane;
+  }
+
+  const maximizeBtn = document.getElementById('maximizePaneBtn');
+  if (maximizeBtn) {
+    maximizeBtn.disabled = !splitActive;
+    maximizeBtn.classList.toggle(
+      'split-toolbar__btn--active',
+      splitActive && state.maximizedSession === state.activeSessionId
+    );
+  }
+
+  const closeSplitBtn = document.getElementById('closeSplitBtn');
+  if (closeSplitBtn) {
+    closeSplitBtn.disabled = !splitActive;
+  }
 }
 
 function getPaneDropPosition(wrapper, event) {
@@ -7187,22 +7232,16 @@ function setupSplitToolbar() {
   document.getElementById('splitDefaultBtn')?.addEventListener('click', splitDefault);
   document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
 
-  // Preset buttons
-  document.getElementById('presetTwoColBtn')?.addEventListener('click', () => applyLayoutPreset('two-columns'));
-  document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-rows'));
-  document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid-2x2'));
-  document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-columns'));
-  document.getElementById('openLayoutGalleryBtn')?.addEventListener('click', () => {
-    const preset = document.getElementById('layoutPresetSelect')?.value || null;
-    openLayoutGalleryModal(preset);
+  const layoutPresetSelect = document.getElementById('layoutPresetSelect');
+  layoutPresetSelect?.addEventListener('change', async (event) => {
+    const preset = event.target?.value;
+    if (!preset) return;
+    await applyLayoutPreset(preset);
   });
-  document.getElementById('applyLayoutPresetBtn')?.addEventListener('click', () => {
-    const preset = document.getElementById('layoutPresetSelect')?.value;
-    if (!preset) {
-      showToast('레이아웃 프리셋을 먼저 선택하세요', 'warning', 1200);
-      return;
-    }
-    applyLayoutPreset(preset);
+
+  document.getElementById('openLayoutGalleryBtn')?.addEventListener('click', () => {
+    const preset = layoutPresetSelect?.value || null;
+    openLayoutGalleryModal(preset);
   });
 
   // Control buttons
@@ -7221,5 +7260,6 @@ function setupSplitToolbar() {
     showToast('분할 모드 종료', 'info');
   });
 
+  updateSplitToolbarState();
   debug('Split toolbar setup complete');
 }

@@ -308,23 +308,47 @@ html, body {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   padding: 4px 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
+}
+
+.split-toolbar__section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+}
+
+.split-toolbar__section:last-child {
+  border-right: none;
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.split-toolbar__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
 .split-toolbar__group {
   display: flex;
   gap: 4px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .split-toolbar__btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
+  min-width: 50px;
   height: 28px;
   padding: 0 8px;
   background: var(--bg-tertiary);
@@ -361,25 +385,8 @@ html, body {
   transform: none;
 }
 
-.split-toolbar__icon {
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 2px;
-}
-
-.split-toolbar__icon--vertical {
-  line-height: 0.8;
-  letter-spacing: 0;
-}
-
-.split-toolbar__divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-}
-
 .split-toolbar__select {
-  min-width: 124px;
+  min-width: 138px;
   height: 28px;
   padding: 0 8px;
   background: var(--bg-tertiary);
@@ -810,6 +817,17 @@ html, body {
   .split-toolbar {
     padding: 6px 8px;
     gap: 6px;
+  }
+
+  .split-toolbar__section {
+    width: 100%;
+    border-right: none;
+    padding-right: 0;
+    margin-right: 0;
+  }
+
+  .split-toolbar__label {
+    min-width: 38px;
   }
 
   .split-toolbar__group {
@@ -1959,12 +1977,19 @@ html, body {
 }
 
 .terminal-wrapper--split {
-  display: block !important;
+  display: flex !important;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   min-width: 0;
   border: 1px solid transparent;
   position: relative;
+}
+
+.terminal-wrapper--split .xterm {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 
 .terminal-wrapper--split.terminal-wrapper--active {
@@ -1976,19 +2001,13 @@ html, body {
 }
 
 .split-pane-header {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  right: 6px;
-  z-index: 12;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: rgba(30, 30, 30, 0.85);
-  backdrop-filter: blur(2px);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
 }
 
 .split-pane-header__status {
@@ -2027,26 +2046,6 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.split-pane-header__btn {
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.split-pane-header__btn:hover {
-  color: var(--text-primary);
-  border-color: var(--accent);
-}
-
-.split-pane-header__btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .terminal-wrapper--swap-target {

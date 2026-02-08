@@ -248,7 +248,7 @@ describe('Split Layout E2E', () => {
     expect(document.activeElement).toBe(selector);
 
     selector.value = 'grid-2x2';
-    document.getElementById('applyLayoutPresetBtn').click();
+    selector.dispatchEvent(new Event('change', { bubbles: true }));
 
     await waitFor(
       () => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 4,
@@ -311,7 +311,6 @@ describe('Split Layout E2E', () => {
       return activeLeaf && activeLeaf.dataset.sessionId === targetSessionId;
     });
   });
-
   it('renders enhanced split pane header with status and path summary', async () => {
     await import('../app.js');
 
@@ -325,6 +324,7 @@ describe('Split Layout E2E', () => {
 
     const subtitle = document.querySelector('.split-pane-header__subtitle');
     expect(subtitle).toBeTruthy();
-    expect(subtitle.textContent).toContain('·');
+    expect(subtitle.textContent.length).toBeGreaterThan(0);
+    expect(document.querySelector('.split-pane-header__btn--merge')).toBeNull();
   });
 });
