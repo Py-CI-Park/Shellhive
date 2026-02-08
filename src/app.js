@@ -166,7 +166,7 @@ function showErrorExplanation(sessionId, errorPattern, errorText) {
   panel.innerHTML = `
     <div class="error-explanation__header">
       <span class="error-explanation__icon">💡</span>
-      <span class="error-explanation__title">AI 에러 설명</span>
+      <span class="error-explanation__title">에러 설명</span>
       <button class="error-explanation__close" aria-label="닫기">&times;</button>
     </div>
     <div class="error-explanation__content">
@@ -294,8 +294,27 @@ const SESSION_STATUS = {
   EXITED: 'exited'
 };
 
-// Performance constants
-const MAX_SESSIONS = 20;
+const SESSION_STATUS_LABELS = Object.freeze({
+  connecting: '연결 중',
+  running: '실행 중',
+  exited: '종료됨'
+});
+
+const LAYOUT_PRESET_TITLES = Object.freeze({
+  'two-columns': '2열',
+  'two-rows': '2행',
+  'grid-2x2': '2x2 그리드',
+  'three-columns': '3열',
+  'main-sidebar': '메인 + 사이드'
+});
+
+const LAYOUT_PRESET_DESCRIPTIONS = Object.freeze({
+  'two-columns': '좌우 2분할',
+  'two-rows': '상하 2분할',
+  'grid-2x2': '균등 4분할',
+  'three-columns': '좌우 3분할',
+  'main-sidebar': '메인 작업 + 보조 패널'
+});
 
 // TabGroup class for organizing tabs
 class TabGroup {
@@ -1258,7 +1277,11 @@ const state = {
     fontSize: 14,
     fontFamily: 'Consolas',
     enableLogging: true,
+    enableNotifications: true,
+    enableSnippetSuggestions: true,
+    snippetSuggestionThreshold: 3,
     enableBlockMode: false,  // Warp-style block output
+    enableAiFeatures: false,
     locale: 'ko',
   },
   blockManagers: new Map(),  // Map<sessionId, BlockManager>
@@ -1281,6 +1304,9 @@ const state = {
   swapTargetSession: null,    // Swap target session ID
   maximizedSession: null,     // Maximized session ID (for split mode)
   splitInProgress: false,     // Prevent race condition in splitActivePane
+  splitRenderRaf: null,       // requestAnimationFrame handle for split render batching
+  splitMinimapVisible: true,  // Split minimap panel visibility
+  selectedLayoutPreset: null, // Selected preset in layout gallery modal
   autocompleteVisible: false, // Autocomplete popup visible state
   autocompleteQuery: '',      // Current input for autocomplete
   autocompleteSelected: 0,    // Selected suggestion index
@@ -1298,64 +1324,116 @@ let snippetList, addSnippetBtn, addSnippetModal, closeAddSnippetModal;
 let cancelAddSnippet, confirmAddSnippet, snippetNameInput, snippetCommandInput;
 let settingsBtn, settingsModal, closeSettingsModal, cancelSettings, saveSettingsBtn;
 let settingsTheme, settingsFontSize, fontSizeValue, settingsFontFamily;
-let settingsEnableLogging, settingsEnableNotifications, clearLogsBtn;
+let settingsEnableLogging, settingsEnableNotifications, settingsBlockMode, clearLogsBtn;
 let settingsBackup = null;
 
 // ===== Settings Functions =====
+
+function normalizeSettings(settings) {
+  return {
+    theme: settings.theme || 'dark',
+    fontSize: settings.font_size ?? 14,
+    fontFamily: settings.font_family || 'Consolas',
+    enableLogging: settings.enable_logging ?? true,
+    enableNotifications: settings.enable_notifications ?? true,
+    enableSnippetSuggestions: settings.enable_snippet_suggestions ?? true,
+    snippetSuggestionThreshold: settings.snippet_suggestion_threshold ?? 3,
+    enableBlockMode: settings.enable_block_mode ?? false,
+    // AI 기능은 현재 릴리즈 범위에서 제외
+    enableAiFeatures: false,
+    locale: settings.locale || 'ko',
+  };
+}
+
+function isAiFeaturesEnabled() {
+  return state.settings.enableAiFeatures === true;
+}
+
+function applyAiFeatureVisibility() {
+  const aiEnabled = isAiFeaturesEnabled();
+  const claudeSection = document.querySelector('.sidebar__claude');
+  const aiInputBar = document.getElementById('aiInputBar');
+  const aiPreviewModal = document.getElementById('aiPreviewModal');
+  const aiHelpModal = document.getElementById('aiHelpModal');
+
+  if (claudeSection) {
+    claudeSection.style.display = aiEnabled ? '' : 'none';
+  }
+  if (aiInputBar) {
+    aiInputBar.style.display = aiEnabled ? '' : 'none';
+  }
+  if (aiPreviewModal) {
+    aiPreviewModal.style.display = aiEnabled ? '' : 'none';
+    if (!aiEnabled) {
+      aiPreviewModal.classList.remove('modal--visible');
+    }
+  }
+  if (aiHelpModal) {
+    aiHelpModal.style.display = aiEnabled ? '' : 'none';
+    if (!aiEnabled) {
+      aiHelpModal.classList.remove('modal--visible');
+    }
+  }
+}
+
+function applyBlockModeToSessions(enableBlockMode) {
+  state.sessions.forEach((session, sessionId) => {
+    if (session.wrapper) {
+      session.wrapper.classList.toggle('terminal-wrapper--block-mode', enableBlockMode);
+    }
+    if (session.blockContainer) {
+      session.blockContainer.style.display = enableBlockMode ? 'block' : 'none';
+    }
+    const blockManager = state.blockManagers.get(sessionId);
+    if (blockManager && session.blockContainer) {
+      blockManager.setContainer(session.blockContainer);
+    }
+  });
+}
 
 async function loadSettings() {
   try {
     const settings = await invoke('get_settings');
     debug('Settings loaded:', settings);
-
-    // Normalize settings (handle snake_case from backend)
-    state.settings = {
-      theme: settings.theme,
-      fontSize: settings.fontSize || settings.font_size || 14,
-      fontFamily: settings.fontFamily || settings.font_family || 'Consolas',
-      enableLogging: settings.enableLogging ?? settings.enable_logging ?? true,
-      enableNotifications: settings.enableNotifications ?? settings.enable_notifications ?? true,
-      locale: settings.locale || 'ko',
-      enableSnippetSuggestions: settings.enableSnippetSuggestions ?? settings.enable_snippet_suggestions ?? true,
-      snippetSuggestionThreshold: settings.snippetSuggestionThreshold || settings.snippet_suggestion_threshold || 3,
-    };
+    state.settings = normalizeSettings(settings);
 
     applyTheme(state.settings.theme);
 
-    // Apply locale setting
     if (state.settings.locale) {
       setLocale(state.settings.locale);
     }
 
-    // Update command history threshold
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
+    applyAiFeatureVisibility();
+    applyBlockModeToSessions(state.settings.enableBlockMode);
 
     return state.settings;
   } catch (error) {
     debug('Failed to load settings:', error);
+    applyAiFeatureVisibility();
     return state.settings;
   }
 }
 
 async function saveSettings(settings) {
   try {
-    await invoke('save_settings', { settings });
-
-    // Normalize settings for frontend use
-    state.settings = {
+    const backendSettings = {
       theme: settings.theme,
-      fontSize: settings.fontSize || settings.font_size || 14,
-      fontFamily: settings.fontFamily || settings.font_family || 'Consolas',
-      enableLogging: settings.enableLogging ?? settings.enable_logging ?? true,
-      enableNotifications: settings.enableNotifications ?? settings.enable_notifications ?? true,
-      locale: settings.locale || 'ko',
-      enableSnippetSuggestions: settings.enableSnippetSuggestions ?? settings.enable_snippet_suggestions ?? true,
-      snippetSuggestionThreshold: settings.snippetSuggestionThreshold || settings.snippet_suggestion_threshold || 3,
+      font_size: settings.fontSize,
+      font_family: settings.fontFamily,
+      enable_logging: settings.enableLogging,
+      enable_notifications: settings.enableNotifications,
+      enable_snippet_suggestions: settings.enableSnippetSuggestions,
+      snippet_suggestion_threshold: settings.snippetSuggestionThreshold,
+      enable_block_mode: settings.enableBlockMode,
+      enable_ai_features: false,
+      locale: settings.locale,
     };
+    await invoke('save_settings', { settings: backendSettings });
+    state.settings = { ...settings };
 
     applyTheme(state.settings.theme);
 
-    // Apply locale setting
     if (state.settings.locale) {
       setLocale(state.settings.locale);
     }
@@ -1365,8 +1443,9 @@ async function saveSettings(settings) {
       updateTerminalSettings(session.terminal, state.settings);
     });
 
-    // Update command history threshold
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
+    applyAiFeatureVisibility();
+    applyBlockModeToSessions(state.settings.enableBlockMode);
 
     debug('Settings saved');
     showToast('설정이 저장되었습니다', 'success');
@@ -1390,8 +1469,8 @@ function applyTheme(theme) {
 function updateTerminalSettings(terminal, settings) {
   const theme = TERMINAL_THEMES[settings.theme] || TERMINAL_THEMES.dark;
   terminal.options.theme = theme;
-  terminal.options.fontSize = settings.fontSize || settings.font_size || 14;
-  terminal.options.fontFamily = `${settings.fontFamily || settings.font_family || 'Consolas'}, "Courier New", monospace`;
+  terminal.options.fontSize = settings.fontSize || 14;
+  terminal.options.fontFamily = `${settings.fontFamily || 'Consolas'}, "Courier New", monospace`;
 }
 
 function showSettingsModal() {
@@ -1400,22 +1479,27 @@ function showSettingsModal() {
   // Backup current settings for cancel functionality
   settingsBackup = {
     theme: state.settings.theme,
-    fontSize: state.settings.fontSize || state.settings.font_size || 14,
-    fontFamily: state.settings.fontFamily || state.settings.font_family || 'Consolas',
-    enableLogging: state.settings.enableLogging ?? state.settings.enable_logging ?? true,
-    enableNotifications: state.settings.enableNotifications ?? state.settings.enable_notifications ?? true,
-    locale: state.settings.locale || 'ko',
+    fontSize: state.settings.fontSize || 14,
+    fontFamily: state.settings.fontFamily || 'Consolas',
+    enableLogging: state.settings.enableLogging ?? true,
+    enableNotifications: state.settings.enableNotifications ?? true,
     enableSnippetSuggestions: state.settings.enableSnippetSuggestions ?? true,
-    snippetSuggestionThreshold: state.settings.snippetSuggestionThreshold || 3
+    snippetSuggestionThreshold: state.settings.snippetSuggestionThreshold || 3,
+    enableBlockMode: state.settings.enableBlockMode ?? false,
+    enableAiFeatures: state.settings.enableAiFeatures ?? false,
+    locale: state.settings.locale || 'ko',
   };
 
   settingsModal.classList.add('modal--visible');
   settingsTheme.value = state.settings.theme;
-  settingsFontSize.value = state.settings.fontSize || state.settings.font_size || 14;
+  settingsFontSize.value = state.settings.fontSize || 14;
   fontSizeValue.textContent = `${settingsFontSize.value}px`;
-  settingsFontFamily.value = state.settings.fontFamily || state.settings.font_family || 'Consolas';
-  settingsEnableLogging.checked = state.settings.enableLogging ?? state.settings.enable_logging ?? true;
-  settingsEnableNotifications.checked = state.settings.enableNotifications ?? state.settings.enable_notifications ?? true;
+  settingsFontFamily.value = state.settings.fontFamily || 'Consolas';
+  settingsEnableLogging.checked = state.settings.enableLogging ?? true;
+  settingsEnableNotifications.checked = state.settings.enableNotifications ?? true;
+  if (settingsBlockMode) {
+    settingsBlockMode.checked = state.settings.enableBlockMode ?? false;
+  }
 
   const settingsLocale = document.getElementById('settingsLocale');
   if (settingsLocale) {
@@ -1574,6 +1658,12 @@ async function saveSessionState() {
         splitRoot: serializeSplitTree(layout.splitRoot)
       };
     });
+    if (state.activeSessionId && state.splitMode && state.splitRoot) {
+      tabLayoutsObj[state.activeSessionId] = {
+        splitMode: true,
+        splitRoot: serializeSplitTree(state.splitRoot)
+      };
+    }
 
     const sessionState = {
       sessions,
@@ -1615,8 +1705,11 @@ async function restoreSessionState() {
     return;
   }
 
+  const tabGroupInfos = Array.isArray(sessionState.tab_groups) ? sessionState.tab_groups : [];
+  const sessionInfos = Array.isArray(sessionState.sessions) ? sessionState.sessions : [];
+
   // Restore tab groups first
-  for (const groupInfo of sessionState.tab_groups) {
+  for (const groupInfo of tabGroupInfos) {
     const group = new TabGroup(groupInfo.id, groupInfo.name, {
       color: groupInfo.color,
       projectId: groupInfo.project_id,
@@ -1634,7 +1727,7 @@ async function restoreSessionState() {
   // Restore sessions - track old ID to new ID mapping
   const sessionIdMap = new Map(); // oldId -> newId
 
-  for (const sessionInfo of sessionState.sessions) {
+  for (const sessionInfo of sessionInfos) {
     const session = await createSession(
       sessionInfo.name,
       sessionInfo.working_dir,
@@ -1664,14 +1757,17 @@ async function restoreSessionState() {
   renderTabGroups();
 
   // Restore tab layouts (split configurations) with session ID mapping
-  if (sessionState.tab_layouts) {
+  if (sessionState.tab_layouts && typeof sessionState.tab_layouts === 'object') {
     Object.entries(sessionState.tab_layouts).forEach(([oldSessionId, layoutData]) => {
       const newSessionId = sessionIdMap.get(oldSessionId);
       if (newSessionId && state.sessions.has(newSessionId)) {
+        const splitRootData = layoutData.splitRoot ?? layoutData.split_root ?? null;
+        const splitMode = layoutData.splitMode ?? layoutData.split_mode ?? false;
+
         // Update session IDs in the split tree
-        const updatedSplitRoot = updateSessionIdsInTree(layoutData.splitRoot, sessionIdMap);
+        const updatedSplitRoot = updateSessionIdsInTree(splitRootData, sessionIdMap);
         state.tabLayouts.set(newSessionId, {
-          splitMode: layoutData.splitMode,
+          splitMode,
           splitRoot: updatedSplitRoot
         });
       }
@@ -1858,12 +1954,13 @@ function renderProjectList(projects) {
 
 function renderProjectItems(projects) {
   return projects.map(p => `
-    <li class="sidebar__item" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
+    <li class="sidebar__item sidebar__item--project" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
       <button class="sidebar__item-env" data-project-id="${p.id}" data-project-path='${JSON.stringify(p.path)}' title="Environment Variables">⚙</button>
       <button class="sidebar__item-filter" data-project-id="${p.id}" title="Filter tabs">🔍</button>
       <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
+      <div class="sidebar__cmd-tree" data-project-cmd-tree="${p.id}"></div>
     </li>
   `).join('');
 }
@@ -1875,11 +1972,9 @@ function setupProjectListeners() {
     const projectName = item.querySelector('.sidebar__item-name').textContent;
 
     item.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('sidebar__item-delete') &&
-          !e.target.classList.contains('sidebar__item-filter') &&
-          !e.target.classList.contains('sidebar__item-env')) {
-        createSessionInDirectory(projectPath, projectName, projectId);
-      }
+      const blocked = e.target.closest('.sidebar__item-delete, .sidebar__item-filter, .sidebar__item-env, .sidebar__cmd-tree');
+      if (blocked) return;
+      createSessionInDirectory(projectPath, projectName, projectId);
     });
 
     const envBtn = item.querySelector('.sidebar__item-env');
@@ -1913,6 +2008,8 @@ function setupProjectListeners() {
 
     updateProjectTabCount(projectId);
   });
+
+  renderProjectCmdTrees();
 }
 
 async function addProject(name, path) {
@@ -2072,12 +2169,6 @@ async function getProjectEnvVars(projectPath) {
 async function createSession(name = null, workingDir = null, projectId = null, options = {}) {
   const { activate = true } = options;
 
-  // Check session limit
-  if (state.sessions.size >= MAX_SESSIONS) {
-    showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다. 기존 세션을 닫아주세요.`, 'warning');
-    return null;
-  }
-
   const id = `session-${++state.sessionCounter}`;
   const sessionName = name || `Terminal ${state.sessionCounter}`;
   debug('Creating session:', id, sessionName);
@@ -2088,10 +2179,15 @@ async function createSession(name = null, workingDir = null, projectId = null, o
   wrapper.id = `terminal-${id}`;
   terminalContainer.appendChild(wrapper);
 
+  const blockContainer = document.createElement('div');
+  blockContainer.className = 'command-blocks-container';
+  blockContainer.style.display = state.settings.enableBlockMode ? 'block' : 'none';
+  wrapper.appendChild(blockContainer);
+
   // Get theme for terminal
   const theme = TERMINAL_THEMES[state.settings.theme] || TERMINAL_THEMES.dark;
-  const fontSize = state.settings.fontSize || state.settings.font_size || 14;
-  const fontFamily = state.settings.fontFamily || state.settings.font_family || 'Consolas';
+  const fontSize = state.settings.fontSize || 14;
+  const fontFamily = state.settings.fontFamily || 'Consolas';
 
   // Initialize xterm.js
   const terminal = new Terminal({
@@ -2214,7 +2310,7 @@ async function createSession(name = null, workingDir = null, projectId = null, o
     // Listen for PTY output
     unlistenPtyData = await listen(`pty-data:${ptySessionId}`, (event) => {
       terminal.write(event.payload);
-      if (state.settings.enableLogging || state.settings.enable_logging) {
+      if (state.settings.enableLogging) {
         logSessionOutput(ptySessionId, event.payload);
       }
       // Capture output for recording if active
@@ -2362,11 +2458,15 @@ async function createSession(name = null, workingDir = null, projectId = null, o
     projectName: name,
     projectId: projectId,
     projectPath: workingDir,
+    blockContainer,
     pinned: false,    // Phase 3: Tab pinning
     color: null,      // Phase 3: Tab color
   };
   state.sessions.set(id, session);
-  state.blockManagers.set(id, new BlockManager(id));
+  const blockManager = new BlockManager(id);
+  blockManager.setContainer(blockContainer);
+  state.blockManagers.set(id, blockManager);
+  wrapper.classList.toggle('terminal-wrapper--block-mode', state.settings.enableBlockMode);
 
   // Link session to project
   if (projectId) {
@@ -2506,6 +2606,24 @@ function getStatusIcon(status) {
   }
 }
 
+function getStatusLabel(status) {
+  return SESSION_STATUS_LABELS[status] || '상태 미확인';
+}
+
+function getCompactPathLabel(pathValue) {
+  if (!pathValue) return '로컬 셸';
+
+  const normalized = String(pathValue).replace(/\//g, '\\');
+  const parts = normalized.split('\\').filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  return `...\\${parts.slice(-2).join('\\')}`;
+}
+
+function getSplitPaneSubtitle(session) {
+  if (!session) return '상태 미확인';
+  return `${getStatusLabel(session.status)} · ${getCompactPathLabel(session.projectPath)}`;
+}
+
 function updateTabStatus(sessionId, status) {
   const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
   if (!tab) return;
@@ -2514,11 +2632,20 @@ function updateTabStatus(sessionId, status) {
     statusElement.textContent = getStatusIcon(status);
     statusElement.className = `tab__status tab__status--${status}`;
   }
+  if (state.splitMode) {
+    const session = state.sessions.get(sessionId);
+    if (session) {
+      ensureSplitPaneHeader(session);
+    }
+    renderSplitMinimap();
+  }
 }
 
-function activateSession(id) {
+function activateSession(id, options = {}) {
+  const { preserveSplitLayout = false } = options;
   const session = state.sessions.get(id);
   if (!session) return;
+  const keepCurrentSplit = preserveSplitLayout && state.splitMode && !!state.splitRoot;
 
   // Cancel any pending swap operation
   if (state.swapTargetSession) {
@@ -2530,7 +2657,7 @@ function activateSession(id) {
   }
 
   // Save current tab's layout before switching
-  if (state.activeSessionId && state.activeSessionId !== id) {
+  if (!keepCurrentSplit && state.activeSessionId && state.activeSessionId !== id) {
     saveTabLayout(state.activeSessionId);
   }
 
@@ -2550,12 +2677,18 @@ function activateSession(id) {
   state.activeSessionId = id;
 
   // Restore new tab's layout after switching
-  restoreTabLayout(id);
+  if (keepCurrentSplit) {
+    renderSplitLayout();
+  } else {
+    restoreTabLayout(id);
+  }
 
   setTimeout(() => {
     session.fitAddon.fit();
     session.terminal.focus();
   }, 50);
+
+  renderProjectCmdTrees();
 }
 
 async function closeSession(id) {
@@ -2625,6 +2758,10 @@ function handleTabDragStart(e) {
   state.draggedTab = e.currentTarget;
   e.currentTarget.classList.add('tab--dragging');
   e.dataTransfer.effectAllowed = 'move';
+  const sessionId = e.currentTarget.dataset.sessionId;
+  if (sessionId) {
+    e.dataTransfer.setData('text/plain', sessionId);
+  }
 }
 
 function handleTabDragEnter(e) {
@@ -2664,6 +2801,7 @@ function handleTabDragEnd(e) {
   document.querySelectorAll('.tab--drop-target').forEach(tab => {
     tab.classList.remove('tab--drop-target');
   });
+  clearPaneDropIndicators();
   state.draggedTab = null;
 }
 
@@ -2700,8 +2838,10 @@ function showTabContextMenu(e, sessionId) {
     <div class="context-menu__item" data-action="create-group">Create Group from Tab</div>
     ${isInGroup ? '<div class="context-menu__item" data-action="remove-from-group">Remove from Group</div>' : ''}
     <div class="context-menu__separator"></div>
-    <div class="context-menu__item" data-action="split-horizontal">Split Horizontal</div>
-    <div class="context-menu__item" data-action="split-vertical">Split Vertical</div>
+    <div class="context-menu__item" data-action="split-default">기본 분할 (오른쪽)</div>
+    <div class="context-menu__item" data-action="split-horizontal">아래로 분할</div>
+    <div class="context-menu__item" data-action="split-vertical">오른쪽 분할</div>
+    ${state.splitMode ? '<div class="context-menu__item" data-action="merge-pane">창 합치기</div>' : ''}
     ${state.splitMode ? '<div class="context-menu__item" data-action="swap-position">Swap Position</div>' : ''}
     ${state.splitMode ? `<div class="context-menu__item" data-action="toggle-maximize">${state.maximizedSession === sessionId ? 'Restore Pane' : 'Maximize Pane'}</div>` : ''}
     <div class="context-menu__item context-menu__item--submenu" data-action="layout-presets">
@@ -2759,9 +2899,16 @@ function showTabContextMenu(e, sessionId) {
         activateSession(sessionId);
         splitHorizontal();
         break;
+      case 'split-default':
+        activateSession(sessionId);
+        splitDefault();
+        break;
       case 'split-vertical':
         activateSession(sessionId);
         splitVertical();
+        break;
+      case 'merge-pane':
+        mergePane(sessionId);
         break;
       case 'swap-position':
         startSwapMode(sessionId);
@@ -4013,25 +4160,19 @@ function formatTime(ms) {
 // ===== Split Pane Functions =====
 
 function initSplitMode() {
-  console.log('initSplitMode called, activeSessionId:', state.activeSessionId);
   if (!state.activeSessionId) return;
 
   state.splitMode = true;
   state.splitRoot = new SplitNode('leaf', state.activeSessionId);
-  console.log('splitRoot created:', state.splitRoot);
   renderSplitLayout();
-  console.log('renderSplitLayout completed');
 }
 
 function splitHorizontal() {
-  console.log('splitHorizontal called, activeSessionId:', state.activeSessionId);
   if (!state.activeSessionId) {
     showToast('먼저 터미널 세션을 생성하세요', 'warning');
     return;
   }
-  console.log('splitMode before init:', state.splitMode);
   if (!state.splitMode) initSplitMode();
-  console.log('splitMode after init:', state.splitMode, 'splitRoot:', state.splitRoot);
   splitActivePane('horizontal');
 }
 
@@ -4042,6 +4183,153 @@ function splitVertical() {
   }
   if (!state.splitMode) initSplitMode();
   splitActivePane('vertical');
+}
+
+function splitDefault() {
+  splitVertical();
+}
+
+function focusLayoutPresetSelector() {
+  const presetSelect = document.getElementById('layoutPresetSelect');
+  if (!presetSelect) return;
+  presetSelect.focus();
+  showToast('레이아웃 프리셋을 선택하세요', 'info', 1200);
+}
+
+function getLayoutPresetName(presetKey) {
+  const preset = LAYOUT_PRESETS[presetKey];
+  if (!preset) return presetKey;
+  return LAYOUT_PRESET_TITLES[presetKey] || preset.name || presetKey;
+}
+
+function getLayoutPresetDescription(presetKey) {
+  return LAYOUT_PRESET_DESCRIPTIONS[presetKey] || '분할 레이아웃';
+}
+
+function createLayoutPreviewCell(extraClass = '') {
+  const cell = document.createElement('span');
+  cell.className = `layout-gallery__preview-cell ${extraClass}`.trim();
+  return cell;
+}
+
+function createLayoutPreviewElement(presetKey) {
+  const preview = document.createElement('div');
+  preview.className = `layout-gallery__preview layout-gallery__preview--${presetKey}`;
+
+  switch (presetKey) {
+    case 'two-columns':
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+    case 'two-rows':
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+    case 'three-columns':
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+    case 'main-sidebar':
+      preview.appendChild(createLayoutPreviewCell('layout-gallery__preview-cell--main'));
+      preview.appendChild(createLayoutPreviewCell('layout-gallery__preview-cell--sidebar'));
+      break;
+    case 'grid-2x2':
+    default:
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+  }
+
+  return preview;
+}
+
+function renderLayoutGallery() {
+  const list = document.getElementById('layoutGalleryList');
+  const applyBtn = document.getElementById('applyLayoutGallery');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  Object.keys(LAYOUT_PRESETS).forEach((presetKey) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'layout-gallery__card';
+    if (state.selectedLayoutPreset === presetKey) {
+      card.classList.add('layout-gallery__card--active');
+    }
+    card.dataset.preset = presetKey;
+
+    const preview = createLayoutPreviewElement(presetKey);
+
+    const title = document.createElement('h3');
+    title.className = 'layout-gallery__card-title';
+    title.textContent = getLayoutPresetName(presetKey);
+
+    const description = document.createElement('p');
+    description.className = 'layout-gallery__card-description';
+    description.textContent = getLayoutPresetDescription(presetKey);
+
+    card.appendChild(preview);
+    card.appendChild(title);
+    card.appendChild(description);
+
+    card.addEventListener('click', () => {
+      state.selectedLayoutPreset = presetKey;
+      renderLayoutGallery();
+    });
+
+    card.addEventListener('dblclick', async () => {
+      state.selectedLayoutPreset = presetKey;
+      await applyLayoutGallerySelection();
+    });
+
+    list.appendChild(card);
+  });
+
+  if (applyBtn) {
+    applyBtn.disabled = !state.selectedLayoutPreset;
+  }
+}
+
+function openLayoutGalleryModal(defaultPreset = null) {
+  if (!state.activeSessionId) {
+    showToast('먼저 터미널 세션을 생성하세요', 'warning');
+    return;
+  }
+
+  const modal = document.getElementById('layoutGalleryModal');
+  const presetSelect = document.getElementById('layoutPresetSelect');
+  if (!modal) return;
+
+  const fallback = defaultPreset || presetSelect?.value || state.selectedLayoutPreset || 'two-columns';
+  state.selectedLayoutPreset = LAYOUT_PRESETS[fallback] ? fallback : 'two-columns';
+  renderLayoutGallery();
+  modal.classList.add('modal--visible');
+}
+
+function closeLayoutGalleryModal() {
+  const modal = document.getElementById('layoutGalleryModal');
+  if (!modal) return;
+  modal.classList.remove('modal--visible');
+}
+
+async function applyLayoutGallerySelection() {
+  if (!state.selectedLayoutPreset) {
+    showToast('레이아웃 프리셋을 먼저 선택하세요', 'warning', 1200);
+    return;
+  }
+
+  await applyLayoutPreset(state.selectedLayoutPreset);
+
+  const presetSelect = document.getElementById('layoutPresetSelect');
+  if (presetSelect && LAYOUT_PRESETS[state.selectedLayoutPreset]) {
+    presetSelect.value = state.selectedLayoutPreset;
+  }
+
+  closeLayoutGalleryModal();
 }
 
 // Toggle maximize for a split pane
@@ -4084,16 +4372,14 @@ function renderMaximizedView(sessionId) {
   container.innerHTML = '';
   container.className = 'terminal-container terminal-container--maximized';
   container.appendChild(session.wrapper);
+  renderSplitMinimap();
+  updateSplitToolbarState();
 
   // Fit terminal after render
   setTimeout(() => session.fitAddon.fit(), 50);
 }
 
 async function splitActivePane(direction) {
-  console.log('splitActivePane called, direction:', direction);
-  console.log('activeSessionId:', state.activeSessionId);
-  console.log('splitRoot:', state.splitRoot);
-
   if (!state.activeSessionId) return;
 
   // Prevent race condition - only one split operation at a time
@@ -4101,20 +4387,12 @@ async function splitActivePane(direction) {
   state.splitInProgress = true;
 
   try {
-    // Check session limit
-    if (state.sessions.size >= MAX_SESSIONS) {
-      showToast(`최대 세션 수(${MAX_SESSIONS}개)에 도달했습니다`, 'warning');
-      return;
-    }
-
     // Find the leaf node containing the active session
     const leafNode = findLeafNode(state.splitRoot, state.activeSessionId);
-    console.log('leafNode found:', leafNode);
     if (!leafNode) return;
 
     // Create a new session for the split
     const session = state.sessions.get(state.activeSessionId);
-    console.log('Creating new session for split, current session:', session);
     const newSession = await createSession(
       `${session.name} (split)`,
       session.projectPath,
@@ -4122,16 +4400,13 @@ async function splitActivePane(direction) {
       { activate: false }
     );
 
-    console.log('New session created:', newSession);
     if (!newSession) return;
 
     // Split the leaf node
-    console.log('Splitting leaf node with direction:', direction, 'newSessionId:', newSession.id);
     leafNode.split(direction, newSession.id);
     state.activeSessionId = newSession.id;
 
     // Render the new layout
-    console.log('Calling renderSplitLayout after split');
     renderSplitLayout();
     newSession.terminal.focus();
 
@@ -4150,11 +4425,16 @@ function findLeafNode(node, sessionId) {
          findLeafNode(node.children[1], sessionId);
 }
 
+function scheduleSplitRender() {
+  if (state.splitRenderRaf) return;
+  state.splitRenderRaf = requestAnimationFrame(() => {
+    state.splitRenderRaf = null;
+    renderSplitLayout();
+  });
+}
+
 function renderSplitLayout() {
-  console.log('renderSplitLayout called');
-  console.log('splitMode:', state.splitMode, 'splitRoot:', state.splitRoot);
   const container = document.getElementById('terminalContainer');
-  console.log('terminalContainer:', container);
   if (!state.splitMode || !state.splitRoot) {
     // Reset to normal mode
     container.innerHTML = '';
@@ -4163,7 +4443,10 @@ function renderSplitLayout() {
     state.sessions.forEach((session) => {
       container.appendChild(session.wrapper);
       session.wrapper.classList.remove('terminal-wrapper--split');
+      removeSplitPaneHeader(session.wrapper);
     });
+    renderSplitMinimap();
+    updateSplitToolbarState();
     return;
   }
 
@@ -4175,12 +4458,11 @@ function renderSplitLayout() {
 
   container.innerHTML = '';
   container.className = 'terminal-container terminal-container--split';
-  console.log('container className:', container.className);
 
   const layoutEl = renderSplitNode(state.splitRoot);
-  console.log('layoutEl created:', layoutEl);
   container.appendChild(layoutEl);
-  console.log('container innerHTML length:', container.innerHTML.length);
+  renderSplitMinimap();
+  updateSplitToolbarState();
 
   // Fit all terminals
   setTimeout(() => {
@@ -4198,13 +4480,55 @@ function renderSplitNode(node) {
     session.wrapper.classList.add('terminal-wrapper--split');
     session.wrapper.classList.toggle('terminal-wrapper--active',
       node.sessionId === state.activeSessionId);
+    ensureSplitPaneHeader(session);
 
     // Add click handler for focus or swap
     session.wrapper.onclick = () => {
       if (state.swapTargetSession) {
         completeSwap(node.sessionId);
       } else {
-        activateSession(node.sessionId);
+        activateSession(node.sessionId, { preserveSplitLayout: true });
+      }
+    };
+
+    session.wrapper.ondragover = (e) => {
+      const draggedSessionId = state.draggedTab?.dataset.sessionId || e.dataTransfer.getData('text/plain');
+      if (!draggedSessionId || !state.sessions.has(draggedSessionId)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dropPosition = getPaneDropPosition(session.wrapper, e);
+      setPaneDropIndicator(session.wrapper, dropPosition);
+    };
+
+    session.wrapper.ondragleave = (e) => {
+      if (!session.wrapper.contains(e.relatedTarget)) {
+        clearPaneDropIndicators();
+      }
+    };
+
+    session.wrapper.ondrop = (e) => {
+      const draggedSessionId = state.draggedTab?.dataset.sessionId || e.dataTransfer.getData('text/plain');
+      if (!draggedSessionId || !state.sessions.has(draggedSessionId)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearPaneDropIndicators();
+
+      const dropPosition = getPaneDropPosition(session.wrapper, e);
+      if (dropPosition === 'center') {
+        const merged = mergePane(draggedSessionId, { fallbackSessionId: node.sessionId, silent: true });
+        if (!merged) {
+          activateSession(draggedSessionId, { preserveSplitLayout: true });
+        } else {
+          showToast('분할 창을 합쳤습니다', 'info', 1200);
+        }
+        return;
+      }
+
+      const moved = moveSessionToSplitPane(draggedSessionId, node.sessionId, dropPosition);
+      if (moved) {
+        showToast('탭을 분할 패널에 배치했습니다', 'success', 1200);
+      } else {
+        showToast('분할 패널 배치에 실패했습니다', 'warning', 1200);
       }
     };
 
@@ -4248,10 +4572,15 @@ function startSplitResize(e, node) {
     const currentPos = isHorizontal ? e.clientY : e.clientX;
     const delta = (currentPos - startPos) / containerSize;
     node.ratio = Math.max(0.1, Math.min(0.9, startRatio + delta));
-    renderSplitLayout();
+    scheduleSplitRender();
   }
 
   function onMouseUp() {
+    if (state.splitRenderRaf) {
+      cancelAnimationFrame(state.splitRenderRaf);
+      state.splitRenderRaf = null;
+    }
+    renderSplitLayout();
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
   }
@@ -4304,9 +4633,64 @@ function removeLeafNode(node, sessionId) {
 }
 
 function exitSplitMode() {
+  state.maximizedSession = null;
   state.splitMode = false;
   state.splitRoot = null;
   renderSplitLayout();
+}
+
+function mergePane(sessionId = state.activeSessionId, options = {}) {
+  const { fallbackSessionId = null, silent = false } = options;
+
+  if (!state.splitMode || !state.splitRoot || !sessionId) {
+    if (!silent) showToast('분할 모드에서만 사용할 수 있습니다', 'warning');
+    return false;
+  }
+
+  const leaves = getAllLeafNodes(state.splitRoot);
+  if (leaves.length <= 1) {
+    if (!silent) showToast('합칠 수 있는 분할 창이 없습니다', 'info');
+    return false;
+  }
+
+  const removed = removeLeafNode(state.splitRoot, sessionId);
+  if (!removed) return false;
+
+  if (state.maximizedSession === sessionId || !findLeafNode(state.splitRoot, state.maximizedSession)) {
+    state.maximizedSession = null;
+  }
+
+  state.tabLayouts.delete(sessionId);
+
+  const remainingLeaves = getAllLeafNodes(state.splitRoot);
+  if (remainingLeaves.length === 0) {
+    exitSplitMode();
+    return true;
+  }
+
+  const preferred = fallbackSessionId && state.sessions.has(fallbackSessionId)
+    ? fallbackSessionId
+    : remainingLeaves[0].sessionId;
+  state.activeSessionId = preferred;
+
+  if (state.splitRoot.isLeaf()) {
+    exitSplitMode();
+  } else {
+    renderSplitLayout();
+  }
+  renderTabGroups();
+
+  const session = state.sessions.get(preferred);
+  if (session) {
+    session.wrapper.classList.add('terminal-wrapper--active');
+    setTimeout(() => {
+      session.fitAddon.fit();
+      session.terminal.focus();
+    }, 30);
+  }
+
+  if (!silent) showToast('활성 창을 합쳤습니다', 'success', 1200);
+  return true;
 }
 
 // Swap two panes
@@ -4353,6 +4737,255 @@ function completeSwap(sessionId) {
     swapPanes(state.swapTargetSession, sessionId);
   }
   state.swapTargetSession = null;
+}
+
+function canMergePane(sessionId) {
+  if (!state.splitMode || !state.splitRoot || !sessionId) return false;
+  if (!findLeafNode(state.splitRoot, sessionId)) return false;
+  return getAllLeafNodes(state.splitRoot).length > 1;
+}
+
+function removeSplitPaneHeader(wrapper) {
+  if (!wrapper) return;
+  wrapper.querySelector('.split-pane-header')?.remove();
+}
+
+function ensureSplitPaneHeader(session) {
+  if (!session?.wrapper) return;
+
+  let header = session.wrapper.querySelector('.split-pane-header');
+  if (!header) {
+    header = document.createElement('div');
+    header.className = 'split-pane-header';
+    header.innerHTML = `
+      <span class="split-pane-header__status"></span>
+      <div class="split-pane-header__meta">
+        <span class="split-pane-header__title"></span>
+        <span class="split-pane-header__subtitle"></span>
+      </div>
+    `;
+  }
+  if (session.wrapper.firstChild !== header) {
+    session.wrapper.prepend(header);
+  }
+
+  const statusEl = header.querySelector('.split-pane-header__status');
+  const titleEl = header.querySelector('.split-pane-header__title');
+  const subtitleEl = header.querySelector('.split-pane-header__subtitle');
+
+  if (statusEl) {
+    statusEl.textContent = getStatusIcon(session.status);
+    statusEl.className = `split-pane-header__status split-pane-header__status--${session.status}`;
+    statusEl.title = getStatusLabel(session.status);
+  }
+  if (titleEl) {
+    titleEl.textContent = session.name;
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent = getSplitPaneSubtitle(session);
+    subtitleEl.title = session.projectPath || '로컬 셸';
+  }
+}
+
+function getSplitBranchLabel(nodeType) {
+  return nodeType === 'horizontal' ? '가로 분할' : '세로 분할';
+}
+
+function buildSplitMinimapNode(node, depth = 0) {
+  if (!node) return document.createElement('div');
+
+  if (node.isLeaf()) {
+    const session = state.sessions.get(node.sessionId);
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'split-minimap__leaf';
+    item.dataset.sessionId = session?.id || node.sessionId;
+    item.style.setProperty('--depth', String(depth));
+    if (node.sessionId === state.activeSessionId) {
+      item.classList.add('split-minimap__leaf--active');
+    }
+
+    const icon = document.createElement('span');
+    icon.className = `split-minimap__status split-minimap__status--${session?.status || SESSION_STATUS.EXITED}`;
+    icon.textContent = getStatusIcon(session?.status || SESSION_STATUS.EXITED);
+
+    const title = document.createElement('span');
+    title.className = 'split-minimap__leaf-title';
+    title.textContent = session?.name || node.sessionId;
+
+    const subtitle = document.createElement('span');
+    subtitle.className = 'split-minimap__leaf-subtitle';
+    subtitle.textContent = getCompactPathLabel(session?.projectPath);
+
+    item.appendChild(icon);
+    item.appendChild(title);
+    item.appendChild(subtitle);
+
+    item.addEventListener('click', () => {
+      if (session?.id) {
+        activateSession(session.id, { preserveSplitLayout: true });
+      }
+    });
+
+    return item;
+  }
+
+  const branch = document.createElement('div');
+  branch.className = 'split-minimap__branch';
+  branch.style.setProperty('--depth', String(depth));
+
+  const branchLabel = document.createElement('div');
+  branchLabel.className = 'split-minimap__branch-label';
+  branchLabel.textContent = getSplitBranchLabel(node.type);
+
+  const children = document.createElement('div');
+  children.className = `split-minimap__branch-children split-minimap__branch-children--${node.type}`;
+  children.appendChild(buildSplitMinimapNode(node.children[0], depth + 1));
+  children.appendChild(buildSplitMinimapNode(node.children[1], depth + 1));
+
+  branch.appendChild(branchLabel);
+  branch.appendChild(children);
+  return branch;
+}
+
+function renderSplitMinimap() {
+  const panel = document.getElementById('splitMinimapPanel');
+  const content = document.getElementById('splitMinimapContent');
+  const toggleBtn = document.getElementById('toggleSplitMinimapBtn');
+  if (!panel || !content) return;
+
+  const shouldShow = state.splitMode && !!state.splitRoot && state.splitMinimapVisible;
+  panel.classList.toggle('split-minimap--visible', shouldShow);
+  if (toggleBtn) {
+    toggleBtn.classList.toggle('split-toolbar__btn--active', shouldShow);
+  }
+
+  content.innerHTML = '';
+  if (!state.splitMode || !state.splitRoot) {
+    content.textContent = '분할 시 미니맵이 표시됩니다.';
+    return;
+  }
+
+  if (!state.splitMinimapVisible) {
+    content.textContent = '미니맵이 숨김 상태입니다.';
+    return;
+  }
+
+  content.appendChild(buildSplitMinimapNode(state.splitRoot));
+}
+
+function setSplitMinimapVisibility(visible) {
+  state.splitMinimapVisible = visible;
+  renderSplitMinimap();
+  updateSplitToolbarState();
+}
+
+function updateSplitToolbarState() {
+  const hasActiveSession = Boolean(state.activeSessionId);
+  const splitActive = state.splitMode && !!state.splitRoot;
+  const canMergeActivePane = canMergePane(state.activeSessionId);
+
+  [
+    document.getElementById('splitDefaultBtn'),
+    document.getElementById('splitHorizontalBtn'),
+    document.getElementById('splitVerticalBtn'),
+    document.getElementById('layoutPresetSelect'),
+    document.getElementById('openLayoutGalleryBtn')
+  ].forEach((control) => {
+    if (control) {
+      control.disabled = !hasActiveSession;
+    }
+  });
+
+  const minimapBtn = document.getElementById('toggleSplitMinimapBtn');
+  if (minimapBtn) {
+    minimapBtn.disabled = !splitActive;
+    minimapBtn.classList.toggle('split-toolbar__btn--active', splitActive && state.splitMinimapVisible);
+  }
+
+  const swapBtn = document.getElementById('swapPanesBtn');
+  if (swapBtn) {
+    swapBtn.disabled = !splitActive;
+  }
+
+  const mergeBtn = document.getElementById('mergePaneBtn');
+  if (mergeBtn) {
+    mergeBtn.disabled = !canMergeActivePane;
+  }
+
+  const maximizeBtn = document.getElementById('maximizePaneBtn');
+  if (maximizeBtn) {
+    maximizeBtn.disabled = !splitActive;
+    maximizeBtn.classList.toggle(
+      'split-toolbar__btn--active',
+      splitActive && state.maximizedSession === state.activeSessionId
+    );
+  }
+
+  const closeSplitBtn = document.getElementById('closeSplitBtn');
+  if (closeSplitBtn) {
+    closeSplitBtn.disabled = !splitActive;
+  }
+}
+
+function getPaneDropPosition(wrapper, event) {
+  const rect = wrapper.getBoundingClientRect();
+  const xRatio = (event.clientX - rect.left) / Math.max(rect.width, 1);
+  const yRatio = (event.clientY - rect.top) / Math.max(rect.height, 1);
+  const threshold = 0.25;
+
+  if (yRatio <= threshold) return 'top';
+  if (yRatio >= 1 - threshold) return 'bottom';
+  if (xRatio <= threshold) return 'left';
+  if (xRatio >= 1 - threshold) return 'right';
+  return 'center';
+}
+
+function clearPaneDropIndicators() {
+  document.querySelectorAll('.terminal-wrapper--drop-target').forEach(el => {
+    el.classList.remove(
+      'terminal-wrapper--drop-target',
+      'terminal-wrapper--drop-left',
+      'terminal-wrapper--drop-right',
+      'terminal-wrapper--drop-top',
+      'terminal-wrapper--drop-bottom',
+      'terminal-wrapper--drop-center'
+    );
+  });
+}
+
+function setPaneDropIndicator(wrapper, dropPosition) {
+  clearPaneDropIndicators();
+  wrapper.classList.add('terminal-wrapper--drop-target');
+  wrapper.classList.add(`terminal-wrapper--drop-${dropPosition}`);
+}
+
+function moveSessionToSplitPane(draggedSessionId, targetSessionId, dropPosition) {
+  if (!state.splitMode || !state.splitRoot) return false;
+  if (draggedSessionId === targetSessionId) return false;
+
+  const direction = (dropPosition === 'left' || dropPosition === 'right') ? 'vertical' : 'horizontal';
+  const placeDraggedFirst = dropPosition === 'left' || dropPosition === 'top';
+
+  if (findLeafNode(state.splitRoot, draggedSessionId)) {
+    const removed = removeLeafNode(state.splitRoot, draggedSessionId);
+    if (!removed) return false;
+  }
+
+  const targetNode = findLeafNode(state.splitRoot, targetSessionId);
+  if (!targetNode || !targetNode.isLeaf()) return false;
+
+  const oldSessionId = targetNode.sessionId;
+  targetNode.type = direction;
+  targetNode.sessionId = null;
+  targetNode.ratio = 0.5;
+  targetNode.children = placeDraggedFirst
+    ? [new SplitNode('leaf', draggedSessionId), new SplitNode('leaf', oldSessionId)]
+    : [new SplitNode('leaf', oldSessionId), new SplitNode('leaf', draggedSessionId)];
+
+  state.activeSessionId = draggedSessionId;
+  renderSplitLayout();
+  return true;
 }
 
 // Get all leaf nodes from split tree
@@ -4742,6 +5375,7 @@ function linkSessionToProject(sessionId, projectId) {
   }
   state.projectTabMap.get(projectId).add(sessionId);
   updateProjectTabCount(projectId);
+  renderProjectCmdTrees();
 }
 
 function unlinkSessionFromProject(sessionId) {
@@ -4754,6 +5388,7 @@ function unlinkSessionFromProject(sessionId) {
       updateProjectTabCount(projectId);
     }
   }
+  renderProjectCmdTrees();
 }
 
 function updateProjectTabCount(projectId) {
@@ -4810,6 +5445,62 @@ function updateProjectFilterButtons() {
   });
 }
 
+function renderProjectCmdTrees() {
+  document.querySelectorAll('[data-project-cmd-tree]').forEach((treeEl) => {
+    const projectId = treeEl.dataset.projectCmdTree;
+    const sessionSet = state.projectTabMap.get(projectId);
+    const sessionIds = sessionSet ? Array.from(sessionSet) : [];
+    const sessions = sessionIds
+      .map((sessionId) => state.sessions.get(sessionId))
+      .filter(Boolean);
+
+    if (sessions.length === 0) {
+      treeEl.innerHTML = '';
+      treeEl.classList.remove('sidebar__cmd-tree--visible');
+      return;
+    }
+
+    const cmdItems = sessions.map((session) => {
+      const activeClass = session.id === state.activeSessionId ? ' sidebar__cmd-item--active' : '';
+      const statusClass = `sidebar__cmd-status--${session.status}`;
+      return `
+        <div class="sidebar__cmd-item${activeClass}" data-session-id="${session.id}" title="${escapeHtml(session.name)}">
+          <span class="sidebar__cmd-status ${statusClass}">${getStatusIcon(session.status)}</span>
+          <span class="sidebar__cmd-name">${escapeHtml(session.name)}</span>
+          <button class="sidebar__cmd-close" data-session-id="${session.id}" aria-label="세션 닫기">&times;</button>
+        </div>
+      `;
+    }).join('');
+
+    treeEl.innerHTML = `
+      <div class="sidebar__cmd-tree-header">CMD ${sessions.length}</div>
+      <div class="sidebar__cmd-tree-list">${cmdItems}</div>
+    `;
+    treeEl.classList.add('sidebar__cmd-tree--visible');
+  });
+
+  document.querySelectorAll('.sidebar__cmd-item').forEach((item) => {
+    item.onclick = (e) => {
+      if (e.target.closest('.sidebar__cmd-close')) return;
+      e.stopPropagation();
+      const { sessionId } = item.dataset;
+      if (sessionId && state.sessions.has(sessionId)) {
+        activateSession(sessionId);
+      }
+    };
+  });
+
+  document.querySelectorAll('.sidebar__cmd-close').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const { sessionId } = btn.dataset;
+      if (sessionId && state.sessions.has(sessionId)) {
+        closeSession(sessionId);
+      }
+    };
+  });
+}
+
 // ===== Command Palette =====
 
 // 커맨드 정의 (모든 앱 기능)
@@ -4817,8 +5508,12 @@ const COMMANDS = [
   { id: 'new-tab', name: '새 탭', shortcut: 'Ctrl+T', action: () => createSession() },
   { id: 'close-tab', name: '탭 닫기', shortcut: 'Ctrl+W', action: () => state.activeSessionId && closeSession(state.activeSessionId) },
   { id: 'restore-tab', name: '닫은 탭 복원', shortcut: 'Ctrl+Shift+T', action: () => restoreLastClosedTab() },
-  { id: 'split-horizontal', name: '가로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
-  { id: 'split-vertical', name: '세로 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
+  { id: 'split-default', name: '기본 분할 (오른쪽)', shortcut: 'Ctrl+\\', action: () => splitDefault() },
+  { id: 'split-horizontal', name: '아래로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
+  { id: 'split-vertical', name: '오른쪽 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
+  { id: 'layout-preset-selector', name: '레이아웃 선택기 열기', shortcut: 'Ctrl+Shift+S', action: () => focusLayoutPresetSelector() },
+  { id: 'layout-gallery', name: '레이아웃 갤러리 열기', shortcut: 'Ctrl+Shift+L', action: () => openLayoutGalleryModal() },
+  { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
   { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
   { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
   { id: 'search-tabs', name: '탭 검색', shortcut: 'Ctrl+Shift+F', action: () => showTabSearch() },
@@ -4834,7 +5529,6 @@ const COMMANDS = [
   }},
   { id: 'clear-screen', name: '화면 지우기', shortcut: 'Ctrl+L', action: () => clearTerminalScreen() },
   { id: 'clear-scrollback', name: '스크롤백 지우기', shortcut: 'Ctrl+K', action: () => clearTerminalScrollback() },
-  { id: 'start-claude', name: 'Claude Code 시작', shortcut: 'Ctrl+Shift+C', action: () => startClaudeSession() },
   { id: 'fullscreen', name: '전체화면 전환', shortcut: 'F11', action: () => toggleFullscreen() },
   { id: 'history', name: '명령어 히스토리', shortcut: 'Ctrl+R', action: () => showHistoryPanel(commandHistory, state, escapeHtml) },
   { id: 'git-panel', name: 'Git 패널 토글', shortcut: 'Ctrl+G', action: () => toggleGitPanel() },
@@ -5104,6 +5798,25 @@ function handleKeyboardShortcuts(e) {
     showTabSearch();
     return;
   }
+  // Ctrl+\ - Default split (right)
+  if (e.ctrlKey && !e.shiftKey && e.code === 'Backslash') {
+    e.preventDefault();
+    splitDefault();
+    return;
+  }
+  // Ctrl+Shift+S - Focus layout preset selector
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyS') {
+    e.preventDefault();
+    focusLayoutPresetSelector();
+    return;
+  }
+  // Ctrl+Shift+L - Open layout gallery
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyL') {
+    e.preventDefault();
+    const preset = document.getElementById('layoutPresetSelect')?.value || null;
+    openLayoutGalleryModal(preset);
+    return;
+  }
   // Ctrl+Shift+D - Horizontal split
   if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
     e.preventDefault();
@@ -5114,6 +5827,12 @@ function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && e.shiftKey && e.code === 'KeyE') {
     e.preventDefault();
     splitVertical();
+    return;
+  }
+  // Ctrl+Shift+J - Merge active split pane
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyJ') {
+    e.preventDefault();
+    mergePane();
     return;
   }
   // Ctrl+Shift+R - Toggle recording
@@ -5166,13 +5885,6 @@ function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && e.key === 'k') {
     e.preventDefault();
     clearTerminalScrollback();
-    return;
-  }
-
-  // Ctrl+Shift+C - Start Claude Code session
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-    e.preventDefault();
-    startClaudeSession();
     return;
   }
 
@@ -5264,6 +5976,11 @@ const claudeState = {
 
 // Claude Code 설치 확인
 async function checkClaudeInstalled() {
+  if (!isAiFeaturesEnabled()) {
+    claudeState.installed = false;
+    updateClaudeButton();
+    return;
+  }
   if (claudeState.checking) return;
 
   claudeState.checking = true;
@@ -5324,7 +6041,11 @@ function updateClaudeButton() {
 }
 
 // Claude 세션 시작
-async function startClaudeSession(projectPath = null) {
+async function _startClaudeSession(projectPath = null) {
+  if (!isAiFeaturesEnabled()) {
+    showToast('현재 버전에서는 AI 기능이 비활성화되어 있습니다', 'info');
+    return;
+  }
   if (!claudeState.installed) {
     showToast('Claude Code가 설치되어 있지 않습니다', 'error');
     return;
@@ -5401,7 +6122,7 @@ function focusPaneByDirection(direction) {
     nextIndex = (currentIndex - 1 + leaves.length) % leaves.length;
   }
 
-  activateSession(leaves[nextIndex].sessionId);
+  activateSession(leaves[nextIndex].sessionId, { preserveSplitLayout: true });
 }
 
 function switchToNextTab() {
@@ -5564,6 +6285,7 @@ function initializeDOMElements() {
   settingsFontFamily = document.getElementById('settingsFontFamily');
   settingsEnableLogging = document.getElementById('settingsEnableLogging');
   settingsEnableNotifications = document.getElementById('settingsEnableNotifications');
+  settingsBlockMode = document.getElementById('settingsBlockMode');
   clearLogsBtn = document.getElementById('clearLogsBtn');
 
   debug('DOM elements initialized');
@@ -5660,12 +6382,6 @@ function setupEventListeners() {
   closeSettingsModal.addEventListener('click', () => cancelSettingsModal());
   cancelSettings.addEventListener('click', () => cancelSettingsModal());
 
-  // Claude Code 버튼
-  const claudeBtn = document.getElementById('claudeBtn');
-  if (claudeBtn) {
-    claudeBtn.addEventListener('click', () => startClaudeSession());
-  }
-
   // Real-time preview for theme changes
   settingsTheme.addEventListener('change', () => {
     previewSettings();
@@ -5698,13 +6414,15 @@ function setupEventListeners() {
 
     await saveSettings({
       theme: settingsTheme.value,
-      font_size: parseInt(settingsFontSize.value),
-      font_family: settingsFontFamily.value,
-      enable_logging: settingsEnableLogging.checked,
-      enable_notifications: settingsEnableNotifications.checked,
+      fontSize: parseInt(settingsFontSize.value),
+      fontFamily: settingsFontFamily.value,
+      enableLogging: settingsEnableLogging.checked,
+      enableNotifications: settingsEnableNotifications.checked,
+      enableBlockMode: settingsBlockMode?.checked ?? false,
       locale: settingsLocale?.value || 'ko',
-      enable_snippet_suggestions: settingsEnableSnippetSuggestions?.checked ?? true,
-      snippet_suggestion_threshold: settingsSnippetThreshold ? parseInt(settingsSnippetThreshold.value) : 3,
+      enableSnippetSuggestions: settingsEnableSnippetSuggestions?.checked ?? true,
+      snippetSuggestionThreshold: settingsSnippetThreshold ? parseInt(settingsSnippetThreshold.value) : 3,
+      enableAiFeatures: false,
     });
 
     // Update command history settings
@@ -5734,6 +6452,10 @@ function setupEventListeners() {
   const cancelEnvVars = document.getElementById('cancelEnvVars');
   const saveEnvVarsBtn = document.getElementById('saveEnvVars');
   const addEnvVarBtn = document.getElementById('addEnvVarBtn');
+  const layoutGalleryModal = document.getElementById('layoutGalleryModal');
+  const closeLayoutGalleryBtn = document.getElementById('closeLayoutGalleryModal');
+  const cancelLayoutGalleryBtn = document.getElementById('cancelLayoutGallery');
+  const applyLayoutGalleryBtn = document.getElementById('applyLayoutGallery');
 
   if (closeEnvVarsModal) {
     closeEnvVarsModal.addEventListener('click', () => hideEnvVarsModal());
@@ -5746,6 +6468,17 @@ function setupEventListeners() {
   }
   if (addEnvVarBtn) {
     addEnvVarBtn.addEventListener('click', () => addEnvVarRow());
+  }
+  if (closeLayoutGalleryBtn) {
+    closeLayoutGalleryBtn.addEventListener('click', () => closeLayoutGalleryModal());
+  }
+  if (cancelLayoutGalleryBtn) {
+    cancelLayoutGalleryBtn.addEventListener('click', () => closeLayoutGalleryModal());
+  }
+  if (applyLayoutGalleryBtn) {
+    applyLayoutGalleryBtn.addEventListener('click', async () => {
+      await applyLayoutGallerySelection();
+    });
   }
 
   // ===== AI Mode Setup =====
@@ -5763,11 +6496,12 @@ function setupEventListeners() {
   const closeAiHelpModal = document.getElementById('closeAiHelpModal');
   const closeAiHelp = document.getElementById('closeAiHelp');
 
+  const aiEnabled = isAiFeaturesEnabled();
   let aiModeActive = false;
   let currentAiTranslation = null;
 
   // AI 모드 토글
-  if (aiModeToggle) {
+  if (aiEnabled && aiModeToggle) {
     aiModeToggle.addEventListener('click', () => {
       aiModeActive = !aiModeActive;
       aiModeToggle.classList.toggle('ai-input-bar__toggle--active', aiModeActive);
@@ -5904,13 +6638,13 @@ function setupEventListeners() {
   }
 
   // AI 이벤트 리스너
-  if (aiSendBtn) {
+  if (aiEnabled && aiSendBtn) {
     aiSendBtn.addEventListener('click', () => {
       translateCommand(aiInput.value);
     });
   }
 
-  if (aiInput) {
+  if (aiEnabled && aiInput) {
     aiInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -5922,40 +6656,44 @@ function setupEventListeners() {
     });
   }
 
-  if (aiHelpBtn) {
+  if (aiEnabled && aiHelpBtn) {
     aiHelpBtn.addEventListener('click', showAiHelp);
   }
 
-  if (closeAiPreviewModal) {
+  if (aiEnabled && closeAiPreviewModal) {
     closeAiPreviewModal.addEventListener('click', hideAiPreview);
   }
 
-  if (cancelAiPreview) {
+  if (aiEnabled && cancelAiPreview) {
     cancelAiPreview.addEventListener('click', hideAiPreview);
   }
 
-  if (copyAiCommand) {
+  if (aiEnabled && copyAiCommand) {
     copyAiCommand.addEventListener('click', copyAiTranslatedCommand);
   }
 
-  if (executeAiCommand) {
+  if (aiEnabled && executeAiCommand) {
     executeAiCommand.addEventListener('click', executeAiTranslatedCommand);
   }
 
-  if (closeAiHelpModal) {
+  if (aiEnabled && closeAiHelpModal) {
     closeAiHelpModal.addEventListener('click', () => {
       aiHelpModal.classList.remove('modal--visible');
     });
   }
 
-  if (closeAiHelp) {
+  if (aiEnabled && closeAiHelp) {
     closeAiHelp.addEventListener('click', () => {
       aiHelpModal.classList.remove('modal--visible');
     });
   }
 
+  const modalTargets = aiEnabled
+    ? [addProjectModal, addSnippetModal, settingsModal, envVarsModal, layoutGalleryModal, aiPreviewModal, aiHelpModal]
+    : [addProjectModal, addSnippetModal, settingsModal, envVarsModal, layoutGalleryModal];
+
   // Close modals when clicking outside
-  [addProjectModal, addSnippetModal, settingsModal, envVarsModal, aiPreviewModal, aiHelpModal].forEach(modal => {
+  modalTargets.forEach(modal => {
     if (modal) {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.classList.remove('modal--visible');
@@ -5966,14 +6704,14 @@ function setupEventListeners() {
   // Keyboard events
   document.addEventListener('keydown', (e) => {
     // Ctrl+Space: AI 모드 토글
-    if (e.ctrlKey && e.code === 'Space') {
+    if (aiEnabled && e.ctrlKey && e.code === 'Space') {
       e.preventDefault();
       if (aiModeToggle) aiModeToggle.click();
       return;
     }
 
     if (e.key === 'Escape') {
-      [addProjectModal, addSnippetModal, settingsModal, envVarsModal, aiPreviewModal, aiHelpModal].forEach(m => {
+      modalTargets.forEach(m => {
         if (m) m.classList.remove('modal--visible');
       });
       return;
@@ -5983,6 +6721,7 @@ function setupEventListeners() {
       addSnippetModal.classList.contains('modal--visible') ||
       settingsModal.classList.contains('modal--visible') ||
       (envVarsModal && envVarsModal.classList.contains('modal--visible')) ||
+      (layoutGalleryModal && layoutGalleryModal.classList.contains('modal--visible')) ||
       (aiPreviewModal && aiPreviewModal.classList.contains('modal--visible')) ||
       (aiHelpModal && aiHelpModal.classList.contains('modal--visible')) ||
       ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
@@ -6011,21 +6750,28 @@ async function initialize() {
   debug('Tauri available:', typeof window.__TAURI__ !== 'undefined');
 
   initializeDOMElements();
+  commandHistory.load();
+
+  try {
+    await loadSettings();
+  } catch (error) {
+    debug('Error loading settings:', error);
+  }
+
   setupEventListeners();
   setupAccessibility();
   setupFileDragDrop();
   createRecordingControls();
   initializeHistoryPanel();  // 히스토리 패널 초기화
   setupSplitToolbar();       // 분할 툴바 초기화
-
-  // 명령어 히스토리 로드
-  commandHistory.load();
+  renderSplitMinimap();
 
   try {
-    await loadSettings();
     await loadCategories();
     await loadSnippets();
-    await checkClaudeInstalled();
+    if (isAiFeaturesEnabled()) {
+      await checkClaudeInstalled();
+    }
   } catch (error) {
     debug('Error loading data:', error);
   }
@@ -6295,7 +7041,7 @@ async function refreshGitStatus() {
 
   try {
     // Git 상태 가져오기
-    const gitStatus = await invoke('get_git_status', { path: gitPath });
+    const gitStatus = await invoke('git_status', { path: gitPath });
 
     if (!gitStatus.is_repo) {
       gitPanel.innerHTML = `
@@ -6384,7 +7130,14 @@ function setupGitPanelListeners(panel, gitPath) {
   if (stageAllBtn) {
     stageAllBtn.addEventListener('click', async () => {
       try {
-        await invoke('git_stage_all', { path: gitPath });
+        const files = Array.from(panel.querySelectorAll('.git-panel__file-checkbox'))
+          .map(checkbox => checkbox.dataset.file)
+          .filter(Boolean);
+        if (files.length === 0) {
+          showToast('스테이징할 파일이 없습니다', 'info');
+          return;
+        }
+        await invoke('git_stage', { path: gitPath, files });
         showToast('모든 파일이 스테이징되었습니다', 'success');
         refreshGitStatus();
       } catch (error) {
@@ -6454,9 +7207,9 @@ function setupGitPanelListeners(panel, gitPath) {
 
       try {
         if (shouldStage) {
-          await invoke('git_stage_file', { path: gitPath, file: filePath });
+          await invoke('git_stage', { path: gitPath, files: [filePath] });
         } else {
-          await invoke('git_unstage_file', { path: gitPath, file: filePath });
+          await invoke('git_unstage', { path: gitPath, files: [filePath] });
         }
       } catch (error) {
         showToast(`파일 ${shouldStage ? '스테이징' : '언스테이징'} 실패: ` + error, 'error');
@@ -6474,16 +7227,22 @@ function initializeHistoryPanel() {
 
 // Split Toolbar 초기화
 function setupSplitToolbar() {
-  console.log('Setting up split toolbar...');
   // Split buttons
   document.getElementById('splitHorizontalBtn')?.addEventListener('click', splitHorizontal);
+  document.getElementById('splitDefaultBtn')?.addEventListener('click', splitDefault);
   document.getElementById('splitVerticalBtn')?.addEventListener('click', splitVertical);
 
-  // Preset buttons
-  document.getElementById('presetTwoColBtn')?.addEventListener('click', () => applyLayoutPreset('two-columns'));
-  document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-rows'));
-  document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid-2x2'));
-  document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-columns'));
+  const layoutPresetSelect = document.getElementById('layoutPresetSelect');
+  layoutPresetSelect?.addEventListener('change', async (event) => {
+    const preset = event.target?.value;
+    if (!preset) return;
+    await applyLayoutPreset(preset);
+  });
+
+  document.getElementById('openLayoutGalleryBtn')?.addEventListener('click', () => {
+    const preset = layoutPresetSelect?.value || null;
+    openLayoutGalleryModal(preset);
+  });
 
   // Control buttons
   document.getElementById('swapPanesBtn')?.addEventListener('click', () => {
@@ -6491,12 +7250,16 @@ function setupSplitToolbar() {
       startSwapMode(state.activeSessionId);
     }
   });
+  document.getElementById('toggleSplitMinimapBtn')?.addEventListener('click', () => {
+    setSplitMinimapVisibility(!state.splitMinimapVisible);
+  });
+  document.getElementById('mergePaneBtn')?.addEventListener('click', () => mergePane());
   document.getElementById('maximizePaneBtn')?.addEventListener('click', () => toggleMaximize());
   document.getElementById('closeSplitBtn')?.addEventListener('click', () => {
     exitSplitMode();
     showToast('분할 모드 종료', 'info');
   });
 
+  updateSplitToolbarState();
   debug('Split toolbar setup complete');
-  console.log('Split toolbar setup complete');
 }

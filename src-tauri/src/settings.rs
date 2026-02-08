@@ -1,15 +1,22 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Settings {
     pub theme: String,       // "dark", "light", "monokai"
     pub font_size: u8,       // 10-24
     pub font_family: String, // "Consolas", "JetBrains Mono", etc.
     pub enable_logging: bool,
+    pub enable_notifications: bool,
+    pub enable_snippet_suggestions: bool,
+    pub snippet_suggestion_threshold: u8,
+    pub enable_block_mode: bool,
+    pub enable_ai_features: bool,
     pub locale: String, // "en", "ko"
 }
 
@@ -20,6 +27,11 @@ impl Default for Settings {
             font_size: 14,
             font_family: "Consolas".to_string(),
             enable_logging: true,
+            enable_notifications: true,
+            enable_snippet_suggestions: true,
+            snippet_suggestion_threshold: 3,
+            enable_block_mode: false,
+            enable_ai_features: false,
             locale: "ko".to_string(), // Default to Korean
         }
     }
@@ -76,6 +88,10 @@ pub async fn save_settings(settings: Settings) -> Result<(), String> {
     // Validate settings
     if settings.font_size < 10 || settings.font_size > 24 {
         return Err("Font size must be between 10 and 24".to_string());
+    }
+
+    if settings.snippet_suggestion_threshold < 2 || settings.snippet_suggestion_threshold > 10 {
+        return Err("Snippet suggestion threshold must be between 2 and 10".to_string());
     }
 
     let valid_themes = ["dark", "light", "monokai", "high-contrast"];
@@ -265,10 +281,32 @@ impl Default for WindowState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SplitNodeState {
+    #[serde(rename = "type")]
+    pub node_type: String,
+    #[serde(default)]
+    pub ratio: Option<f64>,
+    #[serde(default, rename = "sessionId")]
+    pub session_id: Option<String>,
+    #[serde(default)]
+    pub children: Option<Vec<SplitNodeState>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TabLayoutState {
+    #[serde(default, rename = "splitMode")]
+    pub split_mode: bool,
+    #[serde(default, rename = "splitRoot")]
+    pub split_root: Option<SplitNodeState>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct SessionState {
     pub sessions: Vec<SessionInfo>,
     pub active_session_id: Option<String>,
     pub tab_groups: Vec<TabGroupInfo>,
+    pub tab_layouts: HashMap<String, TabLayoutState>,
     pub window_state: WindowState,
 }
 

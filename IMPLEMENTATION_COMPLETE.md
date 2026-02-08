@@ -1,15 +1,21 @@
-# ✅ Snippet Auto-Generation Feature - Implementation Complete
+# Snippet Auto-Generation Feature - Historical Implementation Report
 
 **Date:** 2026-02-03
-**Status:** ✅ COMPLETE
-**Build Status:** ✅ SUCCESS
-**Tests:** ✅ VERIFIED
+**Status:** Archived (2026-02-07 기준 운영 범위 제외)
+**Build Status:** Historical
+**Tests:** Historical
 
 ---
 
+## Important Notice (2026-02-07)
+
+- 본 문서는 과거 구현 시도/연구 결과를 기록한 **이력 문서**입니다.
+- 현재 릴리즈 정책(비AI 코어 우선)에 따라 스니펫 자동 생성/AI 연계 흐름은 운영 범위에서 제외됩니다.
+- 따라서 아래 "완료" 표현은 **당시 구현 기준**이며, **현재 제품 활성 기능 상태를 의미하지 않습니다**.
+
 ## Implementation Summary
 
-Successfully implemented a complete snippet auto-generation feature for Shellhive that intelligently tracks command usage and suggests saving frequently used commands as reusable snippets.
+Historically documented an implementation attempt for snippet auto-generation behavior based on command history patterns.
 
 ## What Was Built
 
@@ -226,27 +232,12 @@ terminal.onData((data) => {
 
 ## Conclusion
 
-The snippet auto-generation feature is **fully implemented, tested, and ready for use**. All requirements have been met:
+This document is retained for historical context only.
 
-✅ **Functional Requirements**
-- Command tracking ✓
-- Frequency analysis ✓
-- Auto-suggestions ✓
-- Settings integration ✓
-
-✅ **Non-Functional Requirements**
-- Performance ✓
-- User experience ✓
-- Code quality ✓
-- Documentation ✓
-
-✅ **Build Verification**
-- Frontend builds ✓
-- Backend compiles ✓
-- No errors/warnings ✓
-
-The implementation is production-ready and follows best practices for maintainability and extensibility.
+- Current release policy prioritizes non-AI core stability.
+- Snippet auto-generation remains out of active release scope until re-planned.
+- Re-activation requires explicit roadmap approval, implementation review, and updated QA coverage.
 
 ---
 
-**Next Steps:** Test in development environment and collect user feedback for refinements.
+**Next Steps:** Re-evaluate feature scope in a future dedicated AI/snippet phase.

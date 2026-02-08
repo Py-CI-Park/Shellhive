@@ -16,14 +16,14 @@
       <div class="sidebar__projects">
         <div class="sidebar__section-header">
           <span>Projects</span>
-          <button class="sidebar__add-btn" id="addProjectBtn" aria-label="프로젝트 추가">+</button>
+          <button class="sidebar__add-btn" id="addProjectBtn" aria-label="?熬곣뫁夷??釉띾콦 ?怨뺣뼺?">+</button>
         </div>
         <ul class="sidebar__list" id="projectList"></ul>
       </div>
       <div class="sidebar__snippets">
         <div class="sidebar__section-header">
           <span>Snippets</span>
-          <button class="sidebar__add-btn" id="addSnippetBtn" aria-label="스니펫 추가">+</button>
+          <button class="sidebar__add-btn" id="addSnippetBtn" aria-label="???노퉵???怨뺣뼺?">+</button>
         </div>
         <ul class="sidebar__list sidebar__list--snippets" id="snippetList"></ul>
       </div>
@@ -35,118 +35,72 @@
           <!-- Git panel will be rendered here -->
         </div>
       </div>
-      <div class="sidebar__claude">
-        <div class="sidebar__section-header">
-          <span>Claude Code</span>
-          <span class="claude-status" id="claudeStatus" title="Claude Code 상태"></span>
-        </div>
-        <button class="sidebar__claude-btn" id="claudeBtn" aria-label="Claude Code 시작">
-          <span class="claude-icon">🤖</span>
-          <span class="claude-text">Start Claude</span>
-        </button>
-      </div>
       <div class="sidebar__footer">
-        <button class="sidebar__settings-btn" id="settingsBtn" aria-label="설정 열기">Settings</button>
+        <button class="sidebar__settings-btn" id="settingsBtn" aria-label="???깆젧 ???⒱뵛">Settings</button>
       </div>
     </aside>
     <main class="main">
       <div class="tabs" id="tabsContainer">
         <div class="tabs__list" id="tabsList"></div>
-        <button class="tabs__new-btn" id="newTabBtn" aria-label="새 탭 만들기">+</button>
+        <button class="tabs__new-btn" id="newTabBtn" aria-label="Create new tab">+</button>
       </div>
       <div class="split-toolbar" id="splitToolbar">
-        <div class="split-toolbar__group">
-          <button class="split-toolbar__btn" id="splitHorizontalBtn" title="가로 분할 (Ctrl+Shift+D)">
-            <span class="split-toolbar__icon">&#x2B1C;&#x2B1C;</span>
-          </button>
-          <button class="split-toolbar__btn" id="splitVerticalBtn" title="세로 분할 (Ctrl+Shift+E)">
-            <span class="split-toolbar__icon split-toolbar__icon--vertical">&#x2B1B;<br>&#x2B1B;</span>
-          </button>
+        <div class="split-toolbar__section" data-section="split">
+          <span class="split-toolbar__label">Split</span>
+          <div class="split-toolbar__group">
+            <button class="split-toolbar__btn" id="splitDefaultBtn" title="Default split: right (Ctrl+\\)">Default</button>
+            <button class="split-toolbar__btn" id="splitHorizontalBtn" title="Split down (Ctrl+Shift+D)">Down</button>
+            <button class="split-toolbar__btn" id="splitVerticalBtn" title="Split right (Ctrl+Shift+E)">Right</button>
+          </div>
         </div>
-        <div class="split-toolbar__divider"></div>
-        <div class="split-toolbar__group">
-          <button class="split-toolbar__btn" id="presetTwoColBtn" title="2열 레이아웃">2열</button>
-          <button class="split-toolbar__btn" id="presetTwoRowBtn" title="2행 레이아웃">2행</button>
-          <button class="split-toolbar__btn" id="presetGridBtn" title="2x2 그리드">그리드</button>
-          <button class="split-toolbar__btn" id="presetThreeColBtn" title="3열 레이아웃">3열</button>
+        <div class="split-toolbar__section" data-section="layout">
+          <span class="split-toolbar__label">Layout</span>
+          <div class="split-toolbar__group">
+            <select class="split-toolbar__select" id="layoutPresetSelect" aria-label="Select layout preset">
+              <option value="">Select layout</option>
+              <option value="two-columns">Two Columns</option>
+              <option value="two-rows">Two Rows</option>
+              <option value="grid-2x2">2x2 Grid</option>
+              <option value="three-columns">Three Columns</option>
+            </select>
+            <button class="split-toolbar__btn" id="openLayoutGalleryBtn" title="Open layout gallery">Gallery</button>
+          </div>
         </div>
-        <div class="split-toolbar__divider"></div>
-        <div class="split-toolbar__group">
-          <button class="split-toolbar__btn" id="swapPanesBtn" title="창 교환">&#x21C4;</button>
-          <button class="split-toolbar__btn" id="maximizePaneBtn" title="창 최대화 (Ctrl+Shift+M)">&#x2610;</button>
-          <button class="split-toolbar__btn" id="closeSplitBtn" title="분할 종료">&#x2715;</button>
+        <div class="split-toolbar__section" data-section="pane">
+          <span class="split-toolbar__label">Pane</span>
+          <div class="split-toolbar__group">
+            <button class="split-toolbar__btn" id="toggleSplitMinimapBtn" title="Toggle split minimap">Minimap</button>
+            <button class="split-toolbar__btn" id="swapPanesBtn" title="Swap panes">Swap</button>
+            <button class="split-toolbar__btn" id="mergePaneBtn" title="Merge active pane (Ctrl+Shift+J)">Merge</button>
+            <button class="split-toolbar__btn" id="maximizePaneBtn" title="Maximize pane (Ctrl+Shift+M)">Maximize</button>
+            <button class="split-toolbar__btn" id="closeSplitBtn" title="Exit split mode">Exit</button>
+          </div>
         </div>
       </div>
+      <aside class="split-minimap" id="splitMinimapPanel" aria-label="Split minimap">
+        <div class="split-minimap__header">
+          <span class="split-minimap__title">Split Map</span>
+          <span class="split-minimap__hint">Click to focus</span>
+        </div>
+        <div class="split-minimap__content" id="splitMinimapContent">Minimap is shown in split mode.</div>
+      </aside>
       <div class="terminal-container" id="terminalContainer"></div>
-      <!-- AI Mode Input Bar -->
-      <div class="ai-input-bar" id="aiInputBar">
-        <button class="ai-input-bar__toggle" id="aiModeToggle" title="AI Mode (Ctrl+Space)">
-          <span class="ai-input-bar__icon">AI</span>
-        </button>
-        <div class="ai-input-bar__input-container">
-          <input type="text" class="ai-input-bar__input" id="aiInput" placeholder="자연어로 명령어를 입력하세요... (예: js 파일 찾아줘)" disabled />
-          <button class="ai-input-bar__send" id="aiSendBtn" disabled>변환</button>
-        </div>
-        <button class="ai-input-bar__help" id="aiHelpBtn" title="AI 도움말">?</button>
-      </div>
     </main>
   </div>
-
-  <!-- AI Command Preview Modal -->
-  <div class="modal" id="aiPreviewModal" role="dialog" aria-labelledby="aiPreviewModalTitle" aria-modal="true">
-    <div class="modal__content">
-      <div class="modal__header">
-        <h2 class="modal__title" id="aiPreviewModalTitle">AI 명령어 변환</h2>
-        <button class="modal__close" id="closeAiPreviewModal" aria-label="닫기">&times;</button>
-      </div>
-      <div class="modal__body">
-        <div class="ai-preview">
-          <div class="ai-preview__input">
-            <span class="ai-preview__label">입력:</span>
-            <span class="ai-preview__text" id="aiPreviewInput"></span>
-          </div>
-          <div class="ai-preview__arrow">↓</div>
-          <div class="ai-preview__output">
-            <span class="ai-preview__label">변환된 명령어:</span>
-            <code class="ai-preview__command" id="aiPreviewCommand"></code>
-          </div>
-          <div class="ai-preview__description" id="aiPreviewDescription"></div>
-          <div class="ai-preview__confidence" id="aiPreviewConfidence"></div>
-          <div class="ai-preview__alternatives" id="aiPreviewAlternatives"></div>
-        </div>
-      </div>
-      <div class="modal__footer">
-        <button class="btn btn--secondary" id="cancelAiPreview">취소</button>
-        <button class="btn btn--secondary" id="copyAiCommand">복사</button>
-        <button class="btn btn--primary" id="executeAiCommand">실행</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI Help Modal -->
-  <div class="modal" id="aiHelpModal" role="dialog" aria-labelledby="aiHelpModalTitle" aria-modal="true">
+  <!-- Layout Gallery Modal -->
+  <div class="modal" id="layoutGalleryModal" role="dialog" aria-labelledby="layoutGalleryModalTitle" aria-modal="true">
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
-        <h2 class="modal__title" id="aiHelpModalTitle">AI 명령어 변환 도움말</h2>
-        <button class="modal__close" id="closeAiHelpModal" aria-label="닫기">&times;</button>
+        <h2 class="modal__title" id="layoutGalleryModalTitle">Layout Gallery</h2>
+        <button class="modal__close" id="closeLayoutGalleryModal" aria-label="Close">&times;</button>
       </div>
       <div class="modal__body">
-        <p class="ai-help__intro">자연어로 원하는 작업을 설명하면 쉘 명령어로 변환해 드립니다.</p>
-        <div class="ai-help__patterns" id="aiHelpPatterns">
-          <!-- Patterns will be inserted here -->
-        </div>
-        <div class="ai-help__tips">
-          <h4>사용 팁</h4>
-          <ul>
-            <li><strong>Ctrl+Space</strong>: AI 모드 켜기/끄기</li>
-            <li><strong>Enter</strong>: 명령어 변환</li>
-            <li>따옴표로 파일명이나 검색어를 감싸면 더 정확합니다</li>
-            <li>예: "test.js 파일 삭제해줘", "'에러' 텍스트 검색"</li>
-          </ul>
-        </div>
+        <p class="settings-help">Preview a split layout and apply it.</p>
+        <div class="layout-gallery" id="layoutGalleryList"></div>
       </div>
       <div class="modal__footer">
-        <button class="btn btn--primary" id="closeAiHelp">확인</button>
+        <button class="btn btn--secondary" id="cancelLayoutGallery">Cancel</button>
+        <button class="btn btn--primary" id="applyLayoutGallery" disabled>Apply Selected Layout</button>
       </div>
     </div>
   </div>
@@ -156,7 +110,7 @@
     <div class="modal__content">
       <div class="modal__header">
         <h2 class="modal__title" id="addProjectModalTitle">Add Project</h2>
-        <button class="modal__close" id="closeAddProjectModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeAddProjectModal" aria-label="???뗢뵛">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -183,7 +137,7 @@
     <div class="modal__content">
       <div class="modal__header">
         <h2 class="modal__title" id="addSnippetModalTitle">Add Snippet</h2>
-        <button class="modal__close" id="closeAddSnippetModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeAddSnippetModal" aria-label="???뗢뵛">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -231,7 +185,7 @@
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
         <h2 class="modal__title" id="envVarsModalTitle">Environment Variables</h2>
-        <button class="modal__close" id="closeEnvVarsModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeEnvVarsModal" aria-label="???뗢뵛">&times;</button>
       </div>
       <div class="modal__body">
         <p class="env-vars-description">Set environment variables for this project. These will be applied when opening a new terminal in this project.</p>
@@ -252,7 +206,7 @@
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
         <h2 class="modal__title" id="settingsModalTitle">Settings</h2>
-        <button class="modal__close" id="closeSettingsModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeSettingsModal" aria-label="???뗢뵛">&times;</button>
       </div>
       <div class="modal__body">
         <div class="settings-section">
@@ -292,7 +246,7 @@
             <label for="settingsLocale">Language</label>
             <select id="settingsLocale" class="form-select">
               <option value="en">English</option>
-              <option value="ko">한국어</option>
+              <option value="ko">Korean</option>
             </select>
           </div>
         </div>
@@ -345,10 +299,10 @@
 
           <div class="form-group form-group--checkbox">
             <input type="checkbox" id="settingsBlockMode">
-            <label for="settingsBlockMode">블록 모드 (Warp-style command blocks)</label>
+            <label for="settingsBlockMode">Block Mode (Warp-style command blocks)</label>
           </div>
 
-          <p class="settings-help">명령어를 블록 단위로 표시합니다 (명령어, 출력, 실행 시간, 종료 상태 포함)</p>
+          <p class="settings-help">Display command output in grouped command blocks (input, output, duration, and status).</p>
         </div>
       </div>
       <div class="modal__footer">
