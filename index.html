@@ -16,14 +16,14 @@
       <div class="sidebar__projects">
         <div class="sidebar__section-header">
           <span>Projects</span>
-          <button class="sidebar__add-btn" id="addProjectBtn" aria-label="프로젝트 추가">+</button>
+          <button class="sidebar__add-btn" id="addProjectBtn" aria-label="?꾨줈?앺듃 異붽?">+</button>
         </div>
         <ul class="sidebar__list" id="projectList"></ul>
       </div>
       <div class="sidebar__snippets">
         <div class="sidebar__section-header">
           <span>Snippets</span>
-          <button class="sidebar__add-btn" id="addSnippetBtn" aria-label="스니펫 추가">+</button>
+          <button class="sidebar__add-btn" id="addSnippetBtn" aria-label="?ㅻ땲??異붽?">+</button>
         </div>
         <ul class="sidebar__list sidebar__list--snippets" id="snippetList"></ul>
       </div>
@@ -36,11 +36,11 @@
         </div>
       </div>
       <div class="sidebar__footer">
-        <button class="sidebar__settings-btn" id="settingsBtn" aria-label="설정 열기">Settings</button>
+        <button class="sidebar__settings-btn" id="settingsBtn" aria-label="?ㅼ젙 ?닿린">Settings</button>
       </div>
     </aside>
     <main class="main">
-      <div class="tabs" id="tabsContainer">
+            <div class="tabs" id="tabsContainer">
         <div class="tabs__list" id="tabsList"></div>
         <button class="tabs__new-btn" id="newTabBtn" aria-label="새 탭 만들기">+</button>
       </div>
@@ -67,26 +67,52 @@
             <option value="grid-2x2">2x2 그리드</option>
             <option value="three-columns">3열</option>
           </select>
-          <button class="split-toolbar__btn" id="applyLayoutPresetBtn" title="선택한 레이아웃 적용">적용</button>
+          <button class="split-toolbar__btn" id="applyLayoutPresetBtn" title="선택된 레이아웃 적용">적용</button>
+          <button class="split-toolbar__btn" id="openLayoutGalleryBtn" title="레이아웃 갤러리 열기">갤러리</button>
         </div>
         <div class="split-toolbar__divider"></div>
         <div class="split-toolbar__group">
+          <button class="split-toolbar__btn" id="toggleSplitMinimapBtn" title="분할 트리 미니맵 토글">미니맵</button>
           <button class="split-toolbar__btn" id="swapPanesBtn" title="창 교환">&#x21C4;</button>
           <button class="split-toolbar__btn" id="mergePaneBtn" title="활성 창 합치기 (Ctrl+Shift+J)">합치기</button>
           <button class="split-toolbar__btn" id="maximizePaneBtn" title="창 최대화 (Ctrl+Shift+M)">&#x2610;</button>
           <button class="split-toolbar__btn" id="closeSplitBtn" title="분할 종료">&#x2715;</button>
         </div>
       </div>
+      <aside class="split-minimap" id="splitMinimapPanel" aria-label="분할 트리 미니맵">
+        <div class="split-minimap__header">
+          <span class="split-minimap__title">Split Map</span>
+          <span class="split-minimap__hint">클릭하여 이동</span>
+        </div>
+        <div class="split-minimap__content" id="splitMinimapContent">분할 시 미니맵이 표시됩니다.</div>
+      </aside>
       <div class="terminal-container" id="terminalContainer"></div>
     </main>
   </div>
 
+  <!-- Layout Gallery Modal -->
+  <div class="modal" id="layoutGalleryModal" role="dialog" aria-labelledby="layoutGalleryModalTitle" aria-modal="true">
+    <div class="modal__content modal__content--wide">
+      <div class="modal__header">
+        <h2 class="modal__title" id="layoutGalleryModalTitle">레이아웃 갤러리</h2>
+        <button class="modal__close" id="closeLayoutGalleryModal" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal__body">
+        <p class="settings-help">분할 구성을 미리 보고 선택한 뒤 적용할 수 있습니다.</p>
+        <div class="layout-gallery" id="layoutGalleryList"></div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="cancelLayoutGallery">취소</button>
+        <button class="btn btn--primary" id="applyLayoutGallery" disabled>선택 레이아웃 적용</button>
+      </div>
+    </div>
+  </div>
   <!-- Add Project Modal -->
   <div class="modal" id="addProjectModal" role="dialog" aria-labelledby="addProjectModalTitle" aria-modal="true">
     <div class="modal__content">
       <div class="modal__header">
         <h2 class="modal__title" id="addProjectModalTitle">Add Project</h2>
-        <button class="modal__close" id="closeAddProjectModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeAddProjectModal" aria-label="?リ린">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -113,7 +139,7 @@
     <div class="modal__content">
       <div class="modal__header">
         <h2 class="modal__title" id="addSnippetModalTitle">Add Snippet</h2>
-        <button class="modal__close" id="closeAddSnippetModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeAddSnippetModal" aria-label="?リ린">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -161,7 +187,7 @@
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
         <h2 class="modal__title" id="envVarsModalTitle">Environment Variables</h2>
-        <button class="modal__close" id="closeEnvVarsModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeEnvVarsModal" aria-label="?リ린">&times;</button>
       </div>
       <div class="modal__body">
         <p class="env-vars-description">Set environment variables for this project. These will be applied when opening a new terminal in this project.</p>
@@ -182,7 +208,7 @@
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
         <h2 class="modal__title" id="settingsModalTitle">Settings</h2>
-        <button class="modal__close" id="closeSettingsModal" aria-label="닫기">&times;</button>
+        <button class="modal__close" id="closeSettingsModal" aria-label="?リ린">&times;</button>
       </div>
       <div class="modal__body">
         <div class="settings-section">
@@ -275,10 +301,10 @@
 
           <div class="form-group form-group--checkbox">
             <input type="checkbox" id="settingsBlockMode">
-            <label for="settingsBlockMode">블록 모드 (Warp-style command blocks)</label>
+            <label for="settingsBlockMode">釉붾줉 紐⑤뱶 (Warp-style command blocks)</label>
           </div>
 
-          <p class="settings-help">명령어를 블록 단위로 표시합니다 (명령어, 출력, 실행 시간, 종료 상태 포함)</p>
+          <p class="settings-help">紐낅졊?대? 釉붾줉 ?⑥쐞濡??쒖떆?⑸땲??(紐낅졊?? 異쒕젰, ?ㅽ뻾 ?쒓컙, 醫낅즺 ?곹깭 ?ы븿)</p>
         </div>
       </div>
       <div class="modal__footer">

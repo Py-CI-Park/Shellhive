@@ -255,4 +255,76 @@ describe('Split Layout E2E', () => {
       10000
     );
   });
+
+  it('opens layout gallery modal and applies selected preset', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+
+    const openGalleryBtn = document.getElementById('openLayoutGalleryBtn');
+    expect(openGalleryBtn).toBeTruthy();
+    openGalleryBtn.click();
+
+    const modal = document.getElementById('layoutGalleryModal');
+    expect(modal.classList.contains('modal--visible')).toBe(true);
+
+    const gridCard = modal.querySelector('.layout-gallery__card[data-preset="grid-2x2"]');
+    expect(gridCard).toBeTruthy();
+    gridCard.click();
+
+    document.getElementById('applyLayoutGallery').click();
+
+    await waitFor(() => !modal.classList.contains('modal--visible'));
+    await waitFor(
+      () => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 4,
+      10000
+    );
+  });
+
+  it('shows split minimap and changes active pane when minimap leaf is clicked', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 2);
+
+    const minimap = document.getElementById('splitMinimapPanel');
+    expect(minimap.classList.contains('split-minimap--visible')).toBe(true);
+
+    const leaves = Array.from(minimap.querySelectorAll('.split-minimap__leaf'));
+    expect(leaves.length).toBeGreaterThanOrEqual(2);
+
+    const targetLeaf = leaves.find((leaf) => !leaf.classList.contains('split-minimap__leaf--active')) || leaves[0];
+    const targetSessionId = targetLeaf.dataset.sessionId;
+    targetLeaf.click();
+
+    await waitFor(() => {
+      const activeLeaf = minimap.querySelector('.split-minimap__leaf--active');
+      return activeLeaf && activeLeaf.dataset.sessionId === targetSessionId;
+    });
+  });
+
+  it('renders enhanced split pane header with status and path summary', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelectorAll('.split-pane-header').length >= 2);
+
+    const subtitle = document.querySelector('.split-pane-header__subtitle');
+    expect(subtitle).toBeTruthy();
+    expect(subtitle.textContent).toContain('·');
+  });
 });

@@ -36,6 +36,47 @@
 - `npm run test -- --run` (4 files, 19 tests)
 - `cargo check --manifest-path src-tauri/Cargo.toml`
 
+#### feat(split-ux): 분할 미니맵/레이아웃 갤러리/패널 헤더 정보 강화
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `index.html`
+  - 분할 툴바에 `레이아웃 갤러리`, `미니맵` 액션 버튼 추가
+  - 분할 트리 미니맵 패널(`splitMinimapPanel`) 및 컨텐츠 영역(`splitMinimapContent`) 추가
+  - 레이아웃 갤러리 모달(`layoutGalleryModal`)과 카드 목록/적용 버튼 추가
+- `src/app.js`
+  - 분할 트리 구조를 시각화하는 미니맵 렌더러 추가
+    - `renderSplitMinimap`, `buildSplitMinimapNode`, `setSplitMinimapVisibility`
+  - 레이아웃 프리셋 갤러리 모달 로직 추가
+    - `openLayoutGalleryModal`, `renderLayoutGallery`, `applyLayoutGallerySelection`
+  - `Ctrl+Shift+L` 단축키 및 명령 팔레트 항목으로 레이아웃 갤러리 진입 지원
+- `src/__tests__/split-layout.e2e.test.js`
+  - 레이아웃 갤러리 적용 시나리오 테스트 추가
+  - 분할 미니맵 클릭으로 활성 패널 전환되는 시나리오 테스트 추가
+  - 분할 패널 헤더의 상태/경로 요약 렌더링 테스트 추가
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - 분할 패널 헤더를 2줄 정보 구조로 확장
+    - 1줄: 세션명
+    - 2줄: 실행 상태 + 경로 요약
+  - 세션 상태 변경 시 분할 헤더/미니맵이 즉시 갱신되도록 보강
+- `src/style.css`
+  - 미니맵 패널 스타일과 트리/리프 상태 스타일 추가
+  - 레이아웃 갤러리 카드/미리보기 스타일 추가
+  - 분할 패널 헤더 메타(타이틀+서브타이틀) 스타일 확장
+- `index.html`
+  - 설정 모달 언어 옵션 깨짐 태그(`ko`)를 정상 HTML 태그로 정리
+
+##### 검증 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 22 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+
 #### fix(dev): run-dev.bat 실행 경로/인자 처리 수정
 
 **커밋**: `working-tree`

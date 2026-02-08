@@ -294,6 +294,28 @@ const SESSION_STATUS = {
   EXITED: 'exited'
 };
 
+const SESSION_STATUS_LABELS = Object.freeze({
+  connecting: '연결 중',
+  running: '실행 중',
+  exited: '종료됨'
+});
+
+const LAYOUT_PRESET_TITLES = Object.freeze({
+  'two-columns': '2열',
+  'two-rows': '2행',
+  'grid-2x2': '2x2 그리드',
+  'three-columns': '3열',
+  'main-sidebar': '메인 + 사이드'
+});
+
+const LAYOUT_PRESET_DESCRIPTIONS = Object.freeze({
+  'two-columns': '좌우 2분할',
+  'two-rows': '상하 2분할',
+  'grid-2x2': '균등 4분할',
+  'three-columns': '좌우 3분할',
+  'main-sidebar': '메인 작업 + 보조 패널'
+});
+
 // TabGroup class for organizing tabs
 class TabGroup {
   constructor(id, name, options = {}) {
@@ -1283,6 +1305,8 @@ const state = {
   maximizedSession: null,     // Maximized session ID (for split mode)
   splitInProgress: false,     // Prevent race condition in splitActivePane
   splitRenderRaf: null,       // requestAnimationFrame handle for split render batching
+  splitMinimapVisible: true,  // Split minimap panel visibility
+  selectedLayoutPreset: null, // Selected preset in layout gallery modal
   autocompleteVisible: false, // Autocomplete popup visible state
   autocompleteQuery: '',      // Current input for autocomplete
   autocompleteSelected: 0,    // Selected suggestion index
@@ -2582,6 +2606,24 @@ function getStatusIcon(status) {
   }
 }
 
+function getStatusLabel(status) {
+  return SESSION_STATUS_LABELS[status] || '상태 미확인';
+}
+
+function getCompactPathLabel(pathValue) {
+  if (!pathValue) return '로컬 셸';
+
+  const normalized = String(pathValue).replace(/\//g, '\\');
+  const parts = normalized.split('\\').filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  return `...\\${parts.slice(-2).join('\\')}`;
+}
+
+function getSplitPaneSubtitle(session) {
+  if (!session) return '상태 미확인';
+  return `${getStatusLabel(session.status)} · ${getCompactPathLabel(session.projectPath)}`;
+}
+
 function updateTabStatus(sessionId, status) {
   const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
   if (!tab) return;
@@ -2589,6 +2631,13 @@ function updateTabStatus(sessionId, status) {
   if (statusElement) {
     statusElement.textContent = getStatusIcon(status);
     statusElement.className = `tab__status tab__status--${status}`;
+  }
+  if (state.splitMode) {
+    const session = state.sessions.get(sessionId);
+    if (session) {
+      ensureSplitPaneHeader(session);
+    }
+    renderSplitMinimap();
   }
 }
 
@@ -4147,6 +4196,142 @@ function focusLayoutPresetSelector() {
   showToast('레이아웃 프리셋을 선택하세요', 'info', 1200);
 }
 
+function getLayoutPresetName(presetKey) {
+  const preset = LAYOUT_PRESETS[presetKey];
+  if (!preset) return presetKey;
+  return LAYOUT_PRESET_TITLES[presetKey] || preset.name || presetKey;
+}
+
+function getLayoutPresetDescription(presetKey) {
+  return LAYOUT_PRESET_DESCRIPTIONS[presetKey] || '분할 레이아웃';
+}
+
+function createLayoutPreviewCell(extraClass = '') {
+  const cell = document.createElement('span');
+  cell.className = `layout-gallery__preview-cell ${extraClass}`.trim();
+  return cell;
+}
+
+function createLayoutPreviewElement(presetKey) {
+  const preview = document.createElement('div');
+  preview.className = `layout-gallery__preview layout-gallery__preview--${presetKey}`;
+
+  switch (presetKey) {
+    case 'two-columns':
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+    case 'two-rows':
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+    case 'three-columns':
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+    case 'main-sidebar':
+      preview.appendChild(createLayoutPreviewCell('layout-gallery__preview-cell--main'));
+      preview.appendChild(createLayoutPreviewCell('layout-gallery__preview-cell--sidebar'));
+      break;
+    case 'grid-2x2':
+    default:
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      preview.appendChild(createLayoutPreviewCell());
+      break;
+  }
+
+  return preview;
+}
+
+function renderLayoutGallery() {
+  const list = document.getElementById('layoutGalleryList');
+  const applyBtn = document.getElementById('applyLayoutGallery');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  Object.keys(LAYOUT_PRESETS).forEach((presetKey) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'layout-gallery__card';
+    if (state.selectedLayoutPreset === presetKey) {
+      card.classList.add('layout-gallery__card--active');
+    }
+    card.dataset.preset = presetKey;
+
+    const preview = createLayoutPreviewElement(presetKey);
+
+    const title = document.createElement('h3');
+    title.className = 'layout-gallery__card-title';
+    title.textContent = getLayoutPresetName(presetKey);
+
+    const description = document.createElement('p');
+    description.className = 'layout-gallery__card-description';
+    description.textContent = getLayoutPresetDescription(presetKey);
+
+    card.appendChild(preview);
+    card.appendChild(title);
+    card.appendChild(description);
+
+    card.addEventListener('click', () => {
+      state.selectedLayoutPreset = presetKey;
+      renderLayoutGallery();
+    });
+
+    card.addEventListener('dblclick', async () => {
+      state.selectedLayoutPreset = presetKey;
+      await applyLayoutGallerySelection();
+    });
+
+    list.appendChild(card);
+  });
+
+  if (applyBtn) {
+    applyBtn.disabled = !state.selectedLayoutPreset;
+  }
+}
+
+function openLayoutGalleryModal(defaultPreset = null) {
+  if (!state.activeSessionId) {
+    showToast('먼저 터미널 세션을 생성하세요', 'warning');
+    return;
+  }
+
+  const modal = document.getElementById('layoutGalleryModal');
+  const presetSelect = document.getElementById('layoutPresetSelect');
+  if (!modal) return;
+
+  const fallback = defaultPreset || presetSelect?.value || state.selectedLayoutPreset || 'two-columns';
+  state.selectedLayoutPreset = LAYOUT_PRESETS[fallback] ? fallback : 'two-columns';
+  renderLayoutGallery();
+  modal.classList.add('modal--visible');
+}
+
+function closeLayoutGalleryModal() {
+  const modal = document.getElementById('layoutGalleryModal');
+  if (!modal) return;
+  modal.classList.remove('modal--visible');
+}
+
+async function applyLayoutGallerySelection() {
+  if (!state.selectedLayoutPreset) {
+    showToast('레이아웃 프리셋을 먼저 선택하세요', 'warning', 1200);
+    return;
+  }
+
+  await applyLayoutPreset(state.selectedLayoutPreset);
+
+  const presetSelect = document.getElementById('layoutPresetSelect');
+  if (presetSelect && LAYOUT_PRESETS[state.selectedLayoutPreset]) {
+    presetSelect.value = state.selectedLayoutPreset;
+  }
+
+  closeLayoutGalleryModal();
+}
+
 // Toggle maximize for a split pane
 function toggleMaximize(sessionId = state.activeSessionId) {
   if (!sessionId) {
@@ -4187,6 +4372,7 @@ function renderMaximizedView(sessionId) {
   container.innerHTML = '';
   container.className = 'terminal-container terminal-container--maximized';
   container.appendChild(session.wrapper);
+  renderSplitMinimap();
 
   // Fit terminal after render
   setTimeout(() => session.fitAddon.fit(), 50);
@@ -4258,6 +4444,7 @@ function renderSplitLayout() {
       session.wrapper.classList.remove('terminal-wrapper--split');
       removeSplitPaneHeader(session.wrapper);
     });
+    renderSplitMinimap();
     return;
   }
 
@@ -4272,6 +4459,7 @@ function renderSplitLayout() {
 
   const layoutEl = renderSplitNode(state.splitRoot);
   container.appendChild(layoutEl);
+  renderSplitMinimap();
 
   // Fit all terminals
   setTimeout(() => {
@@ -4568,7 +4756,10 @@ function ensureSplitPaneHeader(session) {
     header.className = 'split-pane-header';
     header.innerHTML = `
       <span class="split-pane-header__status"></span>
-      <span class="split-pane-header__title"></span>
+      <div class="split-pane-header__meta">
+        <span class="split-pane-header__title"></span>
+        <span class="split-pane-header__subtitle"></span>
+      </div>
       <button class="split-pane-header__btn split-pane-header__btn--merge" type="button">합치기</button>
     `;
     session.wrapper.appendChild(header);
@@ -4576,14 +4767,20 @@ function ensureSplitPaneHeader(session) {
 
   const statusEl = header.querySelector('.split-pane-header__status');
   const titleEl = header.querySelector('.split-pane-header__title');
+  const subtitleEl = header.querySelector('.split-pane-header__subtitle');
   const mergeBtn = header.querySelector('.split-pane-header__btn--merge');
 
   if (statusEl) {
     statusEl.textContent = getStatusIcon(session.status);
     statusEl.className = `split-pane-header__status split-pane-header__status--${session.status}`;
+    statusEl.title = getStatusLabel(session.status);
   }
   if (titleEl) {
     titleEl.textContent = session.name;
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent = getSplitPaneSubtitle(session);
+    subtitleEl.title = session.projectPath || '로컬 셸';
   }
   if (mergeBtn) {
     mergeBtn.disabled = !canMergePane(session.id);
@@ -4592,6 +4789,98 @@ function ensureSplitPaneHeader(session) {
       mergePane(session.id);
     };
   }
+}
+
+function getSplitBranchLabel(nodeType) {
+  return nodeType === 'horizontal' ? '가로 분할' : '세로 분할';
+}
+
+function buildSplitMinimapNode(node, depth = 0) {
+  if (!node) return document.createElement('div');
+
+  if (node.isLeaf()) {
+    const session = state.sessions.get(node.sessionId);
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'split-minimap__leaf';
+    item.dataset.sessionId = session?.id || node.sessionId;
+    item.style.setProperty('--depth', String(depth));
+    if (node.sessionId === state.activeSessionId) {
+      item.classList.add('split-minimap__leaf--active');
+    }
+
+    const icon = document.createElement('span');
+    icon.className = `split-minimap__status split-minimap__status--${session?.status || SESSION_STATUS.EXITED}`;
+    icon.textContent = getStatusIcon(session?.status || SESSION_STATUS.EXITED);
+
+    const title = document.createElement('span');
+    title.className = 'split-minimap__leaf-title';
+    title.textContent = session?.name || node.sessionId;
+
+    const subtitle = document.createElement('span');
+    subtitle.className = 'split-minimap__leaf-subtitle';
+    subtitle.textContent = getCompactPathLabel(session?.projectPath);
+
+    item.appendChild(icon);
+    item.appendChild(title);
+    item.appendChild(subtitle);
+
+    item.addEventListener('click', () => {
+      if (session?.id) {
+        activateSession(session.id, { preserveSplitLayout: true });
+      }
+    });
+
+    return item;
+  }
+
+  const branch = document.createElement('div');
+  branch.className = 'split-minimap__branch';
+  branch.style.setProperty('--depth', String(depth));
+
+  const branchLabel = document.createElement('div');
+  branchLabel.className = 'split-minimap__branch-label';
+  branchLabel.textContent = getSplitBranchLabel(node.type);
+
+  const children = document.createElement('div');
+  children.className = `split-minimap__branch-children split-minimap__branch-children--${node.type}`;
+  children.appendChild(buildSplitMinimapNode(node.children[0], depth + 1));
+  children.appendChild(buildSplitMinimapNode(node.children[1], depth + 1));
+
+  branch.appendChild(branchLabel);
+  branch.appendChild(children);
+  return branch;
+}
+
+function renderSplitMinimap() {
+  const panel = document.getElementById('splitMinimapPanel');
+  const content = document.getElementById('splitMinimapContent');
+  const toggleBtn = document.getElementById('toggleSplitMinimapBtn');
+  if (!panel || !content) return;
+
+  const shouldShow = state.splitMode && !!state.splitRoot && state.splitMinimapVisible;
+  panel.classList.toggle('split-minimap--visible', shouldShow);
+  if (toggleBtn) {
+    toggleBtn.classList.toggle('split-toolbar__btn--active', shouldShow);
+  }
+
+  content.innerHTML = '';
+  if (!state.splitMode || !state.splitRoot) {
+    content.textContent = '분할 시 미니맵이 표시됩니다.';
+    return;
+  }
+
+  if (!state.splitMinimapVisible) {
+    content.textContent = '미니맵이 숨김 상태입니다.';
+    return;
+  }
+
+  content.appendChild(buildSplitMinimapNode(state.splitRoot));
+}
+
+function setSplitMinimapVisibility(visible) {
+  state.splitMinimapVisible = visible;
+  renderSplitMinimap();
 }
 
 function getPaneDropPosition(wrapper, event) {
@@ -5178,6 +5467,7 @@ const COMMANDS = [
   { id: 'split-horizontal', name: '아래로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
   { id: 'split-vertical', name: '오른쪽 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
   { id: 'layout-preset-selector', name: '레이아웃 선택기 열기', shortcut: 'Ctrl+Shift+S', action: () => focusLayoutPresetSelector() },
+  { id: 'layout-gallery', name: '레이아웃 갤러리 열기', shortcut: 'Ctrl+Shift+L', action: () => openLayoutGalleryModal() },
   { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
   { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
   { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
@@ -5473,6 +5763,13 @@ function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && e.shiftKey && e.code === 'KeyS') {
     e.preventDefault();
     focusLayoutPresetSelector();
+    return;
+  }
+  // Ctrl+Shift+L - Open layout gallery
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyL') {
+    e.preventDefault();
+    const preset = document.getElementById('layoutPresetSelect')?.value || null;
+    openLayoutGalleryModal(preset);
     return;
   }
   // Ctrl+Shift+D - Horizontal split
@@ -6110,6 +6407,10 @@ function setupEventListeners() {
   const cancelEnvVars = document.getElementById('cancelEnvVars');
   const saveEnvVarsBtn = document.getElementById('saveEnvVars');
   const addEnvVarBtn = document.getElementById('addEnvVarBtn');
+  const layoutGalleryModal = document.getElementById('layoutGalleryModal');
+  const closeLayoutGalleryBtn = document.getElementById('closeLayoutGalleryModal');
+  const cancelLayoutGalleryBtn = document.getElementById('cancelLayoutGallery');
+  const applyLayoutGalleryBtn = document.getElementById('applyLayoutGallery');
 
   if (closeEnvVarsModal) {
     closeEnvVarsModal.addEventListener('click', () => hideEnvVarsModal());
@@ -6122,6 +6423,17 @@ function setupEventListeners() {
   }
   if (addEnvVarBtn) {
     addEnvVarBtn.addEventListener('click', () => addEnvVarRow());
+  }
+  if (closeLayoutGalleryBtn) {
+    closeLayoutGalleryBtn.addEventListener('click', () => closeLayoutGalleryModal());
+  }
+  if (cancelLayoutGalleryBtn) {
+    cancelLayoutGalleryBtn.addEventListener('click', () => closeLayoutGalleryModal());
+  }
+  if (applyLayoutGalleryBtn) {
+    applyLayoutGalleryBtn.addEventListener('click', async () => {
+      await applyLayoutGallerySelection();
+    });
   }
 
   // ===== AI Mode Setup =====
@@ -6332,8 +6644,8 @@ function setupEventListeners() {
   }
 
   const modalTargets = aiEnabled
-    ? [addProjectModal, addSnippetModal, settingsModal, envVarsModal, aiPreviewModal, aiHelpModal]
-    : [addProjectModal, addSnippetModal, settingsModal, envVarsModal];
+    ? [addProjectModal, addSnippetModal, settingsModal, envVarsModal, layoutGalleryModal, aiPreviewModal, aiHelpModal]
+    : [addProjectModal, addSnippetModal, settingsModal, envVarsModal, layoutGalleryModal];
 
   // Close modals when clicking outside
   modalTargets.forEach(modal => {
@@ -6364,6 +6676,7 @@ function setupEventListeners() {
       addSnippetModal.classList.contains('modal--visible') ||
       settingsModal.classList.contains('modal--visible') ||
       (envVarsModal && envVarsModal.classList.contains('modal--visible')) ||
+      (layoutGalleryModal && layoutGalleryModal.classList.contains('modal--visible')) ||
       (aiPreviewModal && aiPreviewModal.classList.contains('modal--visible')) ||
       (aiHelpModal && aiHelpModal.classList.contains('modal--visible')) ||
       ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
@@ -6406,6 +6719,7 @@ async function initialize() {
   createRecordingControls();
   initializeHistoryPanel();  // 히스토리 패널 초기화
   setupSplitToolbar();       // 분할 툴바 초기화
+  renderSplitMinimap();
 
   try {
     await loadCategories();
@@ -6878,6 +7192,10 @@ function setupSplitToolbar() {
   document.getElementById('presetTwoRowBtn')?.addEventListener('click', () => applyLayoutPreset('two-rows'));
   document.getElementById('presetGridBtn')?.addEventListener('click', () => applyLayoutPreset('grid-2x2'));
   document.getElementById('presetThreeColBtn')?.addEventListener('click', () => applyLayoutPreset('three-columns'));
+  document.getElementById('openLayoutGalleryBtn')?.addEventListener('click', () => {
+    const preset = document.getElementById('layoutPresetSelect')?.value || null;
+    openLayoutGalleryModal(preset);
+  });
   document.getElementById('applyLayoutPresetBtn')?.addEventListener('click', () => {
     const preset = document.getElementById('layoutPresetSelect')?.value;
     if (!preset) {
@@ -6892,6 +7210,9 @@ function setupSplitToolbar() {
     if (state.activeSessionId) {
       startSwapMode(state.activeSessionId);
     }
+  });
+  document.getElementById('toggleSplitMinimapBtn')?.addEventListener('click', () => {
+    setSplitMinimapVisibility(!state.splitMinimapVisible);
   });
   document.getElementById('mergePaneBtn')?.addEventListener('click', () => mergePane());
   document.getElementById('maximizePaneBtn')?.addEventListener('click', () => toggleMaximize());

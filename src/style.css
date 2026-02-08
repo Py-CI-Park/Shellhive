@@ -307,6 +307,7 @@ html, body {
 .split-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 4px 12px;
   background: var(--bg-secondary);
@@ -316,6 +317,7 @@ html, body {
 .split-toolbar__group {
   display: flex;
   gap: 4px;
+  align-items: center;
 }
 
 .split-toolbar__btn {
@@ -377,7 +379,7 @@ html, body {
 }
 
 .split-toolbar__select {
-  min-width: 116px;
+  min-width: 124px;
   height: 28px;
   padding: 0 8px;
   background: var(--bg-tertiary);
@@ -391,6 +393,129 @@ html, body {
 .split-toolbar__select:hover,
 .split-toolbar__select:focus {
   border-color: var(--accent);
+}
+
+.split-minimap {
+  display: none;
+  margin: 6px 8px 0;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.split-minimap--visible {
+  display: block;
+}
+
+.split-minimap__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.split-minimap__title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
+}
+
+.split-minimap__hint {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.split-minimap__content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.split-minimap__branch {
+  border-left: 1px solid var(--border);
+  padding-left: 8px;
+  margin-left: calc(var(--depth, 0) * 2px);
+}
+
+.split-minimap__branch-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.split-minimap__branch-children {
+  display: grid;
+  gap: 4px;
+}
+
+.split-minimap__branch-children--vertical {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.split-minimap__branch-children--horizontal {
+  grid-template-columns: 1fr;
+}
+
+.split-minimap__leaf {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 6px;
+  row-gap: 1px;
+  align-items: center;
+  text-align: left;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.split-minimap__leaf:hover {
+  border-color: rgba(14, 99, 156, 0.7);
+}
+
+.split-minimap__leaf--active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(14, 99, 156, 0.35);
+}
+
+.split-minimap__status {
+  grid-row: 1 / span 2;
+  font-size: 11px;
+  color: #4ec9b0;
+}
+
+.split-minimap__status--connecting {
+  color: #dcdcaa;
+}
+
+.split-minimap__status--exited {
+  color: var(--text-secondary);
+}
+
+.split-minimap__leaf-title {
+  font-size: 11px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.split-minimap__leaf-subtitle {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Terminal container */
@@ -590,6 +715,114 @@ html, body {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.layout-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.layout-gallery__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  padding: 10px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.layout-gallery__card:hover {
+  border-color: rgba(14, 99, 156, 0.75);
+  transform: translateY(-1px);
+}
+
+.layout-gallery__card--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(14, 99, 156, 0.35);
+}
+
+.layout-gallery__card-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.layout-gallery__card-description {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.layout-gallery__preview {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  background: var(--bg-primary);
+}
+
+.layout-gallery__preview-cell {
+  display: block;
+  border-radius: 3px;
+  background: linear-gradient(135deg, rgba(14, 99, 156, 0.75), rgba(46, 160, 67, 0.65));
+}
+
+.layout-gallery__preview--two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.layout-gallery__preview--two-rows {
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.layout-gallery__preview--three-columns {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.layout-gallery__preview--grid-2x2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.layout-gallery__preview--main-sidebar {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.layout-gallery__preview-cell--main {
+  background: linear-gradient(135deg, rgba(14, 99, 156, 0.85), rgba(46, 160, 67, 0.7));
+}
+
+.layout-gallery__preview-cell--sidebar {
+  background: linear-gradient(135deg, rgba(153, 102, 0, 0.8), rgba(171, 140, 0, 0.7));
+}
+
+@media (max-width: 900px) {
+  .split-toolbar {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .split-toolbar__group {
+    flex-wrap: wrap;
+  }
+
+  .split-minimap {
+    margin: 6px 6px 0;
+  }
+
+  .layout-gallery {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
 }
 
 .btn {
@@ -1759,7 +1992,7 @@ html, body {
 }
 
 .split-pane-header__status {
-  font-size: 10px;
+  font-size: 11px;
   color: #4ec9b0;
   line-height: 1;
 }
@@ -1772,11 +2005,25 @@ html, body {
   color: var(--text-secondary);
 }
 
-.split-pane-header__title {
+.split-pane-header__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   flex: 1;
   min-width: 0;
+}
+
+.split-pane-header__title {
   font-size: 11px;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.split-pane-header__subtitle {
+  font-size: 10px;
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
