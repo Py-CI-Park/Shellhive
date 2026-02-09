@@ -23,7 +23,7 @@
 
 #### feat(split-overlay): display-panes 스타일 패널 라벨 오버레이 및 설정 옵션 도입
 
-**커밋**: `working-tree`
+**커밋**: `83ed90c`
 
 ##### 추가됨 (Added)
 
@@ -61,7 +61,7 @@
 
 #### feat(split-pane-workflow): break/join/move-pane 워크플로우 및 조작 경로 확장
 
-**커밋**: `working-tree`
+**커밋**: `356a65e`
 
 ##### 추가됨 (Added)
 
@@ -100,7 +100,7 @@
 
 #### feat(split-sync): 분할 동시 입력(synchronize-panes) 및 범위 옵션 추가
 
-**커밋**: `working-tree`
+**커밋**: `7a98aad`
 
 ##### 추가됨 (Added)
 
@@ -136,6 +136,45 @@
 
 - `npm run lint`
 - `npm run test -- --run` (4 files, 26 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+
+#### feat(split-layout-policy): 정책형 분할 레이아웃 옵션(main 비율/타일 열 제한) 적용
+
+**커밋**: `dc54d05`
+
+##### 추가됨 (Added)
+
+- `index.html`
+  - 레이아웃 프리셋 셀렉터에 `Main + Sidebar` 옵션 추가
+  - 설정 모달에 Split Layout Policy 섹션 추가
+    - 메인 패널 비율(`settingsSplitMainPaneRatio`)
+    - 타일 최대 열(`settingsSplitTiledMaxColumns`)
+- `src/__tests__/split-layout.e2e.test.js`
+  - 정책 옵션 저장 후 프리셋 결과를 검증하는 E2E 테스트 추가
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/settings.rs`
+  - 설정 스키마 확장
+    - `split_main_pane_ratio`
+    - `split_tiled_max_columns`
+  - 입력값 검증 추가(비율 `50..85`, 최대 열 `1..6`)
+- `src/app.js`
+  - 설정 정규화/저장/모달 바인딩에 신규 정책 필드 반영
+  - 프리셋 적용 시 정책값 우선 적용
+    - `main-sidebar` 첫 분할 비율 반영
+    - `grid`/`three-columns` 계열 최대 열 제한 반영
+  - 분할 생성 유틸 확장
+    - `splitActivePane(direction, { ratio })`
+    - `createLinearLayout(..., firstSplitRatio)`
+    - `createGridLayout(..., totalCells)`
+- `src/__tests__/setup.js`, `src/__tests__/phase5-regression.e2e.test.js`
+  - 신규 설정 필드 mock 반영
+
+##### 테스트 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 27 tests)
 - `cargo check --manifest-path src-tauri/Cargo.toml`
 
 ### 2026-02-08
