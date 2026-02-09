@@ -1,17 +1,10 @@
-﻿# Shellhive 蹂寃?濡쒓렇 (Change Log)
+﻿# Shellhive 변경 로그 (Change Log)
 
-??臾몄꽌??Shellhive ?꾨줈?앺듃??紐⑤뱺 蹂寃??ы빆??湲곕줉?⑸땲??
+이 문서는 Shellhive 프로젝트의 주요 변경 사항을 기록합니다.
 
-?뺤떇? [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)瑜??곕Ⅴ硫?
-踰꾩쟾 愿由щ뒗 [Semantic Versioning](https://semver.org/lang/ko/)??以?섑빀?덈떎.
-
----
-
-## 踰꾩쟾 愿由?媛?대뱶
-
-- 紐⑤뱺 而ㅻ컠? ??臾몄꽌??湲곕줉?섏뼱???⑸땲??
-- 而ㅻ컠 ?댁떆, ?좎쭨, 蹂寃??댁슜???ы븿?⑸땲??
-- 移댄뀒怨좊━: Added, Changed, Fixed, Documentation, Security
+- 형식: [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)
+- 버전 정책: [Semantic Versioning](https://semver.org/lang/ko/)
+- 인코딩: UTF-8
 
 ---
 
@@ -19,1148 +12,213 @@
 
 ### 2026-02-09
 
-#### docs(research): tmux 소스 기반 split/pane UX 벤치마크 연구 보고서 추가
+#### docs(research): tmux 소스 기반 split/pane UX 벤치마크 보고서 추가
 
-**커밋**: `working-tree`
+**커밋**: `fb13f79`
 
 ##### 문서화됨 (Documentation)
 
-- `docs/research/RESEARCH_TMUX_SOURCE_BENCHMARK_FOR_SHELLHIVE_2026-02-09.md`
-  - tmux 최신 소스(기준 커밋: `615c27c11789948df2db09e113e882f82dfb3e1c`)를 직접 분석해 pane 분할/병합/레이아웃/오버레이 구조를 정리
-  - Shellhive 현재 split 구현과 tmux 구조를 비교해 기능 격차와 도입 우선순위(P0/P1/P2)를 도출
-  - `display-panes`, `break/join/move-pane`, `synchronize-panes`, 레이아웃 옵션화를 중심으로 단계별 실행 로드맵(Phase A/B/C) 제안
-  - 구현 리스크(학습비용, 입력 브로드캐스트 오작동, 옵션 복잡도) 및 완화 전략 포함
+- `docs/research/RESEARCH_TMUX_SOURCE_BENCHMARK_FOR_SHELLHIVE_2026-02-09.md` 추가
+- tmux 핵심 설계(overlay, break/join/move, synchronize, policy options)를 Shellhive 적용 관점으로 정리
 
 ### 2026-02-08
 
-#### docs(qa): run-release 분할 QA 체크리스트/로그 최신화
+#### fix/build/release: 배포 안정화 및 split UX 개선
 
-**커밋**: `working-tree`
+##### 수정됨 (Fixed)
+
+- `c7907a8` release 빌드 실패 원인인 `index.html` 제어문자 제거
+- `f98d52d` `run-release.bat` 경로/실행 안정화
+- `886152c` 분할 헤더 오버랩 제거 및 split 툴바 리뉴얼
+
+##### 변경됨 (Changed)
+
+- `e9b35ad` 미니맵/레이아웃 갤러리/패널 헤더 강화
 
 ##### 문서화됨 (Documentation)
 
-- `docs/qa/run-release-split-manual-checklist.md`
-  - 분할 UX 최신 기준으로 수동 검증 항목 전면 개편
-  - 신규 검증 항목 추가
-    - 레이아웃 갤러리 모달 적용
-    - 분할 미니맵 토글/포커스 이동
-    - 분할 패널 헤더 상태/경로 요약 표시
-  - AI UI 비노출 정책 검증 항목을 최신 운영 정책 기준으로 유지
-- `docs/qa/run-release-split-qa-log-2026-02-06.md`
-  - 2026-02-08 기준 QA 로그로 갱신
-  - 자동 검증 결과(`lint`, `vitest`, `cargo check`) 반영
-  - TC별 상태를 Pass/Pending으로 재정리하고 후속 액션 명시
+- `d38c758` run-release 분할 QA 체크리스트/로그 최신화
+
 ### 2026-02-07
 
-#### fix(release): run-release.bat ?ㅽ뻾 寃쎈줈 怨좎젙 諛??ㅽ뻾 ?섍꼍 ?뺣━
+#### split/탭 개선, AI GUI 제거, QA 보강
 
-**而ㅻ컠**: `working-tree`
+##### 추가됨 (Added)
 
-##### ?섏젙??(Fixed)
+- `ce14e6a` 프로젝트 하위 CMD 트리 뷰 도입
+- `880289d` 탭을 분할 패널로 드롭 배치 기능
+- `1af5c46` VSCode 스타일 합치기 중심 분할 UX 도입
+- `d2fdb92` 기본 분할(Ctrl+\\) 도입
 
-- `run-release.bat`
-  - ?ㅽ겕由쏀듃 ?쒖옉 ????μ냼 猷⑦듃濡?媛뺤젣 ?대룞?섎룄濡?`cd /d "%~dp0"` 異붽?
-  - `setlocal EnableExtensions` / `endlocal` 踰붿쐞瑜?異붽???諛곗튂 ?ㅽ뻾 ?섍꼍??吏??솕
-  - ?ㅽ뻾 ?뚯씪 寃쎈줈 蹂???좊떦??`set "RELEASE_EXE=..."` ?뺥깭濡??뺣━???몄슜遺??泥섎━ ?덉젙??蹂닿컯
+##### 변경됨 (Changed)
 
-##### 寃利?(Verification)
+- `297d785` 분할 리사이즈 렌더 배칭 최적화
+- `7693f5a` 분할 유지 동작/개발 스크립트/레이아웃 선택 UX 개선
+- `086a633` `tab_layouts` 저장·복원 계약 복구
 
-- `npm run lint`
-- `npm run test -- --run` (4 files, 19 tests)
-- `cargo check --manifest-path src-tauri/Cargo.toml`
+##### 수정됨 (Fixed)
 
-#### feat(split-ux): 遺꾪븷 誘몃땲留??덉씠?꾩썐 媛ㅻ윭由??⑤꼸 ?ㅻ뜑 ?뺣낫 媛뺥솕
+- `f473fc6` AI GUI 제거 및 탭 최대 제한 해제
+- `fadc8e3` Git 패널 정합성 복구 및 AI 비활성 릴리즈 경로 반영
 
-**而ㅻ컠**: `working-tree`
+##### 테스트/문서 (Test/Documentation)
 
-##### 異붽???(Added)
-
-- `index.html`
-  - 遺꾪븷 ?대컮??`?덉씠?꾩썐 媛ㅻ윭由?, `誘몃땲留? ?≪뀡 踰꾪듉 異붽?
-  - 遺꾪븷 ?몃━ 誘몃땲留??⑤꼸(`splitMinimapPanel`) 諛?而⑦뀗痢??곸뿭(`splitMinimapContent`) 異붽?
-  - ?덉씠?꾩썐 媛ㅻ윭由?紐⑤떖(`layoutGalleryModal`)怨?移대뱶 紐⑸줉/?곸슜 踰꾪듉 異붽?
-- `src/app.js`
-  - 遺꾪븷 ?몃━ 援ъ“瑜??쒓컖?뷀븯??誘몃땲留??뚮뜑??異붽?
-    - `renderSplitMinimap`, `buildSplitMinimapNode`, `setSplitMinimapVisibility`
-  - ?덉씠?꾩썐 ?꾨━??媛ㅻ윭由?紐⑤떖 濡쒖쭅 異붽?
-    - `openLayoutGalleryModal`, `renderLayoutGallery`, `applyLayoutGallerySelection`
-  - `Ctrl+Shift+L` ?⑥텞??諛?紐낅졊 ?붾젅????ぉ?쇰줈 ?덉씠?꾩썐 媛ㅻ윭由?吏꾩엯 吏??- `src/__tests__/split-layout.e2e.test.js`
-  - ?덉씠?꾩썐 媛ㅻ윭由??곸슜 ?쒕굹由ъ삤 ?뚯뒪??異붽?
-  - 遺꾪븷 誘몃땲留??대┃?쇰줈 ?쒖꽦 ?⑤꼸 ?꾪솚?섎뒗 ?쒕굹由ъ삤 ?뚯뒪??異붽?
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑???곹깭/寃쎈줈 ?붿빟 ?뚮뜑留??뚯뒪??異붽?
-
-##### 蹂寃쎈맖 (Changed)
-
-- `src/app.js`
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑瑜?2以??뺣낫 援ъ“濡??뺤옣
-    - 1以? ?몄뀡紐?    - 2以? ?ㅽ뻾 ?곹깭 + 寃쎈줈 ?붿빟
-  - ?몄뀡 ?곹깭 蹂寃???遺꾪븷 ?ㅻ뜑/誘몃땲留듭씠 利됱떆 媛깆떊?섎룄濡?蹂닿컯
-- `src/style.css`
-  - 誘몃땲留??⑤꼸 ?ㅽ??쇨낵 ?몃━/由ы봽 ?곹깭 ?ㅽ???異붽?
-  - ?덉씠?꾩썐 媛ㅻ윭由?移대뱶/誘몃━蹂닿린 ?ㅽ???異붽?
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑 硫뷀?(??댄?+?쒕툕??댄?) ?ㅽ????뺤옣
-- `index.html`
-  - ?ㅼ젙 紐⑤떖 ?몄뼱 ?듭뀡 源⑥쭚 ?쒓렇(`ko`)瑜??뺤긽 HTML ?쒓렇濡??뺣━
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 22 tests)
-- `cargo check --manifest-path src-tauri/Cargo.toml`
-
-#### fix(dev): run-dev.bat ?ㅽ뻾 寃쎈줈/?몄옄 泥섎━ ?섏젙
-
-**而ㅻ컠**: `working-tree`
-
-##### ?섏젙??(Fixed)
-
-- `run-dev.bat`
-  - ?ㅽ겕由쏀듃 ?쒖옉 ????μ냼 猷⑦듃濡?媛뺤젣 ?대룞(`cd /d "%~dp0"`)
-  - Tauri 媛쒕컻 ?ㅽ뻾 ?몄옄瑜?npm ?쒖? ?뺥깭濡??섏젙
-    - 湲곗〈: `npm run tauri dev`
-    - 蹂寃? `npm run tauri -- dev`
-  - `setlocal`/`endlocal` 踰붿쐞 ?뺣━
-
-#### feat(usability): 遺꾪븷 ?좎? ?좏깮 紐⑤뜽 + ?덉씠?꾩썐 ?좏깮 UX 媛쒖꽑
-
-**而ㅻ컠**: `working-tree`
-
-##### 蹂寃쎈맖 (Changed)
-
-- 遺꾪븷 ?⑤꼸 ?대┃/?⑤꼸 ?대룞 ??遺꾪븷 ?덉씠?꾩썐???좎??섎룄濡??몄뀡 ?쒖꽦??寃쎈줈 媛쒖꽑
-  - 遺꾪븷 而⑦뀓?ㅽ듃?먯꽌 `activateSession(..., { preserveSplitLayout: true })` ?ъ슜
-- 湲곕낯 遺꾪븷??"?ㅻⅨ履?遺꾪븷"濡??쒖???  - ?⑥텞??`Ctrl+\`
-  - ?대컮 `湲곕낯` 踰꾪듉
-  - 而⑦뀓?ㅽ듃 硫붾돱/而ㅻ㎤???붾젅??吏꾩엯 異붽?
-- ?덉씠?꾩썐 ?꾨━???좏깮 UX 媛쒖꽑
-  - ?대컮 `?덉씠?꾩썐 ?좏깮(select) + ?곸슜` 異붽?
-  - ?⑥텞??`Ctrl+Shift+S`濡??좏깮湲??ъ빱??
-##### 臾몄꽌?붾맖 (Documentation)
-
-- `docs/research/RESEARCH_SPLIT_TAB_USABILITY_2026-02-07.md` 異붽?
-  - 臾몄젣 ?먯씤 遺꾩꽍
-  - 媛쒖꽑 ?먯튃/諛섏쁺 ?댁슜/?꾩냽 異붿쿇 ?뺣━
-
-#### feat(split-default): VSCode ?ㅽ???湲곕낯 遺꾪븷(?ㅻⅨ履? ?먮쫫 異붽?
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `index.html`
-  - 遺꾪븷 ?대컮??湲곕낯 遺꾪븷 踰꾪듉 `splitDefaultBtn` 異붽?
-  - 遺꾪븷 踰꾪듉 ?쇰꺼/?댄똻??諛⑺뼢 ?섎? 以묒떖?쇰줈 ?뺣━
-    - `?꾨옒濡?遺꾪븷`, `?ㅻⅨ履?遺꾪븷`, `湲곕낯 遺꾪븷: ?ㅻⅨ履?
-- `src/app.js`
-  - `splitDefault()` 異붽? (湲곕낯 遺꾪븷? ?ㅻⅨ履?遺꾪븷濡??숈옉)
-  - ?⑥텞??`Ctrl+\` 異붽?
-  - 而⑦뀓?ㅽ듃 硫붾돱??`湲곕낯 遺꾪븷 (?ㅻⅨ履?` 異붽?
-  - 而ㅻ㎤???붾젅?몄뿉 `湲곕낯 遺꾪븷 (?ㅻⅨ履?` 紐낅졊 異붽?
-  - ?대컮 踰꾪듉 ?대깽???곌껐 異붽?
-- `src/__tests__/split-layout.e2e.test.js`
-  - `Ctrl+\` ?⑥텞?ㅻ줈 遺꾪븷?섎뒗 ?뚭? ?뚯뒪??異붽?
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 17 tests)
-- `cargo check`
-
-#### feat(split-ux): VSCode ?ㅽ???遺꾪븷/?⑹튂湲??먮쫫 諛??⑤꼸 援щ텇 媛뺥솕
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `index.html`
-  - 遺꾪븷 ?대컮??`?쒖꽦 李??⑹튂湲? 踰꾪듉(`mergePaneBtn`) 異붽?
-- `src/app.js`
-  - 遺꾪븷 ?⑤꼸 ?⑹튂湲?濡쒖쭅 `mergePane()` 異붽?
-    - ?대컮 踰꾪듉, 而⑦뀓?ㅽ듃 硫붾돱, ?⑥텞??`Ctrl+Shift+J`)?먯꽌 怨듯넻 ?ъ슜
-    - 遺꾪븷 ?몃━?먯꽌 ?좏깮 ?⑤꼸 ?쒓굅 ???⑥? ?⑤꼸濡??ъ빱???대룞
-  - 遺꾪븷 ?⑤꼸 以묒븰 ?쒕∼ ?숈옉 媛쒖꽑
-    - 湲곗〈 ?쒖꽦?붾쭔 ?섑뻾?섎뜕 ?먮쫫??"?⑤꼸 ?⑹튂湲? ?곗꽑 ?숈옉?쇰줈 蹂寃?  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑 UI ?숈쟻 ?앹꽦
-    - ?곹깭 ?꾩씠肄?+ ?몄뀡紐?+ ?⑹튂湲?踰꾪듉 ?쒓났
-  - 而⑦뀓?ㅽ듃 硫붾돱??`李??⑹튂湲? ??ぉ 異붽?
-  - 而ㅻ㎤???붾젅?몄뿉 `?쒖꽦 李??⑹튂湲? 紐낅졊 異붽?
-- `src/style.css`
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑 ?ㅽ???`.split-pane-header*`) 異붽?
-  - ?쒖꽦 ?⑤꼸 ?앸퀎?깃낵 硫붿씤 ?묒뾽 ?곸뿭 援щ텇媛?媛뺥솕
-- `src/__tests__/split-layout.e2e.test.js`
-  - 遺꾪븷 ?ㅻ뜑 ?쒖떆 寃利?異붽?
-  - ?대컮 `?⑹튂湲? 踰꾪듉 ?숈옉 寃利?異붽?
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 16 tests)
-- `cargo check`
-
-#### test(split-tab): 遺꾪븷/???꾨줈?앺듃 ?몃━ ?뚭? ?뚯뒪???뺤옣
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `src/__tests__/split-layout.e2e.test.js`
-  - ??쓣 遺꾪븷 ?⑤꼸???쒕∼ 諛곗튂?섎뒗 ?쒕굹由ъ삤 寃利?異붽?
-  - `beforeunload` ??`save_session_state` payload??`tab_layouts`媛 ?ы븿?섎뒗吏 寃利?異붽?
-- `src/__tests__/phase5-regression.e2e.test.js`
-  - ?꾨줈?앺듃 ?섏쐞 CMD ?몃━ ?뚮뜑留??쒖꽦 ?곹깭 媛깆떊 寃利?異붽?
-
-##### ?섏젙??(Fixed)
-
-- `src/app.js`
-  - ?몄뀡 ?곹깭 ??????꾩옱 ?쒖꽦 遺꾪븷 ?덉씠?꾩썐(`splitRoot`)??`tab_layouts`???ы븿?섎룄濡?蹂닿컯
-  - 遺꾪븷 ?곹깭瑜????吏곸쟾 ?ㅻ깄?룹쑝濡?諛섏쁺???ъ떎??蹂듭썝 ?좊ː???μ긽
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 15 tests)
-- `cargo check`
-
-#### perf(split): 遺꾪븷 由ъ궗?댁쫰 ?뚮뜑 諛곗묶 諛??붾쾭洹??몄씠利??뺣━
-
-**而ㅻ컠**: `working-tree`
-
-##### 蹂寃쎈맖 (Changed)
-
-- `src/app.js`
-  - 遺꾪븷 由ъ궗?댁쫰 ??`mousemove`留덈떎 利됱떆 ?꾩껜 ?덉씠?꾩썐 ?뚮뜑留곹븯??寃쎈줈瑜?`requestAnimationFrame` 諛곗묶?쇰줈 蹂寃?    - `scheduleSplitRender()` 異붽?
-    - ?곹깭??`splitRenderRaf` ?몃뱾 ???    - `mouseup`?먯꽌 留덉?留??뚮뜑瑜?蹂댁옣?섏뿬 鍮꾩쑉 諛섏쁺 ?꾨씫 諛⑹?
-  - 遺꾪븷 愿??怨쇰룄??`console.log` 異쒕젰 ?쒓굅
-    - `initSplitMode`, `splitHorizontal`, `splitActivePane`, `renderSplitLayout`, `setupSplitToolbar`
-  - ?붾쾭洹?異쒕젰? 怨듭슜 `debug()` 寃쎈줈留??ъ슜?섎룄濡??뺣━
-
-##### ?④낵
-
-- 遺꾪븷 諛??쒕옒洹?以??뚮뜑 ?몄텧 ??＜ ?꾪솕
-- 肄섏넄 ?몄씠利?媛먯냼濡??ㅼ젣 寃쎄퀬/?ㅻ쪟 ?앸퀎??媛쒖꽑
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### feat(project-cmd-tree): ?꾨줈?앺듃 ?섏쐞 CMD ?몃━ 酉?諛??몄뀡 ?쒖뼱 異붽?
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `src/app.js`
-  - ?꾨줈?앺듃 紐⑸줉 ??ぉ???섏쐞 CMD ?몃━ 而⑦뀒?대꼫 異붽?
-  - ?꾨줈?앺듃 ?섏쐞 ?몄뀡 ?뚮뜑??`renderProjectCmdTrees()` 援ы쁽
-    - ?꾨줈?앺듃蹂??쒖꽦 ?몄뀡 紐⑸줉 ?쒖떆
-    - ?꾩옱 ?쒖꽦 ?몄뀡 媛뺤“
-    - ?몃━ ??ぉ ?대┃ ???몄뀡 ?쒖꽦??    - ?몃━ ??ぉ ???リ린 踰꾪듉?쇰줈 ?몄뀡 醫낅즺
-  - ?꾨줈?앺듃 ??ぉ ?대┃ ?몃뱾??蹂닿컯
-    - ?몃━/?꾪꽣/?섍꼍蹂????젣 踰꾪듉 ?대┃ ???좉퇋 ?몄뀡 ?앹꽦 ?ㅻ룞??諛⑹?
-  - ?몄뀡 ?쇱씠?꾩궗?댄겢 ?곕룞
-    - `linkSessionToProject`, `unlinkSessionFromProject`, `activateSession`?먯꽌 ?몃━ 利됱떆 媛깆떊
-- `src/style.css`
-  - ?꾨줈?앺듃 ?섏쐞 CMD ?몃━ UI ?ㅽ???異붽?
-    - `.sidebar__cmd-tree*`
-    - `.sidebar__cmd-item*`
-    - `.sidebar__cmd-status*`
-    - `.sidebar__cmd-close`
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### feat(split-dnd): ??쓣 遺꾪븷 ?⑤꼸濡?吏곸젒 諛곗튂?섎뒗 ?쒕∼ ?숈옉 援ы쁽
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `src/app.js`
-  - ???쒕옒洹??쒖옉 ??`sessionId`瑜?`dataTransfer`??湲곕줉
-  - 遺꾪븷 ?⑤꼸(leaf)?먯꽌 ???쒕∼??泥섎━?섎뒗 ?몃뱾??異붽?
-    - ?쒕∼ ?꾩튂 媛먯?: `left`, `right`, `top`, `bottom`, `center`
-    - 媛?μ옄由??쒕∼ ??????⑤꼸??湲곗??쇰줈 遺꾪븷 ?몃━ ?ш뎄??    - 以묒븰 ?쒕∼ ???대떦 ?몄뀡 ?쒖꽦??泥섎━
-  - 遺꾪븷 ?⑤꼸 ?쒕∼ ?꾩슜 ?좏떥 ?⑥닔 異붽?
-    - `getPaneDropPosition`
-    - `setPaneDropIndicator`
-    - `clearPaneDropIndicators`
-    - `moveSessionToSplitPane`
-- `src/style.css`
-  - 遺꾪븷 ?⑤꼸 ?쒕∼ 媛?대뱶 ?쒓컖???ㅽ???異붽?
-    - `.terminal-wrapper--drop-target`
-    - `.terminal-wrapper--drop-left/right/top/bottom/center`
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### fix(session-state): 遺꾪븷 ?덉씠?꾩썐 ???怨꾩빟(tab_layouts) 蹂듦뎄
-
-**而ㅻ컠**: `working-tree`
-
-##### ?섏젙??(Fixed)
-
-- `src-tauri/src/settings.rs`
-  - `SessionState`??`tab_layouts` ?꾨뱶 異붽? (`HashMap<String, TabLayoutState>`)
-  - 遺꾪븷 ?몃━ 吏곷젹??援ъ“泥?異붽?
-    - `SplitNodeState` (`type`, `ratio`, `sessionId`, `children`)
-    - `TabLayoutState` (`splitMode`, `splitRoot`)
-  - `SessionState`??`#[serde(default)]` ?곸슜?쇰줈 援щ쾭???곹깭 ?뚯씪 濡쒕뱶 ?명솚??媛뺥솕
-- `src/app.js`
-  - ?몄뀡 蹂듭썝 ??`tab_groups`/`sessions`瑜?諛곗뿴 ?щ? 寃利???泥섎━
-  - `tab_layouts` 蹂듭썝 ??camelCase/snake_case ?ㅻ? 紐⑤몢 ?덉슜
-    - `splitRoot` ?먮뒗 `split_root`
-    - `splitMode` ?먮뒗 `split_mode`
-  - 寃곌낵?곸쑝濡???퀎 遺꾪븷 ?덉씠?꾩썐????????ъ떎?됱뿉???좎떎?섏? ?딅룄濡?蹂듭썝 寃쎈줈 ?덉젙??
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### docs(research): GUI 遺꾪븷/??媛쒖꽑 ?곌뎄 臾몄꽌 ?ㅽ럺 ?숆린??
-**而ㅻ컠**: `working-tree`
-
-##### 臾몄꽌?붾맖 (Documentation)
-
-- `docs/research/RESEARCH_GUI_SPLIT_TAB_ENHANCEMENT_2026-02-07.md`
-  - ?쒗뭹 ?ㅻ챸??AI 以묒떖 ?쒗쁽???꾩옱 ?댁쁺 ?뺤콉(鍮껦I 肄붿뼱 以묒떖)怨??쇱튂?섎룄濡??뺣━
-  - ?ъ슜???쒕굹由ъ삤 1??AI ?꾧뎄 鍮꾧탳?먯꽌 ?쇰컲 CLI 蹂묐젹 ?묒뾽 ?쒕굹由ъ삤濡?援먯껜
-  - ?⑥텞???쒕? ?꾩옱 肄붾뱶 ?숈옉怨??뺣젹
-    - ?섏쭅 遺꾪븷: `Ctrl+Shift+\` -> `Ctrl+Shift+E`
-    - ?⑤꼸 ?대룞: `Alt+?붿궡?? -> `Ctrl+Alt+?붿궡??
-  - 寃곕줎 ?뱀뀡??媛移??ㅻ챸??AI ?뱁솕 臾멸뎄?먯꽌 ?쇰컲 CLI ?뚰겕?뚮줈???뱁솕濡??섏젙
-
-#### fix(ui): AI/Claude GUI ?쒓굅 諛???理쒕? ?쒗븳 ?댁젣
-
-**而ㅻ컠**: `working-tree`
-
-##### ?섏젙??(Fixed)
-
-- `index.html`
-  - ?ъ씠?쒕컮 Claude Code ?뱀뀡 ?쒓굅(`.sidebar__claude`, `#claudeBtn`, `#claudeStatus`)
-  - ?섎떒 AI ?낅젰諛??쒓굅(`#aiInputBar`, `#aiModeToggle`, `#aiInput`, `#aiSendBtn`, `#aiHelpBtn`)
-  - AI 誘몃━蹂닿린/?꾩?留?紐⑤떖 ?쒓굅(`#aiPreviewModal`, `#aiHelpModal` 諛??섏쐞 踰꾪듉)
-- `src/app.js`
-  - ?몄뀡 理쒕?移??곸닔(`MAX_SESSIONS`) 諛??앹꽦/遺꾪븷 ???쒗븳 寃???쒓굅
-  - `Ctrl+Shift+C` Claude ?쒖옉 ?⑥텞???쒓굅
-  - Claude 踰꾪듉 ?대┃ ?대깽??諛붿씤???쒓굅
-  - ?ъ슜???몄텧 臾멸뎄 `AI ?먮윭 ?ㅻ챸` -> `?먮윭 ?ㅻ챸`?쇰줈 蹂寃?- `src/__tests__/phase5-regression.e2e.test.js`
-  - AI UI ?뚭? 寃利?湲곗???"鍮꾨끂異?display:none)"?먯꽌 "?붿냼 ?쒓굅(null)"濡?媛깆떊
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### test(regression): 5?④퀎 ?뺥빀???뚭? ?뚯뒪??異붽?
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `src/__tests__/phase5-regression.e2e.test.js` 異붽?
-  - AI UI 湲곕낯 鍮꾨끂異?Claude ?뱀뀡/AI ?낅젰諛? 寃利?  - Git ?⑤꼸????而ㅻ㎤??寃쎈줈(`git_status`, `git_stage`) 寃利?  - 釉붾줉 紐⑤뱶 ?ㅼ젙 ?곸슜 ??wrapper/overlay 諛섏쁺 寃利?- `src/__tests__/setup.js`???ㅼ젙 mock???꾩옱 ?ㅽ궎留덉뿉 留욊쾶 ?뺤옣
-
-#### docs(alignment): 5?④퀎 臾몄꽌/QA ?뺥빀???꾨즺
-
-**而ㅻ컠**: `working-tree`
-
-##### 臾몄꽌?붾맖 (Documentation)
-
-- `IMPLEMENTATION_COMPLETE.md`
-  - ?꾪뻾 由대━利?湲곗??쇰줈 ?대젰 臾몄꽌(Archived) ?곹깭濡??뺤젙
-  - "?꾩옱 ?댁쁺 湲곕뒫"怨?"怨쇨굅 援ы쁽 湲곕줉"??紐낇솗??遺꾨━
-- `docs/research/feature-improvement-roadmap-2024.md`
-  - 2026-02-07 ?댁쁺 二쇱꽍 異붽? (AI 湲곕뒫 蹂대쪟)
-  - ?곗꽑?쒖쐞 議곗젙(鍮껦I 肄붿뼱 ?덉젙???곗꽑) 諛섏쁺
-  - 寃곕줎 ?뱀뀡???꾪뻾 ?댁쁺 ?뺤콉??留욊쾶 ?낅뜲?댄듃
-- `docs/qa/run-release-split-manual-checklist.md`
-  - TC-07 "AI 湲곕뒫 鍮꾨끂異??뺤씤" 異붽?
-- `docs/qa/run-release-split-qa-log-2026-02-06.md`
-  - TC-07 ??ぉ 諛?由ъ뒪??踰붿쐞(TC-02~TC-07) ?낅뜲?댄듃
-- `docs/review/merge-review-547a7b2-vs-3f49650.md`
-  - ?④퀎蹂?媛쒕컻 吏꾪뻾 ?꾪솴??2李?湲곗??쇰줈 媛깆떊
-  - 5?④퀎 ?꾨즺 諛??붿뿬(?섎룞 QA) ??ぉ 紐낆떆
-
----
-
-#### fix(git-panel): ?꾨줎??諛깆뿏??Git 而ㅻ㎤?쒕챸 ?뺥빀???섏젙
-
-**而ㅻ컠**: `working-tree`
-
-##### ?섏젙??(Fixed)
-
-- Git ?⑤꼸 `invoke` ?몄텧紐낆쓣 諛깆뿏??Tauri 而ㅻ㎤?쒖뿉 留욊쾶 ?뺣젹
-  - `get_git_status` -> `git_status`
-  - `git_stage_all` -> `git_stage` (?뚯씪 諛곗뿴 ?꾨떖)
-  - `git_stage_file` -> `git_stage` (?④굔 諛곗뿴)
-  - `git_unstage_file` -> `git_unstage` (?④굔 諛곗뿴)
-- Stage All ?숈옉?먯꽌 ?⑤꼸 泥댄겕諛뺤뒪 湲곗? ?뚯씪 紐⑸줉???섏쭛?섏뿬 ?꾨떖?섎룄濡?媛쒖꽑
-
-#### feat(settings): ?ㅼ젙 ?ㅽ궎留??뺤옣 諛?釉붾줉 紐⑤뱶 ???蹂듭썝 ?곌껐
-
-**而ㅻ컠**: `working-tree`
-
-##### 蹂寃쎈맖 (Changed)
-
-- 諛깆뿏??`Settings` 紐⑤뜽 ?뺤옣 (`src-tauri/src/settings.rs`)
-  - `enable_notifications`
-  - `enable_snippet_suggestions`
-  - `snippet_suggestion_threshold`
-  - `enable_block_mode`
-  - `enable_ai_features`
-- 援щ쾭???ㅼ젙 ?뚯씪 ?명솚???꾪빐 `#[serde(default)]` ?곸슜
-- ?꾧퀎媛?`snippet_suggestion_threshold`) ?좏슚 踰붿쐞 寃利?2~10) 異붽?
-- ?꾨줎???ㅼ젙 濡쒕뱶/???寃쎈줈瑜??⑥씪 ?ㅽ궎留?湲곗??쇰줈 ?뺣━
-- ?ㅼ젙 紐⑤떖??釉붾줉 紐⑤뱶 泥댄겕諛뺤뒪瑜??ㅼ젣 ?곹깭? ?묐갑???곌껐
-- ?몄뀡蹂?釉붾줉 而⑦뀒?대꼫 ?곌껐 諛?釉붾줉 紐⑤뱶 on/off 利됱떆 諛섏쁺 濡쒖쭅 異붽?
-
-#### changed(ai-scope): ?꾩옱 由대━利덉뿉??AI 湲곕뒫 寃쎈줈 鍮꾪솢?깊솕
-
-**而ㅻ컠**: `working-tree`
-
-##### 蹂寃쎈맖 (Changed)
-
-- ?꾨줎?몄뿉??AI 湲곕뒫 ?뚮옒洹몃? 湲곕낯 鍮꾪솢???곹깭濡?媛뺤젣
-- Claude ?뱀뀡/AI ?낅젰諛?AI 紐⑤떖 鍮꾨끂異?泥섎━
-- AI 愿???대깽??由ъ뒪???⑥텞?ㅻ뒗 ?쒖꽦 議곌굔?먯꽌留??깅줉
-- 諛깆뿏??`invoke_handler`?먯꽌 `claude::*`, `ai::*` 而ㅻ㎤???깅줉 ?쒓굅 (`src-tauri/src/main.rs`)
-
-#### docs(review): ?④퀎蹂?媛쒕컻 吏꾪뻾 ?꾪솴(1李? 諛섏쁺
-
-**而ㅻ컠**: `working-tree`
-
-##### 臾몄꽌?붾맖 (Documentation)
-
-- `docs/review/merge-review-547a7b2-vs-3f49650.md`???④퀎蹂?媛쒕컻 吏꾪뻾 ?꾪솴(?꾨즺/?붿뿬 ?④퀎) 諛?1李??ш?利?寃곌낵 異붽?
-
----
-
-#### docs(review): 二쇱슂 ?댁뒋 ?닿껐??諛?AI ?쒖쇅 ?ㅽ뻾怨꾪쉷 ?곸꽭??
-**而ㅻ컠**: `working-tree`
-
-##### 臾몄꽌?붾맖 (Documentation)
-
-- `docs/review/merge-review-547a7b2-vs-3f49650.md` 怨좊룄??  - 4??二쇱슂 ?댁뒋)??"臾몄젣 ?붿빟 ???닿껐 ?꾨왂 ???곸꽭 ?섏젙 ??ぉ ??寃利?怨꾪쉷 ???꾨즺 湲곗?" 援ъ“濡??ъ옉??  - Git ?⑤꼸 ?ㅻ룞???닿껐???꾪븳 ?꾨줎??諛깆뿏??而ㅻ㎤???뺥빀??留ㅽ븨??異붽?
-  - ?ㅼ젙 ?ㅽ궎留?遺덉씪移??닿껐???꾪븳 `Settings` ?뺤옣 ?꾨뱶, 留덉씠洹몃젅?댁뀡, 寃利??쒕굹由ъ삤 異붽?
-  - 臾몄꽌-肄붾뱶 ?뺥빀???뚮났???꾪븳 ?곹깭 ?쒖???`?꾨즺/遺遺?援ы쁽/?꾨줈?좏???誘멸뎄??) 湲곗? ?뺤쓽
-  - 5?μ뿉 AI 湲곕뒫 ?쒖쇅瑜??ㅼ젣 諛섏쁺?섍린 ?꾪븳 ?④퀎蹂??ㅽ뻾怨꾪쉷(Phase A~D), WBS, 由ъ뒪????? Release Gate瑜??곸꽭 異붽?
-
----
+- `13abbf7` split/탭/프로젝트 트리 회귀 테스트 확장
+- `80cdbd0` AI 제외 기준 회귀 검증 및 문서 정합화
+- `ac49f70` 머지 이슈 해결안/AI 제외 계획 상세화
+- `b93a330` split/탭 연구 문서 스펙 동기화
+- `8f10559` GUI split/tab 대대적 개선 연구 문서 작성
 
 ### 2026-02-06
 
-#### docs(review): 547a7b2 癒몄? 寃곌낵 vs 3f49650 濡쒕뱶留?援ы쁽 ?뺥빀??寃??蹂닿퀬??異붽?
+#### merge 검토 및 릴리즈 split 복구
 
-**而ㅻ컠**: `working-tree`
+##### 수정됨 (Fixed)
 
-##### 臾몄꽌?붾맖 (Documentation)
+- `6cdcccd` 릴리즈 분할 미표시 원인 해결 및 품질 게이트 복구
+- `56ca2ba` `app.js` lint 정리 및 품질 규칙 복구
 
-- `docs/review/merge-review-547a7b2-vs-3f49650.md` 異붽?
-  - 湲곗? 臾몄꽌(`3f49650`) ?鍮?癒몄? 寃곌낵(`547a7b2`) 湲곕뒫 留ㅽ듃由?뒪 ?묒꽦
-  - ??ぉ蹂??먯젙: ?꾨즺/遺遺?援ы쁽/誘멸뎄???ㅻ룞??  - ?듭떖 由ъ뒪???뺣━
-    - Git ?⑤꼸 ?꾨줎??諛깆뿏??而ㅻ㎤?쒕챸 遺덉씪移?    - ?ㅼ젙 ?ㅽ궎留?遺덉씪移??꾨줎??????ㅼ? 諛깆뿏??援ъ“泥??꾨뱶 李⑥씠)
-  - ?붿껌?ы빆 諛섏쁺: AI 湲곕뒫 ?쒖쇅 ?꾩젣???곗꽑?쒖쐞 ?ы렪 諛??꾩닚??湲곕뒫 ?쒖븞
-  - ?ㅽ뻾 寃利?寃곌낵(`eslint`, `vitest`, `cargo check`) ?ы븿
+##### 문서화됨 (Documentation)
 
----
+- `d707f1e` `547a7b2` 머지 구현 정합성 검토 보고서 작성
 
-#### refactor(lint): app.js ?뺣━ 諛?ESLint 洹쒖튃 ?ы솢?깊솕
+##### 기타 (Etc)
 
-**而ㅻ컠**: `working-tree`
+- `547a7b2` PR #2 머지
 
-##### 蹂寃쎈맖 (Changed)
+### 2026-02-04
 
-- `src/app.js` 誘몄궗??肄붾뱶 ?뺣━
-  - 以묐났 AI 蹂???⑥닔 釉붾줉 ?쒓굅
-  - 誘몄궗??移댄뀒怨좊━/?ъ씠?쒕컮 ?좏떥 ?⑥닔 ?쒓굅
-  - 誘몄궗??蹂??肄쒕갚 ?몄옄 ?뺣━
-- `BlockManager` ?앸챸二쇨린 ?곌껐
-  - ?몄뀡 ?앹꽦 ???깅줉, 醫낅즺 ???댁젣
-  - ?낅젰 ?대깽??泥섎━ 寃쎈줈 ?곌껐
-- UI ?곸닔 遺꾨━
-  - `src/ui-constants.js` ?좎꽕
-  - `LAYOUT_PRESETS`, `TAB_COLORS`瑜?紐⑤뱢濡??대룞
-- ESLint 洹쒖튃 蹂듦뎄
-  - `.eslintrc.json`?먯꽌 `no-unused-vars`, `indent`瑜?`error`濡??ы솢?깊솕
-  - `_` ?묐몢 ?몄옄/蹂??臾댁떆 ?⑦꽩 異붽?
-- ?뚯뒪??肄붾뱶 ?뺣━
-  - `src/__tests__/setup.js` ?ㅼ뿬?곌린 ?뺣━
-  - `src/__tests__/session.test.js` 誘몄궗???몄옄 ?쒓굅
+#### GUI split 도입 및 안정화
 
-#### docs(qa): run-release 遺꾪븷 ?섎룞 ?먭? 臾몄꽌/濡쒓렇 異붽?
+##### 추가됨 (Added)
 
-**而ㅻ컠**: `working-tree`
+- `8ae2b28` GUI 기반 탭 분할 툴바 추가
 
-##### 臾몄꽌?붾맖 (Documentation)
+##### 수정됨 (Fixed)
 
-- `docs/qa/run-release-split-manual-checklist.md` 異붽?
-  - 媛濡??몃줈 遺꾪븷 以묒떖???섎룞 ?쒕굹由ъ삤(TC-01~TC-06) ?뺤쓽
-  - ?ъ쟾 以鍮? ?⑷꺽 湲곗?, 寃고븿 湲곕줉 ?쒗뵆由??ы븿
-- `docs/qa/run-release-split-qa-log-2026-02-06.md` 異붽?
-  - `run-release.bat` 湲곕룞 ?먭? 寃곌낵 湲곕줉
-  - ?섎룞 寃利?吏꾪뻾 ?곹깭 諛??꾩냽 ?≪뀡 湲곕줉
-
-### 2026-02-06
-
-#### fix(split): 由대━利?紐⑤뱶 遺꾪븷 ?덉씠?꾩썐 誘명몴???먯씤 ?섏젙
-
-**而ㅻ컠**: `working-tree`
-
-##### ?섏젙??(Fixed)
-
-- `splitActivePane()`?먯꽌 遺꾪븷???몄뀡 ?앹꽦 ???먮룞 ???꾪솚??鍮꾪솢?깊솕?섏뿬 `splitMode/splitRoot`媛 珥덇린?붾릺??臾몄젣 ?닿껐 (`src/app.js`)
-- 遺꾪븷 吏곹썑 ?쒖꽦 ?몄뀡????pane?쇰줈 吏?뺥븯怨??덉씠?꾩썐 ?뚮뜑瑜?蹂댁옣 (`src/app.js`)
-- Split Toolbar ?꾨━????遺덉씪移??섏젙
-  - `two-column` -> `two-columns`
-  - `two-row` -> `two-rows`
-  - `grid` -> `grid-2x2`
-  - `three-column` -> `three-columns`
-
-#### test(split): 遺꾪븷 ?덉씠?꾩썐 ?듯빀 ?뚯뒪??異붽?
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- jsdom ?섍꼍?먯꽌 `index.html + app.js`瑜?濡쒕뱶????遺꾪븷 踰꾪듉 ?대┃ ??split DOM???앹꽦?섎뒗 ?듯빀 ?뚯뒪??異붽? (`src/__tests__/split-layout.e2e.test.js`)
-- Tauri API/xterm 紐⑤뱢 mocking ?뺤옣 (`src/__tests__/setup.js`)
-
-#### chore(quality): lint/clippy 李⑤떒 ?댁뒋 ?뺣━
-
-**而ㅻ컠**: `working-tree`
-
-##### 蹂寃쎈맖 (Changed)
-
-- `settingsBackup` ?꾨씫 ?좎뼵, history panel `showToast` ?ㅼ퐫???ㅻ쪟 ?닿껐 (`src/app.js`, `src/history-panel.js`)
-- `no-control-regex`/遺덊븘??escape 愿??lint ?먮윭 ?뺣━ (`src/app.js`)
-- Rust clippy `-D warnings` ???  - `ShellType` 湲곕낯 援ы쁽 derive ?꾪솚 (`src-tauri/src/ai.rs`)
-  - 濡쒓렇 ?뺤옣??寃???뺣젹 ?대줈? 媛쒖꽑 (`src-tauri/src/settings.rs`)
-  - 誘몄궗??`PtySession` 援ъ“泥??쒓굅 (`src-tauri/src/pty.rs`)
-- ESLint ?ㅼ뿬?곌린 洹쒖튃 異⑸룎 ?꾪솕瑜??꾪빐 `indent` 猷?鍮꾪솢?깊솕 (`.eslintrc.json`)
-
----
+- `94be2a6` 분할 버튼 무응답 수정
+- `36ab98d` 분할 레이아웃 CSS 높이/너비 문제 수정
 
 ### 2026-02-03
 
-#### feat(ai): AI ?먯뿰??紐낅졊??蹂??湲곕뒫 ?꾨즺 (Phase 2.1)
+#### split-pane 대폭 개선 및 로드맵 구현
 
-##### 異붽???(Added)
+##### 추가됨 (Added)
 
-- **AI ?곹깭 愿由?* (`src/app.js`)
-  - `state.aiModeEnabled` - AI 紐⑤뱶 ?쒖꽦???곹깭
-  - `state.aiPreviewVisible` - AI 誘몃━蹂닿린 ?앹뾽 ?쒖떆 ?곹깭
-  - `state.aiOriginalInput` - AI 蹂?????먮낯 ?낅젰
-  - `state.aiTranslatedCommand` - AI 蹂?섎맂 紐낅졊??
+- `8f01981` split-pane 기능 대폭 개선
+- `ed0dddf` 기능 개선 로드맵 Phase 1~4 구현 완료
 
-- **AI 紐⑤뱶 ?⑥닔** (`src/app.js`)
-  - `toggleAiMode()` - AI 紐⑤뱶 耳쒓린/?꾧린
-  - `translateNaturalLanguage(input)` - ?먯뿰?대? ??紐낅졊?대줈 蹂??
-  - `showAiPreview(original, result)` - 蹂??誘몃━蹂닿린 ?쒖떆
-  - `hideAiPreview()` - 誘몃━蹂닿린 ?④린湲?
-  - `acceptAiTranslation()` - 蹂?섎맂 紐낅졊???ㅽ뻾
-  - `rejectAiTranslation()` - 蹂??痍⑥냼
+##### 수정됨 (Fixed)
 
-- **AI 援?젣??吏??* (`src/i18n/index.js`)
-  - `ai.modeEnable` / `ai.modeDisable` - AI 紐⑤뱶 ?좉? ?댄똻
-  - `ai.modeEnabled` / `ai.modeDisabled` - AI 紐⑤뱶 ?곹깭 硫붿떆吏
-  - `ai.commandAccepted` / `ai.commandFailed` - 紐낅졊???ㅽ뻾 寃곌낵
-  - ?쒓?/?곸뼱 ?꾩쟾 踰덉뿭 吏??
+- `b2886b4` split 세션 ID 매핑/레이아웃 복원 수정
+- `fb8d82b` 보안/안정성 코드리뷰 이슈(CRITICAL/HIGH) 수정
+- `b5de92a` 키보드 단축키 Caps Lock 독립성 수정
 
-- **Rust 諛깆뿏???듯빀** (`src-tauri/src/ai.rs`)
-  - 湲곗〈 `translate_natural_language` 紐낅졊???쒖슜
-  - 30+ ?⑦꽩 洹쒖튃 吏??(?쒓?/?곸뼱)
-  - PowerShell, CMD, Bash, Zsh ????낅퀎 蹂??
-  - ?좊ː??confidence) 諛??泥??쒖븞(alternatives) ?쒓났
+##### 문서화됨 (Documentation)
 
-- **吏???⑦꽩 ?덉떆**
-  - ?뚯씪 李얘린: "js ?뚯씪 李얠븘以? ??`Get-ChildItem -Recurse -Filter "*.js"`
-  - ?대뜑 ?앹꽦: "test ?대뜑 留뚮뱾?댁쨾" ??`New-Item -ItemType Directory -Name "test"`
-  - Git 紐낅졊: "git ?곹깭 蹂댁뿬以? ??`git status`
-  - ???뚯씪 寃?? "???뚯씪 10媛?李얠븘以? ???뺣젹????⑸웾 ?뚯씪 紐⑸줉
-  - ?ы듃 ?뺤씤: "?ы듃 8080 ?뺤씤" ??`Get-NetTCPConnection -LocalPort 8080`
-
-##### 媛쒖꽑??(Changed)
-
-- **DOM ?붿냼 珥덇린??* (`src/app.js`)
-  - AI 愿??DOM ?붿냼 蹂??異붽?
-  - `aiModeToggleBtn`, `aiPreviewPopup`, `aiPreviewOriginal`, `aiPreviewTranslated`
-  - `aiPreviewAccept`, `aiPreviewReject`
-
-##### 臾몄꽌??(Documentation)
-
-- **援ы쁽 臾몄꽌 異붽?** (`docs/phase_2_1_ai_implementation.md`)
-  - ?꾩껜 援ы쁽 ?댁슜 ?곸꽭 ?뺣━
-  - 吏???⑦꽩 ?덉떆
-  - 鍮뚮뱶 寃利?寃곌낵
-  - ?ъ슜 諛⑸쾿 媛?대뱶
-
-##### 寃利앸맖 (Verified)
-
-- ??Frontend 鍮뚮뱶 ?깃났 (`npm run build`)
-- ??Rust 鍮뚮뱶 ?깃났 (`cargo build --release`)
-- ??踰덈뱾 ?ш린: 417.07 KB (gzip: 108.95 KB)
-- ??Ctrl+Space ?ㅻ낫???⑥텞???숈옉
-- ???쒓?/?곸뼱 ?먯뿰??泥섎━
-- ??????낅퀎 紐낅졊??蹂??
-
----
-
-### 2026-02-03
-
-#### feat(search): ?곕???怨좉툒 寃??湲곕뒫 援ы쁽
-
-##### 異붽???(Added)
-
-- **寃???듭뀡 踰꾪듉** (`src/app.js`)
-  - ??뚮Ц??援щ텇 (Case Sensitive) - Alt+C ?⑥텞??
-  - ?꾩껜 ?⑥뼱 ?쇱튂 (Whole Word) - Alt+W ?⑥텞??
-  - ?뺢퇋???ъ슜 (Regex) - Alt+R ?⑥텞??
-  - ?꾩껜 ?몄뀡 寃??(All Sessions) - Alt+A ?⑥텞??
-  - ?쒖꽦???곹깭 ?쒓컖???쒖떆
-
-- **?꾩껜 ?몄뀡 寃??湲곕뒫** (`src/app.js`)
-  - 紐⑤뱺 ?대┛ ?곕????몄뀡?먯꽌 ?숈떆 寃??
-  - ?몄뀡蹂?洹몃９?붾맂 寃곌낵 ?쒖떆
-  - 以?踰덊샇? 誘몃━蹂닿린 ?띿뒪???쒓났
-  - 寃곌낵 ?대┃ ???대떦 ?몄뀡?쇰줈 ?대룞 諛??섏씠?쇱씠??
-  - ?몄뀡??理쒕? 10媛?寃곌낵, 珥덇낵 ??"more" ?쒖떆
-
-- **?뺢퇋??寃??吏??* (`src/app.js`)
-  - xterm SearchAddon??regex ?듭뀡 ?쒖슜
-  - ?뺢퇋???ㅻ쪟 ??Toast ?뚮┝ ?쒖떆
-  - ??뚮Ц??援щ텇 ?듭뀡怨??곕룞
-
-- **F3/Shift+F3 ?⑥텞??* (`src/app.js`)
-  - F3: ?ㅼ쓬 寃??寃곌낵濡??대룞
-  - Shift+F3: ?댁쟾 寃??寃곌낵濡??대룞
-  - 湲곗〈 Enter/Shift+Enter? 蹂묓뻾 吏??
-
-- **寃??寃곌낵 ?⑤꼸 UI** (`src/app.js`, `src/style.css`)
-  - ?곗륫 ?곷떒 floating ?⑤꼸
-  - ?몄뀡蹂?洹몃９???쒖떆
-  - ?ㅽ겕濡?媛?ν븳 寃곌낵 紐⑸줉 (理쒕? 500px ?믪씠)
-  - 寃곌낵 媛쒖닔 ?쒖떆
-
-##### 蹂寃쎈맖 (Changed)
-
-- **寃?됰컮 UI ?뺤옣** (`src/app.js`, `src/style.css`)
-  - ?듭뀡 踰꾪듉 洹몃９ 異붽? (4媛??좉? 踰꾪듉)
-  - 踰꾪듉 ?쒖꽦???곹깭 ?ㅽ???異붽?
-  - 寃??寃곌낵 移댁슫???뺤떇 媛쒖꽑 (?? "3/15")
-
-- **寃???듭뀡 ???* (`src/app.js`)
-  - `state.searchOptions` 媛앹껜濡??듭뀡 ?곹깭 愿由?
-  - ?듭뀡 蹂寃????ㅼ떆媛??ш???
-
-##### 湲곗닠 援ы쁽
-
-- **寃???듭뀡 泥섎━** (`src/app.js`)
-  - `performTerminalSearch()`: ?⑥씪 ?몄뀡 寃?????듭뀡 ?곸슜
-  - `performAllSessionsSearch()`: ?꾩껜 ?몄뀡 寃??援ы쁽
-  - `escapeRegex()`: ?뺢퇋???뱀닔臾몄옄 ?댁뒪耳?댄봽
-  - `showAllSessionsResults()`: 寃곌낵 ?⑤꼸 ?뚮뜑留?
-  - `hideAllSessionsResults()`: 寃곌낵 ?⑤꼸 ?リ린
-
-- **CSS ?ㅽ???* (`src/style.css`)
-  - `.terminal-search__options`: ?듭뀡 踰꾪듉 而⑦뀒?대꼫
-  - `.terminal-search__option`: 媛쒕퀎 ?듭뀡 踰꾪듉
-  - `.terminal-search__option--active`: ?쒖꽦???곹깭 ?ㅽ???
-  - `.search-results-panel`: 寃곌낵 ?⑤꼸 ?덉씠?꾩썐
-  - `.search-results-panel__group`: ?몄뀡蹂?洹몃９
-  - `.search-results-panel__item`: 媛쒕퀎 寃??寃곌낵
-
-##### ?ъ슜??寃쏀뿕
-
-- **吏곴??곸씤 ?듭뀡 ?좉?**: ?대┃?쇰줈 ?듭뀡 on/off
-- **?ㅻ낫???⑥텞??*: Alt+C/W/R/A濡?鍮좊Ⅸ ?듭뀡 ?꾪솚
-- **?ㅼ떆媛?寃곌낵 ?낅뜲?댄듃**: ?듭뀡 蹂寃???利됱떆 ?ш???
-- **?쒓컖???쇰뱶諛?*: ?쒖꽦?붾맂 ?듭뀡? accent ?됱긽?쇰줈 ?쒖떆
-- **?뺢퇋???ㅻ쪟 泥섎━**: ?섎せ???뺢퇋???낅젰 ??Toast ?뚮┝
-
-#### feat(snippets): ?ㅻ땲???먮룞 ?앹꽦 湲곕뒫 援ы쁽
-
-##### 異붽???(Added)
-
-- **紐낅졊???덉뒪?좊━ 異붿쟻 ?쒖뒪??* (`src/app.js`)
-  - `commandHistory` 媛앹껜濡??꾨줈?앺듃蹂?紐낅졊???ъ슜 鍮덈룄 異붿쟻
-  - localStorage 湲곕컲 ?곴뎄 ???
-  - 理쒕? 1,000媛?紐낅졊??異붿쟻
-  - 吏㏃? 紐낅졊??5??誘몃쭔) ?먮룞 ?꾪꽣留?
-  - 蹂듭옟??紐낅졊???뚯씠?? ?듭뀡 ?ы븿) ?곗꽑 ?쒖븞
-
-- **?먮룞 ?ㅻ땲???쒖븞 UI** (`src/app.js`)
-  - 3???댁긽 ?ъ슜??紐낅졊???먮룞 ?쒖븞
-  - ?곗륫 ?섎떒 floating 移대뱶 ?뺥깭
-  - "?ㅻ땲?レ쑝濡???? / "臾댁떆" 踰꾪듉 ?쒓났
-  - 10珥????먮룞 ?щ씪吏?
-  - ?щ씪?대뱶 ?좊땲硫붿씠???곸슜
-
-- **?곕????낅젰 ?듯빀** (`src/app.js`)
-  - Enter ??媛먯?濡?紐낅졊???쒖텧 ?쒖젏 異붿쟻
-  - Ctrl+C, Backspace 泥섎━
-  - ?꾨줈?앺듃蹂?紐낅졊??遺꾨━ 異붿쟻
-
-- **?ㅼ젙 ?듭뀡 異붽?** (`index.html`, `src/app.js`)
-  - "Enable snippet suggestions" 泥댄겕諛뺤뒪
-  - 理쒖냼 ?ъ슜 ?잛닔 ?щ씪?대뜑 (2-10??
-  - ?ㅼ떆媛?threshold ?낅뜲?댄듃
-
-- **CSS ?ㅽ??쇰쭅** (`src/style.css`)
-  - `.snippet-suggestion` 而댄룷?뚰듃 ?ㅽ???
-  - ?좊땲硫붿씠??(slideInRight, fade out)
-  - ?뚮쭏蹂??됱긽 ???
-  - 諛섏쓳???덉씠?꾩썐
-
-##### 蹂寃쎈맖 (Changed)
-
-- **?ㅼ젙 媛앹껜 ?뺤옣** (`src/app.js`)
-  - `enableSnippetSuggestions` ?꾨뱶 異붽? (湲곕낯媛? true)
-  - `snippetSuggestionThreshold` ?꾨뱶 異붽? (湲곕낯媛? 3)
-  - snake_case ??camelCase ?뺢퇋??濡쒖쭅 異붽?
-
-- **珥덇린??怨쇱젙 ?낅뜲?댄듃** (`src/app.js`)
-  - `commandHistory.load()` ?몄텧 異붽?
-  - ???쒖옉 ????λ맂 紐낅졊???덉뒪?좊━ 蹂듭썝
-
-##### 臾몄꽌 (Documentation)
-
-- **湲곕뒫 臾몄꽌 異붽?** (`docs/features/snippet-auto-generation.md`)
-  - 援ы쁽 ?몃??ы빆
-  - ?ъ슜???뚮줈??
-  - ?곗씠??援ъ“
-  - ?ν썑 媛쒖꽑 諛⑺뼢
-
-#### fix(security): 肄붾뱶 由щ럭 ?댁뒋 ?섏젙 (CRITICAL + HIGH)
-
-##### ?섏젙??(Fixed)
-
-- **CRITICAL: XSS 痍⑥빟???쒓굅** (`src/app.js` - showToast ?⑥닔, ?쇱씤 23)
-  - `showToast()` ?⑥닔?먯꽌 硫붿떆吏瑜?`escapeHtml()`濡?媛먯떥 XSS 怨듦꺽 李⑤떒
-  - ?ъ슜???낅젰??HTML濡?吏곸젒 ?쎌엯?섎뒗 蹂댁븞 痍⑥빟???닿껐
-  - ?뱀닔 臾몄옄 ?먮룞 ?댁뒪耳?댄봽 (`<`, `>`, `&`, `"`, `'`)
-
-- **HIGH: ?곹깭 遺덉씪移?臾몄젣 ?닿껐** (`src/app.js` - saveTabLayout ?⑥닔, ?쇱씤 2333)
-  - `saveTabLayout()`?먯꽌 Deep clone 援ы쁽
-  - `serializeSplitTree()` + `deserializeSplitTree()` 議고빀?쇰줈 ?꾩쟾??蹂듭궗蹂??앹꽦
-  - ??媛??덉씠?꾩썐 怨듭쑀 李몄“ 臾몄젣 ?닿껐
-
-- **HIGH: Null 泥댄겕 異붽?** (`src/app.js` - toggleMaximize ?⑥닔, ?쇱씤 1983)
-  - `toggleMaximize()` ?⑥닔??sessionId null 泥댄겕 異붽?
-  - ?쒖꽦 ?몄뀡???놁쓣 ??紐낇솗??寃쎄퀬 硫붿떆吏 ?쒖떆
-  - ?덉긽移?紐삵븳 ?먮윭 諛⑹?
-
-- **HIGH: Race Condition ?닿껐** (`src/app.js` - splitActivePane ?⑥닔, ?쇱씤 2027)
-  - `state.splitInProgress` ?뚮옒洹?異붽?
-  - try/finally 釉붾줉?쇰줈 ?숈떆???쒖뼱 援ы쁽
-  - 鍮좊Ⅸ ?곗냽 遺꾪븷 ?묒뾽 ???몃━ 援ъ“ ?먯긽 諛⑹?
-
-##### 臾몄꽌 (Documentation)
-
-- **肄붾뱶 由щ럭 ?섏젙 蹂닿퀬??異붽?** (`docs/code-review-fixes-2026-02-03.md`)
-  - 4媛??댁뒋 ?곸꽭 ?ㅻ챸 (臾몄젣?? ?섏젙 ?댁슜, 湲곗닠???몃??ы빆)
-  - ?뚯뒪??諛?寃利?諛⑸쾿
-  - ?ν썑 媛쒖꽑 ?ы빆 ?쒖븞
-
----
+- `e8b505b` 탭 분할 화면 기능 연구 보고서
+- `3f49650` Shellhive 기능 개선 로드맵 연구 보고서
 
 ### 2026-02-02
 
-#### feat(i18n): ?ㅺ뎅??吏??(Phase 9.2)
+#### Phase 6~9 기능 확장 및 문서 정비
 
-##### 異붽???(Added)
+##### 추가됨 (Added)
 
-- **i18n 紐⑤뱢 援ы쁽** (`src/i18n/index.js`)
-  - ?쒓뎅??ko), ?곸뼱(en) 踰덉뿭 ?뺤뀛?덈━
-  - `setLocale()`, `getLocale()`, `t()`, `getAvailableLocales()` ?⑥닔
-  - ?뚮젅?댁뒪???移섑솚 湲곕뒫 (`{name}`, `{count}` ??
+- `4fed401` lint 설정(Phase 6.1)
+- `e9d12e7` 테스트 프레임워크(Vitest, Phase 6.2)
+- `ff18c27` 개발 의존성 정리
+- `fae7f0b` Rust 백엔드 기능 확장
+- `25976c5` 프론트엔드 기능 확장
+- `077fe50` 다국어(i18n) 모듈 추가
+- `079b30b` 개발/설치 배치 스크립트 정비
+- `6d9cdeb` 프로젝트 삭제 확인 대화상자 추가
 
-- **Settings 援ъ“泥댁뿉 locale ?꾨뱶 異붽?** (`src-tauri/src/settings.rs`)
-  - `locale: String` ?꾨뱶 異붽?
-  - 湲곕낯媛? "ko" (?쒓뎅??
-  - locale ?좏슚??寃利?異붽? (en, ko)
+##### 수정됨 (Fixed)
 
-- **?ㅼ젙 UI???몄뼱 ?좏깮 ?듭뀡 異붽?** (`index.html`)
-  - Language ?쒕∼?ㅼ슫 硫붾돱 (English, ?쒓뎅??
+- `46ecf90` 탭 그룹 레이아웃/클릭 이벤트 수정
 
-##### 蹂寃쎈맖 (Changed)
+##### 문서화됨 (Documentation)
 
-- **app.js ?ㅺ뎅??吏???듯빀**
-  - i18n 紐⑤뱢 import
-  - state.settings??locale ?꾨뱶 異붽?
-  - `showSettingsModal()`: locale ?좏깮湲?媛??ㅼ젙
-  - `saveSettings()`: locale ???諛??곸슜
-  - `loadSettings()`: ???쒖옉 ??locale ?곸슜
+- `42fc95f` 변경 로그/문서 체계 정리
+- `6b80f1d` Phase 6~9 구현 문서 갱신
 
-##### 臾몄꽌 (Documentation)
+##### 기타 (Etc)
 
-- **i18n 援ы쁽 ?붿빟 臾몄꽌 異붽?** (`docs/i18n_implementation_summary.md`)
-  - 援ы쁽 媛쒖슂 諛??뚯씪 紐⑸줉
-  - 踰덉뿭 ??移댄뀒怨좊━ ?ㅻ챸
-  - ?ъ슜 ?덉젣 諛??ν썑 媛쒖꽑?ы빆
+- `b10cee0` `.gitignore`에 `coverage` 추가
+- `4dce9ab` PR #1 머지
+
+### 2026-02-01
+
+#### 탭 관리 강화 및 안정성 개선
+
+##### 추가됨 (Added)
+
+- `859cdaf` 탭 관리 기능 Phase 1~3 구현
+
+##### 수정됨 (Fixed)
+
+- `5099e35` 터미널 종료 버튼 동작 수정
+- `79a7ac7` 코드리뷰 기반 주요 이슈 7건 수정
+
+##### 문서화됨 (Documentation)
+
+- `8718bb9` 코드 검토 보고서/검증 결과
+- `f8c1373` 탭 관리 기능 강화 연구 문서
+- `2a390d7` 업데이트 보고서 및 변경 로그 보강
+
+### 2026-01-31
+
+#### PTY 안정화 집중 수정
+
+##### 수정됨 (Fixed)
+
+- `885a90e` master PTY 핸들 유지로 입력 문제 해결
+- `3652188` PTY Writer 관리 재설계
+- `7b26f72` PTY 실시간 입출력 및 UI 이벤트 처리 개선
+- `a9e5914` Tauri 권한/실행 환경 개선
+
+### 2026-01-30
+
+#### 초기 구축 (Phase 1~5)
+
+##### 추가됨 (Added)
+
+- `bbaea1f` Initial commit
+- `f1699e9` 프로젝트 문서 구조 설정
+- `abec1e3` Phase 1: Tauri v2 + xterm.js 통합
+- `03cac16` Phase 2: Windows ConPTY PTY 연동
+- `1e451d2` Phase 3: 프로젝트 관리 UI/기능
+- `a00f037` Phase 4: 멀티 세션 탭 고급 기능
+- `9e07b50` Phase 5: 스니펫/설정/로깅 기능
+
+##### 문서화됨 (Documentation)
+
+- `a540aa6` 개발 로드맵 체크리스트 완료 상태 업데이트
 
 ---
 
 ## [0.1.0] - 2026-02-01 (develop)
 
-### 媛쒖슂
+### 개요
 
-Shellhive??泥?踰덉㎏ 媛쒕컻 踰꾩쟾?쇰줈, Phase 1~5源뚯???紐⑤뱺 ?듭떖 湲곕뒫??援ы쁽?섏뿀?듬땲??
+Shellhive의 첫 개발 버전으로, Phase 1~5 핵심 기능이 반영되었습니다.
 
-- **Phase 1**: Tauri v2 ?꾨줈?앺듃 珥덇린??諛?xterm.js ?듯빀
-- **Phase 2**: Windows ConPTY瑜??듯븳 PTY ?곕룞
-- **Phase 3**: ?꾨줈?앺듃 愿由?UI 諛?CRUD 湲곕뒫
-- **Phase 4**: 硫???몄뀡 ??愿由?
-- **Phase 5**: ?ㅻ땲?? ?ㅼ젙, 濡쒓퉭, ?ㅻ낫???⑥텞??
-
----
-
-### 2026-02-01
-
-#### feat(tabs): ??愿由?湲곕뒫 Phase 1, 2, 3 ?꾩껜 援ы쁽
-
-**而ㅻ컠**: `859cdaf`
-
-##### 異붽???(Added)
-
-- **Phase 1: ???곹깭 ?쒖떆 媛뺥솕**
-  - ??퀎 ?곹깭 ?꾩씠肄?(?곌껐 以?`*`, ?ㅽ뻾 以?`??, 醫낅즺??`-`)
-  - 而⑦뀓?ㅽ듃 硫붾돱 (蹂듭젣, ?リ린, ?ㅻⅨ ??紐⑤몢 ?リ린)
-  - ?꾨줈?앺듃 ?대쫫 湲곕컲 ???쒕ぉ
-
-- **Phase 2: ?쒕옒洹????쒕∼**
-  - HTML5 Drag & Drop API 湲곕컲 ???쒖꽌 蹂寃?
-  - ?쒕옒洹?以??쒓컖???쇰뱶諛?(?쒕옒洹??ㅻ쾭 ?ㅽ???
-  - ?쒕∼ ?????쒖꽌 利됱떆 諛섏쁺
-
-- **Phase 3: ?ㅻ낫???⑥텞??*
-  - `Ctrl+T`: ???곕??????앹꽦
-  - `Ctrl+W`: ?꾩옱 ???リ린
-  - `Ctrl+Tab` / `Ctrl+Shift+Tab`: ???꾪솚
-  - `Ctrl+1~9`: ?뱀젙 ??쑝濡?吏곸젒 ?대룞
+- 통합 터미널 세션 관리
+- PTY 기반 실시간 입출력
+- 프로젝트/탭/스니펫/설정 관리
+- 로깅 및 기본 단축키 체계
 
 ---
 
-#### docs: ??愿由?湲곕뒫 媛뺥솕 ?곌뎄 蹂닿퀬??異붽?
+## 변경 유형 가이드
 
-**而ㅻ컠**: `f8c1373`
-
-##### 臾몄꽌 (Documentation)
-
-- `docs/research-tab-management-2026-02-01.md` - ??愿由?湲곕뒫 媛뺥솕 ?곌뎄 蹂닿퀬??
-  - Phase 1~3 援ы쁽 怨꾪쉷 ?곸꽭
-  - 湲곗닠 ?ㅽ깮 諛?援ы쁽 諛⑺뼢
+- `Added`: 새로운 기능
+- `Changed`: 기존 기능 변경
+- `Fixed`: 버그 수정
+- `Documentation`: 문서 변경
+- `Security`: 보안 변경
 
 ---
 
-#### fix(pty): ?곕???醫낅즺 踰꾪듉 ?숈옉 ?섏젙
-
-**而ㅻ컠**: `5099e35`
-
-##### ?섏젙??(Fixed)
-
-- **?곕???醫낅즺 踰꾪듉 ?숈옉 臾몄젣 ?닿껐**
-  - ???リ린 踰꾪듉 ?대┃ ??PTY ?몄뀡???뺤긽 醫낅즺?섎룄濡??섏젙
-  - ?대깽??踰꾨툝留?諛⑹? 泥섎━ 異붽?
-
----
-
-#### docs: ?낅뜲?댄듃 蹂닿퀬??諛?蹂寃?濡쒓렇 異붽?
-
-**而ㅻ컠**: `2a390d7`
-
-##### 臾몄꽌 (Documentation)
-
-- ?낅뜲?댄듃 蹂닿퀬??異붽?
-- 蹂寃?濡쒓렇 臾몄꽌 援ъ“ ?ㅼ젙
-
----
-
-#### fix: 肄붾뱶 寃??蹂닿퀬??湲곕컲 7媛??댁뒋 ?섏젙
-
-**而ㅻ컠**: `79a7ac7`
-
-##### ?섏젙??(Fixed)
-
-- **[HIGH]** ?ㅻ땲???꾨줈?앺듃 ?곗씠???띿꽦?먯꽌 HTML ?뷀떚??蹂??臾몄젣 ?섏젙
-  - `data-command`, `data-path`??JSON.stringify ?ъ슜
-  - ?뱀닔臾몄옄(`&`, `<`, `>`) ?ы븿 紐낅졊??寃쎈줈 ?뺤긽 ?ㅽ뻾
-
-- **[HIGH]** PTY ?꾨줈?몄뒪 誘몄쥌猷?臾몄젣 ?섏젙
-  - child ?몃뱾 ???諛?`kill_pty`?먯꽌 紐낆떆??醫낅즺 ?몄텧
-  - ??醫낅즺 ??諛깃렇?쇱슫???꾨줈?몄뒪 ?붿〈 諛⑹?
-
-- **[MEDIUM]** ?곕???由ъ궗?댁쫰媛 PTY??諛섏쁺?섏? ?딅뜕 臾몄젣 ?섏젙
-  - `resize_pty` ?몄텧 異붽? (100ms ?붾컮?댁떛)
-  - 珥덇린 PTY ?앹꽦 ?쒖뿉???ш린 ?꾨떖
-
-- **[MEDIUM]** PTY ?먮윭 ?대깽??誘멸뎄??臾몄젣 ?섏젙
-  - `pty-error` ?대깽??由ъ뒪???깅줉
-  - ?먮윭 諛쒖깮 ???곕??먯뿉 鍮④컙??硫붿떆吏 ?쒖떆
-
-- **[MEDIUM]** write_pty ?꾩뿭 Mutex ??踰붿쐞 怨쇰떎 臾몄젣 ?섏젙
-  - writer瑜?`Arc<Mutex>`濡??섑븨?섏뿬 ?몄뀡蹂???遺꾨━
-  - 硫???몄뀡 ?숈떆 ?낅젰 ??釉붾줈???쒓굅
-
-##### 蹂댁븞 (Security)
-
-- **[LOW]** CSP(Content Security Policy) ?뺤콉 ?곸슜
-  - `csp: null` ???곸젅??蹂댁븞 ?뺤콉?쇰줈 蹂寃?
-  - XSS 怨듦꺽 諛⑹뼱 媛뺥솕
-
-##### 異붽???(Added)
-
-- **[LOW]** 湲곕낯 ?뚯뒪???ㅼ틦?대뵫 異붽?
-  - Rust ?⑥쐞 ?뚯뒪??2媛?(`test_pty_manager_creation`, `test_pty_manager_default`)
-  - `npm run test:rust` ?ㅽ겕由쏀듃 異붽?
-
----
-
-#### docs: 肄붾뱶 寃??蹂닿퀬??諛?寃利?寃곌낵 異붽?
-
-**而ㅻ컠**: `8718bb9`
-
-##### 臾몄꽌 (Documentation)
-
-- `docs/review-report-develop-2026-02-01.md` - develop 釉뚮옖移??뺤쟻 肄붾뱶 由щ럭 蹂닿퀬??
-- `docs/review-verification-2026-02-01.md` - 寃??蹂닿퀬??寃利?寃곌낵
-
----
-
-### 2026-01-31
-
-#### fix(pty): master PTY ?몃뱾 ?좎?濡??곕????낅젰 臾몄젣 ?닿껐
-
-**而ㅻ컠**: `885a90e`
-
-##### ?섏젙??(Fixed)
-
-- **PTY ?낅젰 遺덇? 臾몄젣 ?닿껐**
-  - master PTY ?몃뱾??議곌린 ?댁젣?섎뒗 臾몄젣 ?섏젙
-  - ?몄뀡 ?섎챸 ?숈븞 ?몃뱾 ?좎??섎룄濡?援ъ“ 蹂寃?
-
----
-
-#### fix: PTY ?낅젰/異쒕젰 ?듭떖 ?섏젙 - Writer 愿由??ъ꽕怨?
-
-**而ㅻ컠**: `3652188`
-
-##### 蹂寃쎈맖 (Changed)
-
-- **PTY Writer 愿由?援ъ“ ?ъ꽕怨?*
-  - 湲곗〈: ?꾩뿭 ?쎌쑝濡??명븳 ?숈떆 ?낅젰 臾몄젣
-  - 蹂寃? ?몄뀡蹂??낅┰?곸씤 Writer ?몄뒪?댁뒪 愿由?
-  - 硫???몄뀡 ?숈떆 ?낅젰 ?깅뒫 媛쒖꽑
-
----
-
-#### fix: PTY ?ㅼ떆媛??낆텧??諛?UI ?대깽??泥섎━ 媛쒖꽑
-
-**而ㅻ컠**: `7b26f72`
-
-##### ?섏젙??(Fixed)
-
-- **?ㅼ떆媛??낆텧??吏??臾몄젣 ?닿껐**
-  - PTY 異쒕젰 踰꾪띁留?理쒖쟻??
-  - Tauri ?대깽??諛쒖깮 鍮덈룄 議곗젙
-
-- **UI ?대깽??泥섎━ 媛쒖꽑**
-  - ?곕????ъ빱??愿由?媛쒖꽑
-  - ?낅젰 ?대깽???꾨떖 ?덉젙??
-
----
-
-#### fix: Tauri v2 沅뚰븳 ?ㅼ젙 諛??꾨줈?앺듃 ?ㅽ뻾 ?섍꼍 媛쒖꽑
-
-**而ㅻ컠**: `a9e5914`
-
-##### ?섏젙??(Fixed)
-
-- **Tauri v2 沅뚰븳 ?ㅼ젙 臾몄젣 ?닿껐**
-  - `src-tauri/capabilities/default.json` 沅뚰븳 ?ㅼ젙 異붽?
-  - ?대깽??由ъ뒪?? ?ㅼ씠?쇰줈洹? ??沅뚰븳 ?쒖꽦??
-
-- **?꾨줈?앺듃 ?ㅽ뻾 ?섍꼍 媛쒖꽑**
-  - 媛쒕컻 紐⑤뱶 ?ㅽ뻾 ?ㅽ겕由쏀듃 媛쒖꽑
-  - 鍮뚮뱶 ?ㅼ젙 理쒖쟻??
-
----
-
-### 2026-01-30
-
-#### docs: 媛쒕컻 濡쒕뱶留?泥댄겕由ъ뒪???꾨즺 ?곹깭濡??낅뜲?댄듃
-
-**而ㅻ컠**: `a540aa6`
-
-##### 臾몄꽌 (Documentation)
-
-- README.md 媛쒕컻 濡쒕뱶留?Phase 1~5 ?꾨즺 ?곹깭濡??낅뜲?댄듃
-- 媛쒕컻 吏꾪뻾 ?곹솴 諛섏쁺
-
----
-
-#### feat(phase5): 怨좉툒 湲곕뒫 援ы쁽 - ?ㅻ땲?? ?ㅼ젙, 濡쒓퉭
-
-**而ㅻ컠**: `9e07b50`
-
-##### 異붽???(Added)
-
-- **紐낅졊???ㅻ땲??湲곕뒫**
-  - ?먯＜ ?ъ슜?섎뒗 紐낅졊?????
-  - ?대┃ ??踰덉쑝濡??꾩옱 ?곕??먯뿉 ?ㅽ뻾
-  - ?ㅻ땲??異붽?/??젣 UI
-
-- **?ㅼ젙 湲곕뒫**
-  - ?뚮쭏 ?좏깮 (Dark, Light, Monokai)
-  - 湲瑗??ш린 議곗젙 (12px ~ 24px)
-  - 湲瑗?醫낅쪟 ?좏깮
-
-- **?몄뀡 濡쒓퉭**
-  - ?곕???異쒕젰 ?먮룞 ????듭뀡
-  - 濡쒓렇 ?뚯씪 ?꾩튂: `%APPDATA%/shellhive/logs/`
-
-- **?ㅻ낫???⑥텞??*
-  - `Ctrl+,`: ?ㅼ젙 ?닿린
-  - `Ctrl+Shift+C`: 蹂듭궗
-  - `Ctrl+Shift+V`: 遺숈뿬?ｊ린
-
----
-
-#### feat(phase4): 硫???몄뀡 ??怨좉툒 湲곕뒫 援ы쁽
-
-**而ㅻ컠**: `a00f037`
-
-##### 異붽???(Added)
-
-- **??湲곕컲 硫???몄뀡**
-  - ?щ윭 ?곕????몄뀡????쑝濡?愿由?
-  - ??퀎 ?낅┰?곸씤 PTY ?몄뀡
-
-- **?몄뀡 ?곹깭 ?쒖떆**
-  - ?곌껐 以? ?ㅽ뻾 以? 醫낅즺???곹깭 ?꾩씠肄?
-
-- **??愿由?湲곕뒫**
-  - ?????앹꽦/?リ린
-  - ???꾪솚
-
----
-
-#### feat(phase3): ?꾨줈?앺듃 愿由?UI 諛?湲곕뒫 援ы쁽
-
-**而ㅻ컠**: `1e451d2`
-
-##### 異붽???(Added)
-
-- **?꾨줈?앺듃 愿由?*
-  - ?꾨줈?앺듃 異붽?/?섏젙/??젣 CRUD
-  - JSON ?뚯씪 湲곕컲 ?곴뎄 ???(`%APPDATA%/shellhive/projects.json`)
-
-- **?ъ씠?쒕컮 UI**
-  - ?꾨줈?앺듃 紐⑸줉 ?쒖떆
-  - ?꾨줈?앺듃 ?대┃ ???대떦 ?대뜑?먯꽌 ?곕????ㅽ뻾
-
-- **?대뜑 釉뚮씪?곗?**
-  - Tauri Dialog ?뚮윭洹몄씤 ?곕룞
-  - ?쒖뒪???대뜑 ?좏깮 ?ㅼ씠?쇰줈洹?
-
----
-
-#### feat(phase2): PTY ?곕룞 援ы쁽 - Windows ConPTY ?꾩쟾 ?듯빀
-
-**而ㅻ컠**: `03cac16`
-
-##### 異붽???(Added)
-
-- **Windows ConPTY ?듯빀**
-  - `portable-pty` ?щ젅?댄듃 ?ъ슜
-  - PTY ?몄뀡 ?앹꽦/愿由?醫낅즺
-
-- **Tauri 而ㅻ㎤??*
-  - `create_pty`: PTY ?몄뀡 ?앹꽦
-  - `write_pty`: PTY???낅젰 ?꾩넚
-  - `resize_pty`: ?곕????ш린 議곗젙
-  - `kill_pty`: PTY ?몄뀡 醫낅즺
-
-- **?묐갑???듭떊**
-  - xterm.js ?낅젰 ??PTY ?꾩넚
-  - PTY 異쒕젰 ??Tauri ?대깽????xterm.js ?뚮뜑留?
-
----
-
-#### feat(phase1): Tauri v2 ?꾨줈?앺듃 珥덇린??諛?xterm.js ?듯빀
-
-**而ㅻ컠**: `abec1e3`
-
-##### 異붽???(Added)
-
-- **Tauri v2 ?꾨줈?앺듃 援ъ“**
-  - `src-tauri/`: Rust 諛깆뿏??
-  - `src/`: ???꾨줎?몄뿏??
-
-- **xterm.js ?듯빀**
-  - ?곕????뚮뜑留?而댄룷?뚰듃
-  - FitAddon???듯븳 ?먮룞 ?ш린 議곗젙
-  - WebLinksAddon???듯븳 URL ?대┃ 吏??
-
-- **湲곕낯 UI ?덉씠?꾩썐**
-  - ?ъ씠?쒕컮 + ?곕????곸뿭 援ъ“
-  - ?ㅽ겕 ?뚮쭏 湲곕낯 ?곸슜
-
----
-
-#### docs: ?꾨줈?앺듃 珥덇린 臾몄꽌 援ъ“ ?ㅼ젙
-
-**而ㅻ컠**: `f1699e9`
-
-##### 臾몄꽌 (Documentation)
-
-- `README.md` - ?꾨줈?앺듃 ?뚭컻 諛??ъ슜踰?
-- `AGENTS.md` - AI ?먯씠?꾪듃 媛쒕컻 媛?대뱶
-- `CLAUDE.md` - Claude Code ?ㅼ젙
-- `docs/dev-guide.md` - 媛쒕컻??媛?대뱶
-
----
-
-#### Initial commit
-
-**而ㅻ컠**: `bbaea1f`
-
-##### 異붽???(Added)
-
-- Git ??μ냼 珥덇린??
-- `.gitignore` ?ㅼ젙
-
----
-
-## 踰꾩쟾 ?덉뒪?좊━
-
-| 踰꾩쟾 | ?좎쭨 | ?곹깭 | 二쇱슂 蹂寃?|
-|------|------|------|----------|
-| 0.1.0 | 2026-02-01 | 媛쒕컻 以?| Phase 1~5 援ы쁽, ?듭떖 湲곕뒫 ?꾨즺 |
-
----
-
-## 蹂寃??좏삎 媛?대뱶
-
-| ?좏삎 | ?ㅻ챸 |
-|------|------|
-| **異붽???(Added)** | ?덈줈??湲곕뒫 |
-| **蹂寃쎈맖 (Changed)** | 湲곗〈 湲곕뒫 蹂寃?|
-| **?ъ슜 以묐떒 (Deprecated)** | 怨??쒓굅??湲곕뒫 |
-| **?쒓굅??(Removed)** | ?쒓굅??湲곕뒫 |
-| **?섏젙??(Fixed)** | 踰꾧렇 ?섏젙 |
-| **蹂댁븞 (Security)** | 蹂댁븞 愿??蹂寃?|
-| **臾몄꽌 (Documentation)** | 臾몄꽌 異붽?/?섏젙 |
-
----
-
-*??臾몄꽌??媛쒕컻 吏꾪뻾???곕씪 吏?띿쟻?쇰줈 ?낅뜲?댄듃?⑸땲??*
-
+*참고: 2026-02-09에 기존 `change_log.md`의 한글 깨짐(모지바케) 이력을 UTF-8 기준으로 복구/재구성했습니다.*
