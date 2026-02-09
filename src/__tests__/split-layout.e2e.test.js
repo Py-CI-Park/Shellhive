@@ -350,6 +350,73 @@ describe('Split Layout E2E', () => {
     await waitFor(() => document.querySelectorAll('.split-pane-overlay').length === 0);
   });
 
+  it('breaks active pane into standalone tab from split toolbar', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 2);
+
+    const breakBtn = document.getElementById('breakPaneBtn');
+    expect(breakBtn).toBeTruthy();
+    breakBtn.click();
+
+    await waitFor(() => !document.querySelector('#terminalContainer .split-container'));
+    expect(document.getElementById('terminalContainer').classList.contains('terminal-container--split')).toBe(false);
+    expect(document.querySelectorAll('.tab').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('joins and moves selected source tab into current split', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('newTabBtn').click();
+    document.getElementById('newTabBtn').click();
+    await waitFor(() => document.querySelectorAll('.tab').length >= 3);
+
+    const tabs = Array.from(document.querySelectorAll('.tab'));
+    tabs[0].click();
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 2);
+
+    const splitSessionIds = new Set(
+      Array.from(document.querySelectorAll('#terminalContainer .terminal-wrapper--split'))
+        .map((el) => el.id.replace('terminal-', ''))
+    );
+    const standaloneTabs = Array.from(document.querySelectorAll('.tab'))
+      .filter((tab) => !splitSessionIds.has(tab.dataset.sessionId));
+    expect(standaloneTabs.length).toBeGreaterThanOrEqual(2);
+
+    const joinSourceSessionId = standaloneTabs[0].dataset.sessionId;
+    standaloneTabs[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 60 }));
+    await waitFor(() => document.querySelector('#tabContextMenu [data-action="join-pane-to-active"]'));
+    document.querySelector('#tabContextMenu [data-action="join-pane-to-active"]').click();
+
+    await waitFor(() => {
+      const wrapper = document.getElementById(`terminal-${joinSourceSessionId}`);
+      return wrapper?.classList.contains('terminal-wrapper--split');
+    });
+
+    const moveSourceSessionId = standaloneTabs[1].dataset.sessionId;
+    const moveSourceTab = document.querySelector(`.tab[data-session-id="${moveSourceSessionId}"]`);
+    moveSourceTab.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 80, clientY: 80 }));
+    await waitFor(() => document.querySelector('#tabContextMenu [data-action="move-pane-to-active"]'));
+    document.querySelector('#tabContextMenu [data-action="move-pane-to-active"]').click();
+
+    await waitFor(() => {
+      const wrapper = document.getElementById(`terminal-${moveSourceSessionId}`);
+      return wrapper?.classList.contains('terminal-wrapper--split');
+    });
+  });
+
   it('renders enhanced split pane header with status and path summary', async () => {
     await import('../app.js');
 

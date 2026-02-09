@@ -59,6 +59,45 @@
 - `npm run test -- --run` (4 files, 23 tests)
 - `cargo check --manifest-path src-tauri/Cargo.toml`
 
+#### feat(split-pane-workflow): break/join/move-pane 워크플로우 및 조작 경로 확장
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `index.html`
+  - Split 툴바에 pane 전환/이동 워크플로우 컨트롤 추가
+    - `Break` 버튼 (`breakPaneBtn`)
+    - 소스 탭 선택 셀렉터 (`splitTransferSourceSelect`)
+    - `Join` 버튼 (`joinPaneBtn`)
+    - `Move` 버튼 (`movePaneBtn`)
+- `src/app.js`
+  - 활성 패널 분리 기능 추가 (`breakActivePaneToTab`)
+  - 선택 소스 탭 결합/이동 기능 추가 (`joinSessionToActiveSplit`, `joinPaneFromSelection`, `movePaneFromSelection`)
+  - 분할 컨텍스트 메뉴 확장
+    - `활성 패널 분리 (Break)`
+    - `현재 분할에 결합 (Join)`
+    - `현재 분할로 이동 (Move)`
+  - Command Palette 명령 확장
+    - `break-pane`, `join-pane`, `move-pane`
+  - 단축키 추가
+    - `Ctrl+Shift+B` (Break)
+    - `Ctrl+Shift+I` (Join)
+    - `Ctrl+Shift+U` (Move)
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - 툴바 상태 업데이트 로직에 소스 탭 옵션 동적 갱신 반영
+  - 분할 레이아웃 스냅샷 동기화 유틸 추가 (`saveCurrentSplitLayoutForSessions`)
+  - 이동 시 기존 저장 레이아웃에서 소스 세션 정리 로직 추가 (`removeSessionFromStoredSplitLayouts`)
+
+##### 테스트 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 25 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+
 ### 2026-02-08
 
 #### fix/build/release: 배포 안정화 및 split UX 개선

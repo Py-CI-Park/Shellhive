@@ -658,6 +658,11 @@ html, body {
               color var(--transition-speed) ease;
 }
 
+.split-toolbar__select--compact {
+  min-width: 120px;
+  max-width: 180px;
+}
+
 .form-group input[type="color"] {
   width: 52px;
   height: 30px;
