@@ -1287,6 +1287,8 @@ const state = {
     paneOverlayLabelColor: '#ffffff',
     splitSyncInputEnabled: false,
     splitSyncScope: 'all',
+    splitMainPaneRatio: 70,
+    splitTiledMaxColumns: 3,
   },
   blockManagers: new Map(),  // Map<sessionId, BlockManager>
   snippets: [],
@@ -1353,6 +1355,8 @@ function normalizeSettings(settings) {
     paneOverlayLabelColor: settings.pane_overlay_label_color || '#ffffff',
     splitSyncInputEnabled: settings.split_sync_input_enabled ?? false,
     splitSyncScope: settings.split_sync_scope || 'all',
+    splitMainPaneRatio: settings.split_main_pane_ratio ?? 70,
+    splitTiledMaxColumns: settings.split_tiled_max_columns ?? 3,
   };
 }
 
@@ -1446,6 +1450,8 @@ async function saveSettings(settings) {
       pane_overlay_label_color: settings.paneOverlayLabelColor,
       split_sync_input_enabled: settings.splitSyncInputEnabled ?? false,
       split_sync_scope: settings.splitSyncScope || 'all',
+      split_main_pane_ratio: settings.splitMainPaneRatio ?? 70,
+      split_tiled_max_columns: settings.splitTiledMaxColumns ?? 3,
     };
     await invoke('save_settings', { settings: backendSettings });
     state.settings = { ...settings };
@@ -1516,6 +1522,8 @@ function showSettingsModal() {
     paneOverlayLabelColor: state.settings.paneOverlayLabelColor || '#ffffff',
     splitSyncInputEnabled: state.settings.splitSyncInputEnabled ?? false,
     splitSyncScope: state.settings.splitSyncScope || 'all',
+    splitMainPaneRatio: state.settings.splitMainPaneRatio ?? 70,
+    splitTiledMaxColumns: state.settings.splitTiledMaxColumns ?? 3,
   };
 
   settingsModal.classList.add('modal--visible');
@@ -1579,6 +1587,26 @@ function showSettingsModal() {
   if (settingsSplitSyncScope) {
     settingsSplitSyncScope.value = state.settings.splitSyncScope || 'all';
     settingsSplitSyncScope.disabled = !(settingsSplitSyncInput?.checked ?? false);
+  }
+
+  const settingsSplitMainPaneRatio = document.getElementById('settingsSplitMainPaneRatio');
+  const splitMainPaneRatioValue = document.getElementById('splitMainPaneRatioValue');
+  if (settingsSplitMainPaneRatio) {
+    const ratio = state.settings.splitMainPaneRatio ?? 70;
+    settingsSplitMainPaneRatio.value = String(ratio);
+    if (splitMainPaneRatioValue) {
+      splitMainPaneRatioValue.textContent = `${ratio}%`;
+    }
+  }
+
+  const settingsSplitTiledMaxColumns = document.getElementById('settingsSplitTiledMaxColumns');
+  const splitTiledMaxColumnsValue = document.getElementById('splitTiledMaxColumnsValue');
+  if (settingsSplitTiledMaxColumns) {
+    const maxColumns = state.settings.splitTiledMaxColumns ?? 3;
+    settingsSplitTiledMaxColumns.value = String(maxColumns);
+    if (splitTiledMaxColumnsValue) {
+      splitTiledMaxColumnsValue.textContent = String(maxColumns);
+    }
   }
 }
 
@@ -4831,8 +4859,9 @@ function renderMaximizedView(sessionId) {
   setTimeout(() => session.fitAddon.fit(), 50);
 }
 
-async function splitActivePane(direction) {
+async function splitActivePane(direction, options = {}) {
   if (!state.activeSessionId) return;
+  const { ratio = null } = options;
 
   // Prevent race condition - only one split operation at a time
   if (state.splitInProgress) return;
@@ -4856,6 +4885,9 @@ async function splitActivePane(direction) {
 
     // Split the leaf node
     leafNode.split(direction, newSession.id);
+    if (typeof ratio === 'number' && Number.isFinite(ratio)) {
+      leafNode.ratio = Math.max(0.1, Math.min(0.9, ratio));
+    }
     state.activeSessionId = newSession.id;
 
     // Render the new layout
@@ -5517,6 +5549,8 @@ async function applyLayoutPreset(presetKey) {
   if (!preset) return;
 
   const config = preset.create();
+  const mainPaneRatio = Math.max(50, Math.min(85, state.settings.splitMainPaneRatio || 70)) / 100;
+  const tiledMaxColumns = Math.max(1, Math.min(6, state.settings.splitTiledMaxColumns || 3));
 
   // Current active session is the base
 
@@ -5525,22 +5559,34 @@ async function applyLayoutPreset(presetKey) {
 
   // Create layout based on preset type
   if (config.type === 'grid') {
-    await createGridLayout(config.rows, config.cols);
+    const totalCells = Math.max(1, (config.rows || 1) * (config.cols || 1));
+    const effectiveCols = Math.max(1, Math.min(config.cols || 1, tiledMaxColumns));
+    const effectiveRows = Math.max(1, Math.ceil(totalCells / effectiveCols));
+    await createGridLayout(effectiveRows, effectiveCols, totalCells);
   } else {
-    await createLinearLayout(config.type, config.count);
+    const effectiveCount = config.type === 'vertical'
+      ? Math.max(2, Math.min(config.count || 2, tiledMaxColumns))
+      : Math.max(2, config.count || 2);
+    const firstSplitRatio = presetKey === 'main-sidebar'
+      ? mainPaneRatio
+      : (typeof config.ratio === 'number' ? config.ratio : null);
+    await createLinearLayout(config.type, effectiveCount, firstSplitRatio);
   }
 }
 
 // Create linear split layout (horizontal or vertical)
-async function createLinearLayout(direction, count) {
+async function createLinearLayout(direction, count, firstSplitRatio = null) {
   initSplitMode();
   for (let i = 1; i < count; i++) {
-    await splitActivePane(direction);
+    const splitOptions = i === 1 && typeof firstSplitRatio === 'number'
+      ? { ratio: firstSplitRatio }
+      : {};
+    await splitActivePane(direction, splitOptions);
   }
 }
 
 // Create grid layout (rows x cols)
-async function createGridLayout(rows, cols) {
+async function createGridLayout(rows, cols, totalCells = rows * cols) {
   // First split horizontally for rows
   initSplitMode();
   for (let i = 1; i < rows; i++) {
@@ -5549,10 +5595,12 @@ async function createGridLayout(rows, cols) {
 
   // Then split each row vertically for cols
   const leaves = getAllLeafNodes(state.splitRoot);
+  let currentCells = leaves.length;
   for (const leaf of leaves) {
     state.activeSessionId = leaf.sessionId;
-    for (let j = 1; j < cols; j++) {
+    for (let j = 1; j < cols && currentCells < totalCells; j++) {
       await splitActivePane('vertical');
+      currentCells += 1;
     }
   }
 }
@@ -6982,6 +7030,22 @@ function setupEventListeners() {
     });
   }
 
+  const settingsSplitMainPaneRatio = document.getElementById('settingsSplitMainPaneRatio');
+  const splitMainPaneRatioValue = document.getElementById('splitMainPaneRatioValue');
+  if (settingsSplitMainPaneRatio && splitMainPaneRatioValue) {
+    settingsSplitMainPaneRatio.addEventListener('input', (e) => {
+      splitMainPaneRatioValue.textContent = `${e.target.value}%`;
+    });
+  }
+
+  const settingsSplitTiledMaxColumns = document.getElementById('settingsSplitTiledMaxColumns');
+  const splitTiledMaxColumnsValue = document.getElementById('splitTiledMaxColumnsValue');
+  if (settingsSplitTiledMaxColumns && splitTiledMaxColumnsValue) {
+    settingsSplitTiledMaxColumns.addEventListener('input', (e) => {
+      splitTiledMaxColumnsValue.textContent = String(e.target.value);
+    });
+  }
+
   saveSettingsBtn.addEventListener('click', async () => {
     const settingsLocale = document.getElementById('settingsLocale');
     const settingsEnableSnippetSuggestions = document.getElementById('settingsEnableSnippetSuggestions');
@@ -6990,6 +7054,8 @@ function setupEventListeners() {
     const settingsPaneOverlayColor = document.getElementById('settingsPaneOverlayColor');
     const settingsSplitSyncInput = document.getElementById('settingsSplitSyncInput');
     const settingsSplitSyncScope = document.getElementById('settingsSplitSyncScope');
+    const settingsSplitMainPaneRatio = document.getElementById('settingsSplitMainPaneRatio');
+    const settingsSplitTiledMaxColumns = document.getElementById('settingsSplitTiledMaxColumns');
 
     await saveSettings({
       theme: settingsTheme.value,
@@ -7006,6 +7072,8 @@ function setupEventListeners() {
       paneOverlayLabelColor: settingsPaneOverlayColor?.value || '#ffffff',
       splitSyncInputEnabled: settingsSplitSyncInput?.checked ?? false,
       splitSyncScope: settingsSplitSyncScope?.value || 'all',
+      splitMainPaneRatio: settingsSplitMainPaneRatio ? parseInt(settingsSplitMainPaneRatio.value) : 70,
+      splitTiledMaxColumns: settingsSplitTiledMaxColumns ? parseInt(settingsSplitTiledMaxColumns.value) : 3,
     });
 
     // Update command history settings

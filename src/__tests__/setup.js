@@ -19,7 +19,9 @@ export const invokeMock = vi.fn(async (command) => {
         pane_overlay_duration_ms: 1800,
         pane_overlay_label_color: '#ffffff',
         split_sync_input_enabled: false,
-        split_sync_scope: 'all'
+        split_sync_scope: 'all',
+        split_main_pane_ratio: 70,
+        split_tiled_max_columns: 3
       };
     case 'list_categories':
     case 'list_projects':

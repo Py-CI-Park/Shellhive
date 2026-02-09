@@ -62,6 +62,7 @@
               <option value="two-rows">Two Rows</option>
               <option value="grid-2x2">2x2 Grid</option>
               <option value="three-columns">Three Columns</option>
+              <option value="main-sidebar">Main + Sidebar</option>
             </select>
             <button class="split-toolbar__btn" id="openLayoutGalleryBtn" title="Open layout gallery">Gallery</button>
           </div>
@@ -352,6 +353,28 @@
           </div>
 
           <p class="settings-help">When enabled, keyboard input in one pane is mirrored to selected target panes.</p>
+        </div>
+
+        <div class="settings-section">
+          <h3 class="settings-section__title">Split Layout Policy</h3>
+
+          <div class="form-group">
+            <label for="settingsSplitMainPaneRatio">Main pane ratio</label>
+            <div class="input-with-value">
+              <input type="range" id="settingsSplitMainPaneRatio" min="50" max="85" step="1" value="70">
+              <span id="splitMainPaneRatioValue">70%</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="settingsSplitTiledMaxColumns">Tiled max columns</label>
+            <div class="input-with-value">
+              <input type="range" id="settingsSplitTiledMaxColumns" min="1" max="6" step="1" value="3">
+              <span id="splitTiledMaxColumnsValue">3</span>
+            </div>
+          </div>
+
+          <p class="settings-help">These policies are applied when layout presets are created or reapplied.</p>
         </div>
       </div>
       <div class="modal__footer">

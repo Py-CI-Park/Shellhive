@@ -22,6 +22,8 @@ pub struct Settings {
     pub pane_overlay_label_color: String,
     pub split_sync_input_enabled: bool,
     pub split_sync_scope: String, // "all" | "same-project"
+    pub split_main_pane_ratio: u8,
+    pub split_tiled_max_columns: u8,
 }
 
 impl Default for Settings {
@@ -41,6 +43,8 @@ impl Default for Settings {
             pane_overlay_label_color: "#ffffff".to_string(),
             split_sync_input_enabled: false,
             split_sync_scope: "all".to_string(),
+            split_main_pane_ratio: 70,
+            split_tiled_max_columns: 3,
         }
     }
 }
@@ -145,6 +149,14 @@ pub async fn save_settings(settings: Settings) -> Result<(), String> {
             "Invalid split sync scope: {}. Valid scopes: all, same-project",
             settings.split_sync_scope
         ));
+    }
+
+    if settings.split_main_pane_ratio < 50 || settings.split_main_pane_ratio > 85 {
+        return Err("Split main pane ratio must be between 50 and 85".to_string());
+    }
+
+    if settings.split_tiled_max_columns < 1 || settings.split_tiled_max_columns > 6 {
+        return Err("Split tiled max columns must be between 1 and 6".to_string());
     }
 
     let file_path = get_settings_file_path()?;

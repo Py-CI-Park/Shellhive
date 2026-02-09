@@ -459,6 +459,42 @@ describe('Split Layout E2E', () => {
     expect(normalWriteCalls.length).toBe(1);
   });
 
+  it('applies split layout policy options to preset result', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+
+    document.getElementById('settingsBtn').click();
+    await waitFor(() => document.getElementById('settingsModal').classList.contains('modal--visible'));
+
+    const mainRatioSlider = document.getElementById('settingsSplitMainPaneRatio');
+    const maxColumnsSlider = document.getElementById('settingsSplitTiledMaxColumns');
+    mainRatioSlider.value = '80';
+    mainRatioSlider.dispatchEvent(new Event('input', { bubbles: true }));
+    maxColumnsSlider.value = '2';
+    maxColumnsSlider.dispatchEvent(new Event('input', { bubbles: true }));
+
+    document.getElementById('saveSettings').click();
+    await waitFor(() => !document.getElementById('settingsModal').classList.contains('modal--visible'));
+
+    const presetSelector = document.getElementById('layoutPresetSelect');
+    presetSelector.value = 'main-sidebar';
+    presetSelector.dispatchEvent(new Event('change', { bubbles: true }));
+
+    await waitFor(() => document.querySelectorAll('#terminalContainer .split-pane').length >= 2);
+    const firstPane = document.querySelector('#terminalContainer .split-pane');
+    expect(firstPane.style.flex).toContain('80%');
+
+    presetSelector.value = 'three-columns';
+    presetSelector.dispatchEvent(new Event('change', { bubbles: true }));
+
+    await waitFor(() => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length === 2);
+  });
+
   it('renders enhanced split pane header with status and path summary', async () => {
     await import('../app.js');
 
