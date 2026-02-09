@@ -36,7 +36,9 @@ function createInvokeImplementation(overrides = {}) {
     enable_ai_features: false,
     locale: 'ko',
     pane_overlay_duration_ms: 1800,
-    pane_overlay_label_color: '#ffffff'
+    pane_overlay_label_color: '#ffffff',
+    split_sync_input_enabled: false,
+    split_sync_scope: 'all'
   };
   let ptyCounter = 0;
 

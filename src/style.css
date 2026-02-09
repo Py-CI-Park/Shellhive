@@ -2063,6 +2063,23 @@ html, body {
   text-overflow: ellipsis;
 }
 
+.split-pane-header__sync {
+  display: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 184, 108, 0.65);
+  background: rgba(255, 184, 108, 0.15);
+  color: #ffb86c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+}
+
+.split-pane-header__sync--active {
+  display: inline-flex;
+  align-items: center;
+}
+
 .split-pane-overlay {
   position: absolute;
   top: 10px;

@@ -417,6 +417,48 @@ describe('Split Layout E2E', () => {
     });
   });
 
+  it('broadcasts input to other split panes when sync mode is enabled', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 2);
+
+    const syncBtn = document.getElementById('syncPanesBtn');
+    expect(syncBtn).toBeTruthy();
+    syncBtn.click();
+    expect(syncBtn.classList.contains('split-toolbar__btn--active')).toBe(true);
+
+    const { Terminal } = await import('xterm');
+    const terminalInstances = Terminal.mock.results.map((result) => result.value);
+    const sourceTerminal = terminalInstances[terminalInstances.length - 1];
+    const sourceOnData = sourceTerminal.onData.mock.calls.at(-1)[0];
+
+    const firstWriteCount = invokeMock.mock.calls.filter(([command]) => command === 'write_pty').length;
+    await sourceOnData('a');
+
+    const syncWriteCalls = invokeMock.mock.calls
+      .filter(([command]) => command === 'write_pty')
+      .slice(firstWriteCount);
+    expect(syncWriteCalls.length).toBeGreaterThanOrEqual(2);
+    const syncTargetIds = new Set(syncWriteCalls.map(([, payload]) => payload.sessionId));
+    expect(syncTargetIds.size).toBeGreaterThanOrEqual(2);
+
+    syncBtn.click();
+    expect(syncBtn.classList.contains('split-toolbar__btn--active')).toBe(false);
+
+    const secondWriteCount = invokeMock.mock.calls.filter(([command]) => command === 'write_pty').length;
+    await sourceOnData('b');
+    const normalWriteCalls = invokeMock.mock.calls
+      .filter(([command]) => command === 'write_pty')
+      .slice(secondWriteCount);
+    expect(normalWriteCalls.length).toBe(1);
+  });
+
   it('renders enhanced split pane header with status and path summary', async () => {
     await import('../app.js');
 

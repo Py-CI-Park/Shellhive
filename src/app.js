@@ -1285,6 +1285,8 @@ const state = {
     locale: 'ko',
     paneOverlayDurationMs: 1800,
     paneOverlayLabelColor: '#ffffff',
+    splitSyncInputEnabled: false,
+    splitSyncScope: 'all',
   },
   blockManagers: new Map(),  // Map<sessionId, BlockManager>
   snippets: [],
@@ -1349,6 +1351,8 @@ function normalizeSettings(settings) {
     locale: settings.locale || 'ko',
     paneOverlayDurationMs: settings.pane_overlay_duration_ms ?? 1800,
     paneOverlayLabelColor: settings.pane_overlay_label_color || '#ffffff',
+    splitSyncInputEnabled: settings.split_sync_input_enabled ?? false,
+    splitSyncScope: settings.split_sync_scope || 'all',
   };
 }
 
@@ -1414,6 +1418,7 @@ async function loadSettings() {
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
     applyAiFeatureVisibility();
     applyBlockModeToSessions(state.settings.enableBlockMode);
+    updateSplitToolbarState();
 
     return state.settings;
   } catch (error) {
@@ -1439,6 +1444,8 @@ async function saveSettings(settings) {
       locale: settings.locale,
       pane_overlay_duration_ms: settings.paneOverlayDurationMs,
       pane_overlay_label_color: settings.paneOverlayLabelColor,
+      split_sync_input_enabled: settings.splitSyncInputEnabled ?? false,
+      split_sync_scope: settings.splitSyncScope || 'all',
     };
     await invoke('save_settings', { settings: backendSettings });
     state.settings = { ...settings };
@@ -1458,6 +1465,11 @@ async function saveSettings(settings) {
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
     applyAiFeatureVisibility();
     applyBlockModeToSessions(state.settings.enableBlockMode);
+    if (state.splitMode) {
+      renderSplitLayout();
+    } else {
+      updateSplitToolbarState();
+    }
 
     debug('Settings saved');
     showToast('설정이 저장되었습니다', 'success');
@@ -1502,6 +1514,8 @@ function showSettingsModal() {
     locale: state.settings.locale || 'ko',
     paneOverlayDurationMs: state.settings.paneOverlayDurationMs ?? 1800,
     paneOverlayLabelColor: state.settings.paneOverlayLabelColor || '#ffffff',
+    splitSyncInputEnabled: state.settings.splitSyncInputEnabled ?? false,
+    splitSyncScope: state.settings.splitSyncScope || 'all',
   };
 
   settingsModal.classList.add('modal--visible');
@@ -1555,6 +1569,16 @@ function showSettingsModal() {
     if (paneOverlayColorValue) {
       paneOverlayColorValue.textContent = color.toLowerCase();
     }
+  }
+
+  const settingsSplitSyncInput = document.getElementById('settingsSplitSyncInput');
+  const settingsSplitSyncScope = document.getElementById('settingsSplitSyncScope');
+  if (settingsSplitSyncInput) {
+    settingsSplitSyncInput.checked = state.settings.splitSyncInputEnabled ?? false;
+  }
+  if (settingsSplitSyncScope) {
+    settingsSplitSyncScope.value = state.settings.splitSyncScope || 'all';
+    settingsSplitSyncScope.disabled = !(settingsSplitSyncInput?.checked ?? false);
   }
 }
 
@@ -2466,6 +2490,7 @@ async function createSession(name = null, workingDir = null, projectId = null, o
           }
 
           await invoke('write_pty', { sessionId: ptySessionId, data });
+          await broadcastInputToSplitPanes(id, data);
         } catch (error) {
           debug('Failed to write to PTY:', error);
         }
@@ -2885,6 +2910,7 @@ function showTabContextMenu(e, sessionId) {
     <div class="context-menu__item" data-action="split-horizontal">아래로 분할</div>
     <div class="context-menu__item" data-action="split-vertical">오른쪽 분할</div>
     ${state.splitMode ? '<div class="context-menu__item" data-action="display-pane-overlay">패널 라벨 표시</div>' : ''}
+    ${state.splitMode ? `<div class="context-menu__item" data-action="toggle-sync-panes">${isSplitSyncEnabled() ? '동시 입력 끄기' : '동시 입력 켜기'}</div>` : ''}
     ${canBreakCurrentPane ? '<div class="context-menu__item" data-action="break-pane">활성 패널 분리 (Break)</div>' : ''}
     ${canTransferToCurrentSplit ? '<div class="context-menu__item" data-action="join-pane-to-active">현재 분할에 결합 (Join)</div>' : ''}
     ${canTransferToCurrentSplit ? '<div class="context-menu__item" data-action="move-pane-to-active">현재 분할로 이동 (Move)</div>' : ''}
@@ -2956,6 +2982,9 @@ function showTabContextMenu(e, sessionId) {
         break;
       case 'display-pane-overlay':
         showPaneOverlaySelection();
+        break;
+      case 'toggle-sync-panes':
+        toggleSplitSyncInput();
         break;
       case 'break-pane':
         activateSession(sessionId, { preserveSplitLayout: true });
@@ -4525,6 +4554,63 @@ function movePaneFromSelection() {
   return joinSessionToActiveSplit(sourceSessionId, { moveSource: true });
 }
 
+function isSplitSyncEnabled() {
+  return state.settings.splitSyncInputEnabled === true;
+}
+
+function getSplitSyncScope() {
+  return state.settings.splitSyncScope === 'same-project' ? 'same-project' : 'all';
+}
+
+function toggleSplitSyncInput(forceValue = null) {
+  const nextValue = typeof forceValue === 'boolean' ? forceValue : !isSplitSyncEnabled();
+  state.settings.splitSyncInputEnabled = nextValue;
+  updateSplitToolbarState();
+  if (state.splitMode) {
+    renderSplitLayout();
+  }
+  showToast(
+    nextValue ? '분할 동시 입력이 활성화되었습니다' : '분할 동시 입력이 비활성화되었습니다',
+    nextValue ? 'warning' : 'info',
+    1200
+  );
+}
+
+function getSplitSyncTargetSessionIds(sourceSessionId) {
+  if (!isSplitSyncEnabled() || !state.splitMode || !state.splitRoot) {
+    return [];
+  }
+
+  const sourceSession = state.sessions.get(sourceSessionId);
+  if (!sourceSession) return [];
+  if (!findLeafNode(state.splitRoot, sourceSessionId)) return [];
+
+  const scope = getSplitSyncScope();
+  return getSplitLeafSessionIds().filter((sessionId) => {
+    if (sessionId === sourceSessionId) return false;
+    const session = state.sessions.get(sessionId);
+    if (!session || !session.ptySessionId || session.status !== SESSION_STATUS.RUNNING) return false;
+
+    if (scope === 'same-project') {
+      const sameProjectId = sourceSession.projectId && session.projectId && sourceSession.projectId === session.projectId;
+      const samePath = sourceSession.projectPath && session.projectPath && sourceSession.projectPath === session.projectPath;
+      return Boolean(sameProjectId || samePath);
+    }
+    return true;
+  });
+}
+
+async function broadcastInputToSplitPanes(sourceSessionId, data) {
+  const targetSessionIds = getSplitSyncTargetSessionIds(sourceSessionId);
+  if (targetSessionIds.length === 0) return;
+
+  await Promise.allSettled(targetSessionIds.map((targetSessionId) => {
+    const session = state.sessions.get(targetSessionId);
+    if (!session?.ptySessionId) return Promise.resolve();
+    return invoke('write_pty', { sessionId: session.ptySessionId, data });
+  }));
+}
+
 function initSplitMode() {
   if (!state.activeSessionId) return;
 
@@ -5139,6 +5225,7 @@ function ensureSplitPaneHeader(session) {
         <span class="split-pane-header__title"></span>
         <span class="split-pane-header__subtitle"></span>
       </div>
+      <span class="split-pane-header__sync">SYNC</span>
     `;
   }
   if (session.wrapper.firstChild !== header) {
@@ -5148,6 +5235,7 @@ function ensureSplitPaneHeader(session) {
   const statusEl = header.querySelector('.split-pane-header__status');
   const titleEl = header.querySelector('.split-pane-header__title');
   const subtitleEl = header.querySelector('.split-pane-header__subtitle');
+  const syncEl = header.querySelector('.split-pane-header__sync');
 
   if (statusEl) {
     statusEl.textContent = getStatusIcon(session.status);
@@ -5160,6 +5248,14 @@ function ensureSplitPaneHeader(session) {
   if (subtitleEl) {
     subtitleEl.textContent = getSplitPaneSubtitle(session);
     subtitleEl.title = session.projectPath || '로컬 셸';
+  }
+  if (syncEl) {
+    const syncActive = isSplitSyncEnabled() && state.splitMode;
+    syncEl.className = `split-pane-header__sync${syncActive ? ' split-pane-header__sync--active' : ''}`;
+    syncEl.textContent = getSplitSyncScope() === 'same-project' ? 'SYNC-P' : 'SYNC';
+    syncEl.title = getSplitSyncScope() === 'same-project'
+      ? '동일 프로젝트 패널에만 동시 입력'
+      : '분할 패널 전체 동시 입력';
   }
 }
 
@@ -5287,6 +5383,12 @@ function updateSplitToolbarState() {
   if (paneOverlayBtn) {
     paneOverlayBtn.disabled = !splitActive;
     paneOverlayBtn.classList.toggle('split-toolbar__btn--active', splitActive && state.paneOverlayVisible);
+  }
+
+  const syncPanesBtn = document.getElementById('syncPanesBtn');
+  if (syncPanesBtn) {
+    syncPanesBtn.disabled = !splitActive;
+    syncPanesBtn.classList.toggle('split-toolbar__btn--active', splitActive && isSplitSyncEnabled());
   }
 
   const swapBtn = document.getElementById('swapPanesBtn');
@@ -5920,6 +6022,7 @@ const COMMANDS = [
   { id: 'layout-preset-selector', name: '레이아웃 선택기 열기', shortcut: 'Ctrl+Shift+S', action: () => focusLayoutPresetSelector() },
   { id: 'layout-gallery', name: '레이아웃 갤러리 열기', shortcut: 'Ctrl+Shift+L', action: () => openLayoutGalleryModal() },
   { id: 'display-pane-overlay', name: '패널 라벨 오버레이 표시', shortcut: 'Ctrl+Shift+O', action: () => showPaneOverlaySelection() },
+  { id: 'toggle-sync-panes', name: '분할 동시 입력 토글', shortcut: 'Ctrl+Shift+Y', action: () => toggleSplitSyncInput() },
   { id: 'break-pane', name: '활성 패널 분리 (Break)', shortcut: 'Ctrl+Shift+B', action: () => breakActivePaneToTab() },
   { id: 'join-pane', name: '선택 소스 탭 결합 (Join)', shortcut: 'Ctrl+Shift+I', action: () => joinPaneFromSelection() },
   { id: 'move-pane', name: '선택 소스 탭 이동 (Move)', shortcut: 'Ctrl+Shift+U', action: () => movePaneFromSelection() },
@@ -6257,6 +6360,12 @@ function handleKeyboardShortcuts(e) {
   if (e.ctrlKey && e.shiftKey && e.code === 'KeyU') {
     e.preventDefault();
     movePaneFromSelection();
+    return;
+  }
+  // Ctrl+Shift+Y - Toggle synchronized split input
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyY') {
+    e.preventDefault();
+    toggleSplitSyncInput();
     return;
   }
   // Ctrl+Shift+D - Horizontal split
@@ -6865,12 +6974,22 @@ function setupEventListeners() {
     });
   }
 
+  const settingsSplitSyncInput = document.getElementById('settingsSplitSyncInput');
+  const settingsSplitSyncScope = document.getElementById('settingsSplitSyncScope');
+  if (settingsSplitSyncInput && settingsSplitSyncScope) {
+    settingsSplitSyncInput.addEventListener('change', () => {
+      settingsSplitSyncScope.disabled = !settingsSplitSyncInput.checked;
+    });
+  }
+
   saveSettingsBtn.addEventListener('click', async () => {
     const settingsLocale = document.getElementById('settingsLocale');
     const settingsEnableSnippetSuggestions = document.getElementById('settingsEnableSnippetSuggestions');
     const settingsSnippetThreshold = document.getElementById('settingsSnippetThreshold');
     const settingsPaneOverlayDuration = document.getElementById('settingsPaneOverlayDuration');
     const settingsPaneOverlayColor = document.getElementById('settingsPaneOverlayColor');
+    const settingsSplitSyncInput = document.getElementById('settingsSplitSyncInput');
+    const settingsSplitSyncScope = document.getElementById('settingsSplitSyncScope');
 
     await saveSettings({
       theme: settingsTheme.value,
@@ -6885,6 +7004,8 @@ function setupEventListeners() {
       enableAiFeatures: false,
       paneOverlayDurationMs: settingsPaneOverlayDuration ? parseInt(settingsPaneOverlayDuration.value) : 1800,
       paneOverlayLabelColor: settingsPaneOverlayColor?.value || '#ffffff',
+      splitSyncInputEnabled: settingsSplitSyncInput?.checked ?? false,
+      splitSyncScope: settingsSplitSyncScope?.value || 'all',
     });
 
     // Update command history settings
@@ -7721,6 +7842,9 @@ function setupSplitToolbar() {
     } else {
       showPaneOverlaySelection();
     }
+  });
+  document.getElementById('syncPanesBtn')?.addEventListener('click', () => {
+    toggleSplitSyncInput();
   });
   document.getElementById('breakPaneBtn')?.addEventListener('click', () => {
     breakActivePaneToTab();

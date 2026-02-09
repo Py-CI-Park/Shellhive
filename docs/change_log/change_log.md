@@ -98,6 +98,46 @@
 - `npm run test -- --run` (4 files, 25 tests)
 - `cargo check --manifest-path src-tauri/Cargo.toml`
 
+#### feat(split-sync): 분할 동시 입력(synchronize-panes) 및 범위 옵션 추가
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `index.html`
+  - Split 툴바에 `Sync` 버튼 추가 (`syncPanesBtn`)
+  - 설정 모달에 Split Sync Input 섹션 추가
+    - 동시 입력 활성화 (`settingsSplitSyncInput`)
+    - 대상 범위 선택 (`settingsSplitSyncScope`: 전체/동일 프로젝트)
+- `src/app.js`
+  - 동시 입력 핵심 로직 추가
+    - `toggleSplitSyncInput`
+    - `getSplitSyncTargetSessionIds`
+    - `broadcastInputToSplitPanes`
+  - 입력 파이프라인에서 분할 대상 브로드캐스트 수행
+  - 단축키 `Ctrl+Shift+Y` 추가
+  - Command Palette `toggle-sync-panes` 명령 추가
+  - 컨텍스트 메뉴에 동시 입력 켜기/끄기 추가
+  - 분할 헤더에 `SYNC / SYNC-P` 상태 배지 표시
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/settings.rs`
+  - 설정 스키마 확장
+    - `split_sync_input_enabled`
+    - `split_sync_scope`
+  - `split_sync_scope` 유효값 검증(`all`, `same-project`) 추가
+- `src/style.css`
+  - 분할 헤더 동시 입력 배지 스타일 추가 (`.split-pane-header__sync*`)
+- `src/__tests__/setup.js`, `src/__tests__/phase5-regression.e2e.test.js`
+  - 신규 설정 필드 mock 반영
+
+##### 테스트 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 26 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+
 ### 2026-02-08
 
 #### fix/build/release: 배포 안정화 및 split UX 개선

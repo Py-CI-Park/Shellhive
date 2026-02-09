@@ -20,6 +20,8 @@ pub struct Settings {
     pub locale: String, // "en", "ko"
     pub pane_overlay_duration_ms: u16,
     pub pane_overlay_label_color: String,
+    pub split_sync_input_enabled: bool,
+    pub split_sync_scope: String, // "all" | "same-project"
 }
 
 impl Default for Settings {
@@ -37,6 +39,8 @@ impl Default for Settings {
             locale: "ko".to_string(), // Default to Korean
             pane_overlay_duration_ms: 1800,
             pane_overlay_label_color: "#ffffff".to_string(),
+            split_sync_input_enabled: false,
+            split_sync_scope: "all".to_string(),
         }
     }
 }
@@ -132,6 +136,14 @@ pub async fn save_settings(settings: Settings) -> Result<(), String> {
         return Err(format!(
             "Invalid pane overlay label color: {}. Expected #RRGGBB",
             settings.pane_overlay_label_color
+        ));
+    }
+
+    let valid_split_sync_scopes = ["all", "same-project"];
+    if !valid_split_sync_scopes.contains(&settings.split_sync_scope.as_str()) {
+        return Err(format!(
+            "Invalid split sync scope: {}. Valid scopes: all, same-project",
+            settings.split_sync_scope
         ));
     }
 
