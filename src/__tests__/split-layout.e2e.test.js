@@ -311,6 +311,45 @@ describe('Split Layout E2E', () => {
       return activeLeaf && activeLeaf.dataset.sessionId === targetSessionId;
     });
   });
+
+  it('shows pane overlay labels and switches pane by keyboard label', async () => {
+    await import('../app.js');
+
+    if (document.readyState === 'loading') {
+      document.dispatchEvent(new Event('DOMContentLoaded'));
+    }
+
+    await waitFor(() => document.querySelectorAll('.tab').length >= 1);
+    document.getElementById('splitHorizontalBtn').click();
+    await waitFor(() => document.querySelectorAll('#terminalContainer .terminal-wrapper--split').length >= 2);
+
+    const overlayBtn = document.getElementById('showPaneOverlayBtn');
+    expect(overlayBtn).toBeTruthy();
+    overlayBtn.click();
+
+    await waitFor(() => document.querySelectorAll('.split-pane-overlay').length >= 2);
+    const overlays = Array.from(document.querySelectorAll('.split-pane-overlay'));
+
+    const activeWrapper = document.querySelector('.terminal-wrapper--split.terminal-wrapper--active');
+    const activeSessionId = activeWrapper?.id.replace('terminal-', '');
+    const targetOverlay = overlays.find((item) => item.dataset.sessionId !== activeSessionId) || overlays[0];
+
+    expect(targetOverlay?.dataset.sessionId).toBeTruthy();
+    expect(targetOverlay?.dataset.label).toBeTruthy();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', {
+      key: targetOverlay.dataset.label,
+      bubbles: true
+    }));
+
+    await waitFor(() => {
+      const currentActive = document.querySelector('.terminal-wrapper--split.terminal-wrapper--active');
+      return currentActive?.id === `terminal-${targetOverlay.dataset.sessionId}`;
+    });
+
+    await waitFor(() => document.querySelectorAll('.split-pane-overlay').length === 0);
+  });
+
   it('renders enhanced split pane header with status and path summary', async () => {
     await import('../app.js');
 

@@ -1283,6 +1283,8 @@ const state = {
     enableBlockMode: false,  // Warp-style block output
     enableAiFeatures: false,
     locale: 'ko',
+    paneOverlayDurationMs: 1800,
+    paneOverlayLabelColor: '#ffffff',
   },
   blockManagers: new Map(),  // Map<sessionId, BlockManager>
   snippets: [],
@@ -1306,6 +1308,9 @@ const state = {
   splitInProgress: false,     // Prevent race condition in splitActivePane
   splitRenderRaf: null,       // requestAnimationFrame handle for split render batching
   splitMinimapVisible: true,  // Split minimap panel visibility
+  paneOverlayVisible: false,  // Whether pane label overlay is visible
+  paneOverlayMap: new Map(),  // Map<label, sessionId> for quick pane jump
+  paneOverlayTimer: null,     // Auto-hide timer for pane overlay
   selectedLayoutPreset: null, // Selected preset in layout gallery modal
   autocompleteVisible: false, // Autocomplete popup visible state
   autocompleteQuery: '',      // Current input for autocomplete
@@ -1342,6 +1347,8 @@ function normalizeSettings(settings) {
     // AI 기능은 현재 릴리즈 범위에서 제외
     enableAiFeatures: false,
     locale: settings.locale || 'ko',
+    paneOverlayDurationMs: settings.pane_overlay_duration_ms ?? 1800,
+    paneOverlayLabelColor: settings.pane_overlay_label_color || '#ffffff',
   };
 }
 
@@ -1398,6 +1405,7 @@ async function loadSettings() {
     state.settings = normalizeSettings(settings);
 
     applyTheme(state.settings.theme);
+    applyPaneOverlaySettings();
 
     if (state.settings.locale) {
       setLocale(state.settings.locale);
@@ -1410,6 +1418,7 @@ async function loadSettings() {
     return state.settings;
   } catch (error) {
     debug('Failed to load settings:', error);
+    applyPaneOverlaySettings();
     applyAiFeatureVisibility();
     return state.settings;
   }
@@ -1428,11 +1437,14 @@ async function saveSettings(settings) {
       enable_block_mode: settings.enableBlockMode,
       enable_ai_features: false,
       locale: settings.locale,
+      pane_overlay_duration_ms: settings.paneOverlayDurationMs,
+      pane_overlay_label_color: settings.paneOverlayLabelColor,
     };
     await invoke('save_settings', { settings: backendSettings });
     state.settings = { ...settings };
 
     applyTheme(state.settings.theme);
+    applyPaneOverlaySettings();
 
     if (state.settings.locale) {
       setLocale(state.settings.locale);
@@ -1488,6 +1500,8 @@ function showSettingsModal() {
     enableBlockMode: state.settings.enableBlockMode ?? false,
     enableAiFeatures: state.settings.enableAiFeatures ?? false,
     locale: state.settings.locale || 'ko',
+    paneOverlayDurationMs: state.settings.paneOverlayDurationMs ?? 1800,
+    paneOverlayLabelColor: state.settings.paneOverlayLabelColor || '#ffffff',
   };
 
   settingsModal.classList.add('modal--visible');
@@ -1521,6 +1535,32 @@ function showSettingsModal() {
       snippetThresholdValue.textContent = `${threshold} times`;
     }
   }
+
+  const settingsPaneOverlayDuration = document.getElementById('settingsPaneOverlayDuration');
+  const paneOverlayDurationValue = document.getElementById('paneOverlayDurationValue');
+  const settingsPaneOverlayColor = document.getElementById('settingsPaneOverlayColor');
+  const paneOverlayColorValue = document.getElementById('paneOverlayColorValue');
+
+  if (settingsPaneOverlayDuration) {
+    const duration = state.settings.paneOverlayDurationMs ?? 1800;
+    settingsPaneOverlayDuration.value = String(duration);
+    if (paneOverlayDurationValue) {
+      paneOverlayDurationValue.textContent = `${duration} ms`;
+    }
+  }
+
+  if (settingsPaneOverlayColor) {
+    const color = state.settings.paneOverlayLabelColor || '#ffffff';
+    settingsPaneOverlayColor.value = color;
+    if (paneOverlayColorValue) {
+      paneOverlayColorValue.textContent = color.toLowerCase();
+    }
+  }
+}
+
+function applyPaneOverlaySettings() {
+  const color = state.settings.paneOverlayLabelColor || '#ffffff';
+  document.documentElement.style.setProperty('--split-overlay-label-color', color);
 }
 
 function hideSettingsModal() {
@@ -2841,6 +2881,7 @@ function showTabContextMenu(e, sessionId) {
     <div class="context-menu__item" data-action="split-default">기본 분할 (오른쪽)</div>
     <div class="context-menu__item" data-action="split-horizontal">아래로 분할</div>
     <div class="context-menu__item" data-action="split-vertical">오른쪽 분할</div>
+    ${state.splitMode ? '<div class="context-menu__item" data-action="display-pane-overlay">패널 라벨 표시</div>' : ''}
     ${state.splitMode ? '<div class="context-menu__item" data-action="merge-pane">창 합치기</div>' : ''}
     ${state.splitMode ? '<div class="context-menu__item" data-action="swap-position">Swap Position</div>' : ''}
     ${state.splitMode ? `<div class="context-menu__item" data-action="toggle-maximize">${state.maximizedSession === sessionId ? 'Restore Pane' : 'Maximize Pane'}</div>` : ''}
@@ -2906,6 +2947,9 @@ function showTabContextMenu(e, sessionId) {
       case 'split-vertical':
         activateSession(sessionId);
         splitVertical();
+        break;
+      case 'display-pane-overlay':
+        showPaneOverlaySelection();
         break;
       case 'merge-pane':
         mergePane(sessionId);
@@ -4159,6 +4203,139 @@ function formatTime(ms) {
 
 // ===== Split Pane Functions =====
 
+const PANE_OVERLAY_LABEL_POOL = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function getSplitLeafSessionIds() {
+  if (!state.splitMode || !state.splitRoot) return [];
+  return getAllLeafNodes(state.splitRoot)
+    .map((leaf) => leaf.sessionId)
+    .filter((sessionId) => state.sessions.has(sessionId));
+}
+
+function getPaneOverlayLabel(index) {
+  if (index < PANE_OVERLAY_LABEL_POOL.length) {
+    return PANE_OVERLAY_LABEL_POOL[index];
+  }
+  return (index + 1).toString(36).toUpperCase();
+}
+
+function clearPaneOverlayTimer() {
+  if (state.paneOverlayTimer) {
+    clearTimeout(state.paneOverlayTimer);
+    state.paneOverlayTimer = null;
+  }
+}
+
+function rebuildPaneOverlayMap() {
+  state.paneOverlayMap.clear();
+  const leafSessionIds = getSplitLeafSessionIds();
+  leafSessionIds.forEach((sessionId, index) => {
+    state.paneOverlayMap.set(getPaneOverlayLabel(index), sessionId);
+  });
+}
+
+function hidePaneOverlaySelection(options = {}) {
+  const { rerender = true } = options;
+  clearPaneOverlayTimer();
+  state.paneOverlayVisible = false;
+  state.paneOverlayMap.clear();
+  if (rerender) {
+    scheduleSplitRender();
+  }
+}
+
+function showPaneOverlaySelection() {
+  if (!state.splitMode || !state.splitRoot) {
+    showToast('분할 모드에서만 패널 라벨을 표시할 수 있습니다', 'warning');
+    return;
+  }
+
+  rebuildPaneOverlayMap();
+  if (state.paneOverlayMap.size === 0) {
+    return;
+  }
+
+  state.paneOverlayVisible = true;
+  scheduleSplitRender();
+
+  const durationMs = Math.max(500, Math.min(5000, state.settings.paneOverlayDurationMs || 1800));
+  clearPaneOverlayTimer();
+  state.paneOverlayTimer = setTimeout(() => {
+    hidePaneOverlaySelection();
+  }, durationMs);
+}
+
+function getPaneOverlayLabelBySessionId(sessionId) {
+  for (const [label, mappedSessionId] of state.paneOverlayMap.entries()) {
+    if (mappedSessionId === sessionId) {
+      return label;
+    }
+  }
+  return null;
+}
+
+function ensurePaneOverlayLabel(wrapper, sessionId) {
+  if (!wrapper) return;
+
+  const currentOverlay = wrapper.querySelector('.split-pane-overlay');
+  if (!state.paneOverlayVisible) {
+    currentOverlay?.remove();
+    return;
+  }
+
+  const label = getPaneOverlayLabelBySessionId(sessionId);
+  if (!label) {
+    currentOverlay?.remove();
+    return;
+  }
+
+  let overlay = currentOverlay;
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'split-pane-overlay';
+    overlay.innerHTML = '<span class="split-pane-overlay__label"></span>';
+    wrapper.appendChild(overlay);
+  }
+
+  overlay.dataset.sessionId = sessionId;
+  overlay.dataset.label = label;
+  const labelEl = overlay.querySelector('.split-pane-overlay__label');
+  if (labelEl) {
+    labelEl.textContent = label;
+  }
+}
+
+function handlePaneOverlayInputKey(event) {
+  if (!state.paneOverlayVisible) {
+    return false;
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    hidePaneOverlaySelection();
+    return true;
+  }
+
+  if (event.ctrlKey || event.altKey || event.metaKey) {
+    return false;
+  }
+
+  const key = String(event.key || '').trim().toUpperCase();
+  if (!key) {
+    return false;
+  }
+
+  const targetSessionId = state.paneOverlayMap.get(key);
+  if (!targetSessionId || !state.sessions.has(targetSessionId)) {
+    return false;
+  }
+
+  event.preventDefault();
+  hidePaneOverlaySelection({ rerender: false });
+  activateSession(targetSessionId, { preserveSplitLayout: true });
+  return true;
+}
+
 function initSplitMode() {
   if (!state.activeSessionId) return;
 
@@ -4436,6 +4613,7 @@ function scheduleSplitRender() {
 function renderSplitLayout() {
   const container = document.getElementById('terminalContainer');
   if (!state.splitMode || !state.splitRoot) {
+    hidePaneOverlaySelection({ rerender: false });
     // Reset to normal mode
     container.innerHTML = '';
     container.className = 'terminal-container';
@@ -4452,8 +4630,15 @@ function renderSplitLayout() {
 
   // If there's a maximized session, render maximized view
   if (state.maximizedSession) {
+    if (state.paneOverlayVisible) {
+      rebuildPaneOverlayMap();
+    }
     renderMaximizedView(state.maximizedSession);
     return;
+  }
+
+  if (state.paneOverlayVisible) {
+    rebuildPaneOverlayMap();
   }
 
   container.innerHTML = '';
@@ -4481,6 +4666,7 @@ function renderSplitNode(node) {
     session.wrapper.classList.toggle('terminal-wrapper--active',
       node.sessionId === state.activeSessionId);
     ensureSplitPaneHeader(session);
+    ensurePaneOverlayLabel(session.wrapper, node.sessionId);
 
     // Add click handler for focus or swap
     session.wrapper.onclick = () => {
@@ -4633,6 +4819,7 @@ function removeLeafNode(node, sessionId) {
 }
 
 function exitSplitMode() {
+  hidePaneOverlaySelection({ rerender: false });
   state.maximizedSession = null;
   state.splitMode = false;
   state.splitRoot = null;
@@ -4901,6 +5088,12 @@ function updateSplitToolbarState() {
   if (minimapBtn) {
     minimapBtn.disabled = !splitActive;
     minimapBtn.classList.toggle('split-toolbar__btn--active', splitActive && state.splitMinimapVisible);
+  }
+
+  const paneOverlayBtn = document.getElementById('showPaneOverlayBtn');
+  if (paneOverlayBtn) {
+    paneOverlayBtn.disabled = !splitActive;
+    paneOverlayBtn.classList.toggle('split-toolbar__btn--active', splitActive && state.paneOverlayVisible);
   }
 
   const swapBtn = document.getElementById('swapPanesBtn');
@@ -5513,6 +5706,7 @@ const COMMANDS = [
   { id: 'split-vertical', name: '오른쪽 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
   { id: 'layout-preset-selector', name: '레이아웃 선택기 열기', shortcut: 'Ctrl+Shift+S', action: () => focusLayoutPresetSelector() },
   { id: 'layout-gallery', name: '레이아웃 갤러리 열기', shortcut: 'Ctrl+Shift+L', action: () => openLayoutGalleryModal() },
+  { id: 'display-pane-overlay', name: '패널 라벨 오버레이 표시', shortcut: 'Ctrl+Shift+O', action: () => showPaneOverlaySelection() },
   { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
   { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
   { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
@@ -5759,6 +5953,10 @@ function changeTheme(theme) {
 }
 
 function handleKeyboardShortcuts(e) {
+  if (handlePaneOverlayInputKey(e)) {
+    return;
+  }
+
   // Ctrl+Shift+P - Command Palette
   if (e.ctrlKey && e.shiftKey && e.code === 'KeyP') {
     e.preventDefault();
@@ -5815,6 +6013,16 @@ function handleKeyboardShortcuts(e) {
     e.preventDefault();
     const preset = document.getElementById('layoutPresetSelect')?.value || null;
     openLayoutGalleryModal(preset);
+    return;
+  }
+  // Ctrl+Shift+O - Show pane label overlay
+  if (e.ctrlKey && e.shiftKey && e.code === 'KeyO') {
+    e.preventDefault();
+    if (state.paneOverlayVisible) {
+      hidePaneOverlaySelection();
+    } else {
+      showPaneOverlaySelection();
+    }
     return;
   }
   // Ctrl+Shift+D - Horizontal split
@@ -6407,10 +6615,28 @@ function setupEventListeners() {
     });
   }
 
+  const settingsPaneOverlayDuration = document.getElementById('settingsPaneOverlayDuration');
+  const paneOverlayDurationValue = document.getElementById('paneOverlayDurationValue');
+  if (settingsPaneOverlayDuration && paneOverlayDurationValue) {
+    settingsPaneOverlayDuration.addEventListener('input', (e) => {
+      paneOverlayDurationValue.textContent = `${e.target.value} ms`;
+    });
+  }
+
+  const settingsPaneOverlayColor = document.getElementById('settingsPaneOverlayColor');
+  const paneOverlayColorValue = document.getElementById('paneOverlayColorValue');
+  if (settingsPaneOverlayColor && paneOverlayColorValue) {
+    settingsPaneOverlayColor.addEventListener('input', (e) => {
+      paneOverlayColorValue.textContent = String(e.target.value || '#ffffff').toLowerCase();
+    });
+  }
+
   saveSettingsBtn.addEventListener('click', async () => {
     const settingsLocale = document.getElementById('settingsLocale');
     const settingsEnableSnippetSuggestions = document.getElementById('settingsEnableSnippetSuggestions');
     const settingsSnippetThreshold = document.getElementById('settingsSnippetThreshold');
+    const settingsPaneOverlayDuration = document.getElementById('settingsPaneOverlayDuration');
+    const settingsPaneOverlayColor = document.getElementById('settingsPaneOverlayColor');
 
     await saveSettings({
       theme: settingsTheme.value,
@@ -6423,6 +6649,8 @@ function setupEventListeners() {
       enableSnippetSuggestions: settingsEnableSnippetSuggestions?.checked ?? true,
       snippetSuggestionThreshold: settingsSnippetThreshold ? parseInt(settingsSnippetThreshold.value) : 3,
       enableAiFeatures: false,
+      paneOverlayDurationMs: settingsPaneOverlayDuration ? parseInt(settingsPaneOverlayDuration.value) : 1800,
+      paneOverlayLabelColor: settingsPaneOverlayColor?.value || '#ffffff',
     });
 
     // Update command history settings
@@ -7252,6 +7480,13 @@ function setupSplitToolbar() {
   });
   document.getElementById('toggleSplitMinimapBtn')?.addEventListener('click', () => {
     setSplitMinimapVisibility(!state.splitMinimapVisible);
+  });
+  document.getElementById('showPaneOverlayBtn')?.addEventListener('click', () => {
+    if (state.paneOverlayVisible) {
+      hidePaneOverlaySelection();
+    } else {
+      showPaneOverlaySelection();
+    }
   });
   document.getElementById('mergePaneBtn')?.addEventListener('click', () => mergePane());
   document.getElementById('maximizePaneBtn')?.addEventListener('click', () => toggleMaximize());

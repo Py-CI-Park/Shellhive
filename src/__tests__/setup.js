@@ -15,7 +15,9 @@ export const invokeMock = vi.fn(async (command) => {
         snippet_suggestion_threshold: 3,
         enable_block_mode: false,
         enable_ai_features: false,
-        locale: 'ko'
+        locale: 'ko',
+        pane_overlay_duration_ms: 1800,
+        pane_overlay_label_color: '#ffffff'
       };
     case 'list_categories':
     case 'list_projects':

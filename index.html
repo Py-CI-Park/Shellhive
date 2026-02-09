@@ -69,6 +69,7 @@
         <div class="split-toolbar__section" data-section="pane">
           <span class="split-toolbar__label">Pane</span>
           <div class="split-toolbar__group">
+            <button class="split-toolbar__btn" id="showPaneOverlayBtn" title="Show pane labels (Ctrl+Shift+O)">Labels</button>
             <button class="split-toolbar__btn" id="toggleSplitMinimapBtn" title="Toggle split minimap">Minimap</button>
             <button class="split-toolbar__btn" id="swapPanesBtn" title="Swap panes">Swap</button>
             <button class="split-toolbar__btn" id="mergePaneBtn" title="Merge active pane (Ctrl+Shift+J)">Merge</button>
@@ -303,6 +304,28 @@
           </div>
 
           <p class="settings-help">Display command output in grouped command blocks (input, output, duration, and status).</p>
+        </div>
+
+        <div class="settings-section">
+          <h3 class="settings-section__title">Split Overlay</h3>
+
+          <div class="form-group">
+            <label for="settingsPaneOverlayDuration">Pane label duration</label>
+            <div class="input-with-value">
+              <input type="range" id="settingsPaneOverlayDuration" min="500" max="5000" step="100" value="1800">
+              <span id="paneOverlayDurationValue">1800 ms</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="settingsPaneOverlayColor">Pane label color</label>
+            <div class="input-with-value">
+              <input type="color" id="settingsPaneOverlayColor" value="#ffffff">
+              <span id="paneOverlayColorValue">#ffffff</span>
+            </div>
+          </div>
+
+          <p class="settings-help">Use Ctrl+Shift+O to show pane labels and jump quickly by keyboard.</p>
         </div>
       </div>
       <div class="modal__footer">

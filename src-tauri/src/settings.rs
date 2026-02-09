@@ -18,6 +18,8 @@ pub struct Settings {
     pub enable_block_mode: bool,
     pub enable_ai_features: bool,
     pub locale: String, // "en", "ko"
+    pub pane_overlay_duration_ms: u16,
+    pub pane_overlay_label_color: String,
 }
 
 impl Default for Settings {
@@ -33,8 +35,20 @@ impl Default for Settings {
             enable_block_mode: false,
             enable_ai_features: false,
             locale: "ko".to_string(), // Default to Korean
+            pane_overlay_duration_ms: 1800,
+            pane_overlay_label_color: "#ffffff".to_string(),
         }
     }
+}
+
+fn is_valid_hex_color(color: &str) -> bool {
+    if color.len() != 7 || !color.starts_with('#') {
+        return false;
+    }
+    color
+        .chars()
+        .skip(1)
+        .all(|c| c.is_ascii_hexdigit())
 }
 
 /// Get settings file path (APPDATA/shellhive/settings.json)
@@ -107,6 +121,17 @@ pub async fn save_settings(settings: Settings) -> Result<(), String> {
         return Err(format!(
             "Invalid locale: {}. Valid locales: en, ko",
             settings.locale
+        ));
+    }
+
+    if settings.pane_overlay_duration_ms < 500 || settings.pane_overlay_duration_ms > 5000 {
+        return Err("Pane overlay duration must be between 500 and 5000 milliseconds".to_string());
+    }
+
+    if !is_valid_hex_color(&settings.pane_overlay_label_color) {
+        return Err(format!(
+            "Invalid pane overlay label color: {}. Expected #RRGGBB",
+            settings.pane_overlay_label_color
         ));
     }
 

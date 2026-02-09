@@ -21,6 +21,44 @@
 - `docs/research/RESEARCH_TMUX_SOURCE_BENCHMARK_FOR_SHELLHIVE_2026-02-09.md` 추가
 - tmux 핵심 설계(overlay, break/join/move, synchronize, policy options)를 Shellhive 적용 관점으로 정리
 
+#### feat(split-overlay): display-panes 스타일 패널 라벨 오버레이 및 설정 옵션 도입
+
+**커밋**: `working-tree`
+
+##### 추가됨 (Added)
+
+- `index.html`
+  - Split 툴바 `Labels` 버튼 추가 (`showPaneOverlayBtn`)
+  - 설정 모달에 Split Overlay 섹션 추가
+    - 표시 시간(`settingsPaneOverlayDuration`)
+    - 라벨 색상(`settingsPaneOverlayColor`)
+- `src/app.js`
+  - 패널 라벨 오버레이 표시/숨김/자동종료 로직 추가
+    - `showPaneOverlaySelection`, `hidePaneOverlaySelection`, `handlePaneOverlayInputKey`
+  - `Ctrl+Shift+O` 단축키로 오버레이 토글
+  - 컨텍스트 메뉴 `패널 라벨 표시` 추가
+  - 분할 렌더 시 오버레이 라벨 DOM 렌더링 (`ensurePaneOverlayLabel`)
+  - Command Palette 명령 추가 (`display-pane-overlay`)
+- `src/style.css`
+  - 오버레이 라벨 스타일 추가 (`.split-pane-overlay*`)
+  - 설정 모달 color input 스타일 보강
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/settings.rs`
+  - 설정 스키마 확장
+    - `pane_overlay_duration_ms`
+    - `pane_overlay_label_color`
+  - 입력값 검증 추가(표시 시간 범위, `#RRGGBB` 색상 형식)
+- `src/__tests__/setup.js`, `src/__tests__/phase5-regression.e2e.test.js`
+  - 신규 설정 필드 mock 반영
+
+##### 테스트 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 23 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+
 ### 2026-02-08
 
 #### fix/build/release: 배포 안정화 및 split UX 개선

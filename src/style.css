@@ -658,6 +658,16 @@ html, body {
               color var(--transition-speed) ease;
 }
 
+.form-group input[type="color"] {
+  width: 52px;
+  height: 30px;
+  padding: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 .form-group input:focus {
   outline: none;
   border-color: var(--accent);
@@ -2046,6 +2056,31 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.split-pane-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.split-pane-overlay__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--split-overlay-label-color, #ffffff);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .terminal-wrapper--swap-target {
