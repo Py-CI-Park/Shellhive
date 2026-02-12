@@ -37,5 +37,5 @@ if %errorlevel% neq 0 (
 )
 
 echo [INFO] Shellhive started successfully
-timeout /t 2 /nobreak >nul
 endlocal
+exit /b 0

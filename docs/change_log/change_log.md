@@ -10,6 +10,40 @@
 
 ## [Unreleased]
 
+### 2026-02-12
+
+#### fix(ops-scripts): 개발/릴리즈 실행 스크립트 충돌 처리 및 번들 식별자 경고 정비
+
+**커밋**: `본 커밋`
+
+##### 추가됨 (Added)
+
+- `scripts/ensure-shellhive-dev-port.ps1`
+  - `run-dev.bat` 실행 전 개발 포트(기본 1420) 점유 프로세스를 점검하는 가드 스크립트 추가
+  - 동일 저장소에서 남아 있던 stale Vite 프로세스는 자동 종료
+  - 타 프로젝트/타 프로세스 점유 시 PID 및 커맨드라인을 출력하고 안전하게 실패 처리
+
+##### 변경됨 (Changed)
+
+- `run-dev.bat`
+  - 포트 가드 스크립트 호출 단계를 추가해 포트 충돌 시 원인을 즉시 안내하도록 개선
+- `run-release.bat`
+  - 리다이렉션 환경에서 불필요한 오류 문자열을 만들던 `timeout` 호출 제거
+- `src-tauri/tauri.conf.json`
+  - 번들 식별자를 `com.shellhive.desktop`로 변경하여 `.app` suffix 경고 제거
+
+##### 테스트 (Verification)
+
+- `npm run lint`
+- `npm run test -- --run` (4 files, 27 tests)
+- `npm run test:rust` (4 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+- `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+- `npm run build`
+- `build-release.bat`
+- `run-release.bat`
+- `run-dev.bat` (포트 충돌/정상 기동 시나리오 점검)
+
 ### 2026-02-09
 
 #### docs(research): tmux 소스 기반 split/pane UX 벤치마크 보고서 추가

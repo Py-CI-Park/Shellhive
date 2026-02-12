@@ -52,6 +52,25 @@ if not exist "node_modules" (
     echo.
 )
 
+set "DEV_PORT=1420"
+set "PORT_GUARD_SCRIPT=scripts\ensure-shellhive-dev-port.ps1"
+
+if not exist "%PORT_GUARD_SCRIPT%" (
+    echo [ERROR] Port guard script not found: %PORT_GUARD_SCRIPT%
+    pause
+    exit /b 1
+)
+
+echo [INFO] Checking if dev port %DEV_PORT% is available...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PORT_GUARD_SCRIPT%" -Port %DEV_PORT% -ProjectRoot "%cd%"
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Cannot start development mode due to port conflict
+    pause
+    exit /b 1
+)
+echo.
+
 echo [INFO] Starting Shellhive in development mode...
 echo [INFO] The app will open automatically with DevTools enabled
 echo [INFO] Press Ctrl+C to stop the development server
