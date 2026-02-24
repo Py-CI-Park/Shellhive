@@ -53,10 +53,22 @@ fn is_valid_hex_color(color: &str) -> bool {
     if color.len() != 7 || !color.starts_with('#') {
         return false;
     }
-    color
+    color.chars().skip(1).all(|c| c.is_ascii_hexdigit())
+}
+
+fn validate_session_id(session_id: &str) -> Result<(), String> {
+    if session_id.is_empty() || session_id.len() > 128 {
+        return Err("Invalid session id length".to_string());
+    }
+
+    if !session_id
         .chars()
-        .skip(1)
-        .all(|c| c.is_ascii_hexdigit())
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("Invalid session id format".to_string());
+    }
+
+    Ok(())
 }
 
 /// Get settings file path (APPDATA/shellhive/settings.json)
@@ -171,6 +183,8 @@ pub async fn save_settings(settings: Settings) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn log_session_output(session_id: String, data: String) -> Result<(), String> {
+    validate_session_id(&session_id)?;
+
     // Check if logging is enabled
     let settings = get_settings().await?;
     if !settings.enable_logging {
@@ -194,6 +208,8 @@ pub async fn log_session_output(session_id: String, data: String) -> Result<(), 
 
 #[tauri::command]
 pub async fn get_session_log(session_id: String) -> Result<String, String> {
+    validate_session_id(&session_id)?;
+
     let logs_dir = get_logs_dir_path()?;
     let log_file = logs_dir.join(format!("{}.log", session_id));
 
@@ -257,6 +273,8 @@ pub async fn list_session_logs() -> Result<Vec<SessionLogInfo>, String> {
 
 #[tauri::command]
 pub async fn delete_session_log(session_id: String) -> Result<(), String> {
+    validate_session_id(&session_id)?;
+
     let logs_dir = get_logs_dir_path()?;
     let log_file = logs_dir.join(format!("{}.log", session_id));
 
