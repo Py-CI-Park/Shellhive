@@ -15,16 +15,20 @@ export function createHistoryPanel(commandHistory, state, showToast, escapeHtml)
   const panel = document.createElement('div');
   panel.id = 'historyPanel';
   panel.className = 'history-panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', 'historyPanelTitle');
   panel.innerHTML = `
     <div class="history-panel__container">
       <div class="history-panel__header">
-        <h3 class="history-panel__title">명령어 히스토리</h3>
-        <button class="history-panel__close" title="닫기">&times;</button>
+        <h3 class="history-panel__title" id="historyPanelTitle">명령어 히스토리</h3>
+        <button class="history-panel__close" title="닫기" aria-label="히스토리 닫기">&times;</button>
       </div>
       <input
         type="text"
         class="history-panel__search"
         placeholder="명령어 검색... (Ctrl+R)"
+        aria-label="명령어 검색"
         autocomplete="off"
       />
       <div class="history-panel__filters">
@@ -177,20 +181,20 @@ function updateHistoryList(query = '', commandHistory, state, escapeHtml) {
   listEl.innerHTML = items.map((item, index) => `
     <div class="history-item ${index === 0 ? 'history-item--selected' : ''}"
          data-index="${index}"
-         data-command="${escapeHtml(item.command)}"
-         data-project-id="${item.projectId || ''}">
+         data-project-id="${escapeAttrValue(item.projectId || '')}">
       <div class="history-item__command">${escapeHtml(item.command)}</div>
       <div class="history-item__meta">
         <span class="history-item__time">${formatRelativeTime(item.timestamp)}</span>
-        ${item.projectId ? `<span class="history-item__project">${getProjectName(item.projectId, state)}</span>` : ''}
+        ${item.projectId ? `<span class="history-item__project">${escapeHtml(getProjectName(item.projectId, state))}</span>` : ''}
         ${item.useCount > 1 ? `<span class="history-item__count">×${item.useCount}</span>` : ''}
       </div>
       <button class="history-item__favorite ${item.favorite ? 'history-item__favorite--active' : ''}"
-              title="즐겨찾기">
+              title="즐겨찾기"
+              aria-label="${item.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가'}">
         ${item.favorite ? '★' : '☆'}
       </button>
-      <button class="history-item__run" title="실행">▶</button>
-      <button class="history-item__delete" title="삭제">×</button>
+      <button class="history-item__run" title="실행" aria-label="명령 실행">▶</button>
+      <button class="history-item__delete" title="삭제" aria-label="명령 삭제">×</button>
     </div>
   `).join('');
 
@@ -365,6 +369,16 @@ function formatRelativeTime(timestamp) {
 
 // Get project name by ID
 function getProjectName(projectId, state) {
-  const project = state.projects.find(p => p.id === projectId);
+  const projects = Array.isArray(state.projects) ? state.projects : [];
+  const project = projects.find(p => p.id === projectId);
   return project ? project.name : 'Unknown';
+}
+
+function escapeAttrValue(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
