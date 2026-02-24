@@ -282,8 +282,18 @@ function showConfirmDialog(title, message) {
   });
 }
 
+const DEBUG_LOG_ENABLED = (() => {
+  if (import.meta.env?.DEV) return true;
+  try {
+    return localStorage.getItem('shellhive:debug') === '1';
+  } catch (_) {
+    return false;
+  }
+})();
+
 // Debug logging
 function debug(...args) {
+  if (!DEBUG_LOG_ENABLED) return;
   console.log('[Shellhive]', ...args);
 }
 

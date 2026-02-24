@@ -8,6 +8,15 @@ let historyPanelState = {
 };
 let historyPanelToast = null;
 
+function reportHistoryPanelError(message) {
+  if (typeof historyPanelToast === 'function') {
+    historyPanelToast(message, 'error', 2500);
+  }
+  if (import.meta.env?.DEV) {
+    console.error('[History Panel]', message);
+  }
+}
+
 // Create history panel UI
 export function createHistoryPanel(commandHistory, state, showToast, escapeHtml) {
   historyPanelToast = showToast;
@@ -89,7 +98,7 @@ export function showHistoryPanel(commandHistory, state, escapeHtml) {
 
   if (!panel) {
     // Panel이 없으면 app.js에서 먼저 createHistoryPanel을 호출해야 함
-    console.error('History panel not created. Call createHistoryPanel first.');
+    reportHistoryPanelError('History panel not created. Call createHistoryPanel first.');
     return;
   }
 

@@ -60,6 +60,21 @@
   - 프론트엔드/백엔드 하드닝 커밋 2건의 목적, 변경 파일, 핵심 개선 포인트를 날짜 기준으로 상세 기록
   - 검증 이력과 함께 릴리즈 추적이 가능하도록 변경 로그 구조 정리
 
+#### fix(code-review-followup): 코드 리뷰 후 로깅/문서 품질 후속 정리
+
+**커밋**: `본 커밋`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - `debug()`를 개발 모드 또는 `localStorage(shellhive:debug=1)`일 때만 출력하도록 제한
+  - 운영 환경에서 불필요한 콘솔 로그 노이즈를 줄이고 로그 노출 범위를 축소
+- `src/history-panel.js`
+  - 패널 미생성 오류를 전용 리포트 함수로 처리하도록 변경
+  - `console.error`는 개발 모드에서만 출력하고, 사용자에게는 토스트 기반 오류 안내를 사용
+- `docs/change_log/change_log.md`
+  - 줄바꿈(EOL) 일관성(LF) 정리로 불필요한 diff 발생 가능성 완화
+
 ##### 테스트 (Verification)
 
 - `npm run -s lint`
