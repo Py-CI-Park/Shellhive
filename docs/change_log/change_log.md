@@ -10,6 +10,64 @@
 
 ## [Unreleased]
 
+### 2026-02-24
+
+#### feat(frontend-hardening): 프론트엔드 보안·접근성 하드닝 적용
+
+**커밋**: `0c87eda`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - 스니펫/프로젝트 렌더링에서 `data-*`에 JSON 문자열을 직접 주입하던 구조를 상태 조회 방식으로 전환
+  - 속성 컨텍스트용 `escapeHtmlAttr()`를 도입하고, `title`, `data-file` 등 속성 값 렌더링에 적용
+  - 공유 코드 표시를 `innerHTML`에서 `textContent + replaceChildren`로 전환하여 DOM XSS 위험 제거
+  - 토스트/스니펫/프로젝트/환경변수/필터/탭 닫기 버튼에 `aria-label` 보강
+  - 카테고리 색상 렌더링을 data attribute + 런타임 검증(`normalizeCategoryColor`) 기반으로 변경
+- `src/history-panel.js`
+  - 동적 히스토리 패널에 `role="dialog"`, `aria-modal`, `aria-labelledby` 적용
+  - 검색 입력 접근성 라벨(`aria-label`) 및 액션 버튼 접근성 라벨 보강
+  - 히스토리 item의 프로젝트명/속성값 이스케이프 처리 강화
+- `index.html`
+  - 깨진 한글 `aria-label` 문자열 복구
+  - 동적 생성 방식과 충돌하던 정적 History Panel 블록 제거
+
+#### feat(backend-hardening): 백엔드 입력 검증 및 Git 권한 경계 강화
+
+**커밋**: `478a084`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/settings.rs`
+  - `validate_session_id()` 추가
+  - `log_session_output`, `get_session_log`, `delete_session_log` 호출 경로에서 세션 ID 검증 강제
+- `src-tauri/src/project.rs`
+  - `canonicalize_project_path()`, `ensure_registered_project_path()` 도입(등록 프로젝트 경로 강제)
+  - `load_project_env`, `save_project_env`에서 등록된 프로젝트 경로만 허용
+  - 카테고리 색상 입력값 `#RRGGBB` 형식 검증(`normalize_category_color`) 추가
+- `src-tauri/src/git.rs`
+  - Git 명령 전반에서 등록 프로젝트 경로 검증 적용
+  - `git_checkout` 브랜치명 검증 로직 추가(`check-ref-format` + 옵션/개행/널 차단)
+  - `git_stage`에 `git add -- <files>` 적용으로 인자 주입 위험 완화
+
+#### docs(change-log): 2026-02-24 하드닝 작업 내역 문서화
+
+**커밋**: `본 커밋`
+
+##### 문서화됨 (Documentation)
+
+- `docs/change_log/change_log.md`
+  - 프론트엔드/백엔드 하드닝 커밋 2건의 목적, 변경 파일, 핵심 개선 포인트를 날짜 기준으로 상세 기록
+  - 검증 이력과 함께 릴리즈 추적이 가능하도록 변경 로그 구조 정리
+
+##### 테스트 (Verification)
+
+- `npm run -s lint`
+- `npm test` (27 tests passed)
+- `npm run -s build`
+- `cargo fmt --all -- --check`
+- `PATH=\"$HOME/.local/bin:$PATH\" cargo check --target x86_64-pc-windows-gnu`
+
 ### 2026-02-12
 
 #### fix(ops-scripts): 개발/릴리즈 실행 스크립트 충돌 처리 및 번들 식별자 경고 정비
