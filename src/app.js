@@ -23,7 +23,7 @@ function showToast(message, type = 'info', duration = 3000) {
   toast.innerHTML = `
     <span class="toast__icon">${type === 'error' ? '⚠' : type === 'success' ? '✓' : 'ℹ'}</span>
     <span class="toast__message">${escapeHtml(message)}</span>
-    <button class="toast__close">&times;</button>
+    <button class="toast__close" aria-label="알림 닫기">&times;</button>
   `;
 
   toast.querySelector('.toast__close').addEventListener('click', () => {
@@ -181,7 +181,7 @@ function showErrorExplanation(sessionId, errorPattern, errorText) {
         <ul>${solutionsHtml}</ul>
       </div>
       ${explanation.command ? `
-        <button class="error-explanation__apply" data-command="${escapeHtml(explanation.command)}">
+        <button class="error-explanation__apply" data-command="${escapeHtmlAttr(explanation.command)}">
           해결 명령어 실행: ${escapeHtml(explanation.command)}
         </button>
       ` : ''}
@@ -282,8 +282,18 @@ function showConfirmDialog(title, message) {
   });
 }
 
+const DEBUG_LOG_ENABLED = (() => {
+  if (import.meta.env?.DEV) return true;
+  try {
+    return localStorage.getItem('shellhive:debug') === '1';
+  } catch (_) {
+    return false;
+  }
+})();
+
 // Debug logging
 function debug(...args) {
+  if (!DEBUG_LOG_ENABLED) return;
   console.log('[Shellhive]', ...args);
 }
 
@@ -1286,6 +1296,7 @@ const state = {
   },
   blockManagers: new Map(),  // Map<sessionId, BlockManager>
   snippets: [],
+  projects: [],
   categories: [],             // Project categories
   activeProjectFilter: null,
   projectTabMap: new Map(),
@@ -1798,22 +1809,28 @@ async function loadSnippets() {
 }
 
 function renderSnippetList(snippets) {
+  const snippetById = new Map(snippets.map((snippet) => [snippet.id, snippet]));
+
   snippetList.innerHTML = snippets.map(s => `
-    <li class="sidebar__item" data-snippet-id="${s.id}" data-command='${JSON.stringify(s.command)}' data-tooltip="${escapeHtml(s.command)}">
+    <li class="sidebar__item" data-snippet-id="${s.id}">
       <span class="sidebar__item-icon">></span>
       <span class="sidebar__item-name">${escapeHtml(s.name)}</span>
-      <button class="sidebar__item-delete" data-snippet-id="${s.id}">&times;</button>
+      <button class="sidebar__item-delete" data-snippet-id="${s.id}" aria-label="스니펫 삭제">&times;</button>
     </li>
   `).join('');
 
   document.querySelectorAll('#snippetList .sidebar__item').forEach(item => {
-    const command = JSON.parse(item.dataset.command);
+    const snippet = snippetById.get(item.dataset.snippetId);
+    if (!snippet) return;
+    item.dataset.tooltip = snippet.command;
+
     item.addEventListener('click', (e) => {
       if (!e.target.classList.contains('sidebar__item-delete')) {
-        executeSnippet(command);
+        executeSnippet(snippet.command);
       }
     });
     const deleteBtn = item.querySelector('.sidebar__item-delete');
+    deleteBtn.setAttribute('aria-label', `${snippet.name} 스니펫 삭제`);
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       await removeSnippet(deleteBtn.dataset.snippetId);
@@ -1825,6 +1842,18 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function escapeHtmlAttr(text) {
+  return escapeHtml(text)
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normalizeCategoryColor(color) {
+  if (typeof color !== 'string') return null;
+  const trimmed = color.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : null;
 }
 
 async function addSnippet(name, command) {
@@ -1897,10 +1926,12 @@ async function loadCategories() {
 async function loadProjects() {
   try {
     const projects = await invoke('list_projects');
+    state.projects = projects;
     debug('Projects loaded:', projects.length);
     renderProjectList(projects);
   } catch (error) {
     debug('Failed to load projects:', error);
+    state.projects = [];
   }
 }
 
@@ -1930,7 +1961,7 @@ function renderProjectList(projects) {
     if (catProjects && catProjects.length > 0) {
       html += `
         <li class="sidebar__category" data-category-id="${cat.id}">
-          <div class="sidebar__category-header" style="border-left-color: ${cat.color || 'var(--accent)'}">
+          <div class="sidebar__category-header" data-category-color="${escapeHtmlAttr(cat.color || '')}">
             <span class="sidebar__category-name">${escapeHtml(cat.name)}</span>
             <span class="sidebar__category-count">${catProjects.length}</span>
           </div>
@@ -1949,17 +1980,23 @@ function renderProjectList(projects) {
   }
 
   projectList.innerHTML = html;
+
+  projectList.querySelectorAll('.sidebar__category-header').forEach((header) => {
+    const color = normalizeCategoryColor(header.dataset.categoryColor);
+    header.style.borderLeftColor = color || 'var(--accent)';
+  });
+
   setupProjectListeners();
 }
 
 function renderProjectItems(projects) {
   return projects.map(p => `
-    <li class="sidebar__item sidebar__item--project" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
+    <li class="sidebar__item sidebar__item--project" data-project-id="${p.id}">
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
-      <button class="sidebar__item-env" data-project-id="${p.id}" data-project-path='${JSON.stringify(p.path)}' title="Environment Variables">⚙</button>
-      <button class="sidebar__item-filter" data-project-id="${p.id}" title="Filter tabs">🔍</button>
-      <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
+      <button class="sidebar__item-env" data-project-id="${p.id}" title="Environment Variables" aria-label="환경 변수 관리">⚙</button>
+      <button class="sidebar__item-filter" data-project-id="${p.id}" title="Filter tabs" aria-label="탭 필터">🔍</button>
+      <button class="sidebar__item-delete" data-project-id="${p.id}" aria-label="프로젝트 삭제">&times;</button>
       <div class="sidebar__cmd-tree" data-project-cmd-tree="${p.id}"></div>
     </li>
   `).join('');
@@ -1968,8 +2005,11 @@ function renderProjectItems(projects) {
 function setupProjectListeners() {
   document.querySelectorAll('#projectList .sidebar__item').forEach(item => {
     const projectId = item.dataset.projectId;
-    const projectPath = JSON.parse(item.dataset.path);
-    const projectName = item.querySelector('.sidebar__item-name').textContent;
+    const project = state.projects.find((p) => p.id === projectId);
+    if (!project) return;
+
+    const projectPath = project.path;
+    const projectName = project.name;
 
     item.addEventListener('click', (e) => {
       const blocked = e.target.closest('.sidebar__item-delete, .sidebar__item-filter, .sidebar__item-env, .sidebar__cmd-tree');
@@ -1978,12 +2018,14 @@ function setupProjectListeners() {
     });
 
     const envBtn = item.querySelector('.sidebar__item-env');
+    envBtn.setAttribute('aria-label', `${projectName} 환경 변수 관리`);
     envBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       showEnvVarsModal(projectPath);
     });
 
     const filterBtn = item.querySelector('.sidebar__item-filter');
+    filterBtn.setAttribute('aria-label', `${projectName} 탭 필터`);
     filterBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (state.activeProjectFilter === projectId) {
@@ -1994,6 +2036,7 @@ function setupProjectListeners() {
     });
 
     const deleteBtn = item.querySelector('.sidebar__item-delete');
+    deleteBtn.setAttribute('aria-label', `${projectName} 프로젝트 삭제`);
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const confirmed = await showConfirmDialog(
@@ -2079,13 +2122,21 @@ function renderEnvVarsList(envVars) {
     return;
   }
 
-  envVarsList.innerHTML = entries.map(([key, value], index) => `
+  envVarsList.innerHTML = entries.map(([_key, _value], index) => `
     <div class="env-var-row" data-index="${index}">
-      <input type="text" class="env-var-key" value="${escapeHtml(key)}" placeholder="KEY">
-      <input type="text" class="env-var-value" value="${escapeHtml(value)}" placeholder="value">
-      <button class="env-var-delete" title="Delete">&times;</button>
+      <input type="text" class="env-var-key" value="" placeholder="KEY">
+      <input type="text" class="env-var-value" value="" placeholder="value">
+      <button class="env-var-delete" title="Delete" aria-label="환경 변수 삭제">&times;</button>
     </div>
   `).join('');
+
+  envVarsList.querySelectorAll('.env-var-row').forEach((row, index) => {
+    const [key, value] = entries[index];
+    const keyInput = row.querySelector('.env-var-key');
+    const valueInput = row.querySelector('.env-var-value');
+    keyInput.value = key;
+    valueInput.value = value;
+  });
 
   // Add delete listeners
   envVarsList.querySelectorAll('.env-var-delete').forEach(btn => {
@@ -2113,7 +2164,7 @@ function addEnvVarRow() {
   row.innerHTML = `
     <input type="text" class="env-var-key" value="" placeholder="KEY">
     <input type="text" class="env-var-value" value="" placeholder="value">
-    <button class="env-var-delete" title="Delete">&times;</button>
+    <button class="env-var-delete" title="Delete" aria-label="환경 변수 삭제">&times;</button>
   `;
 
   row.querySelector('.env-var-delete').addEventListener('click', () => {
@@ -2577,7 +2628,9 @@ function createTab(session) {
     }
   });
 
-  tab.querySelector('.tab__close').addEventListener('click', (e) => {
+  const closeButton = tab.querySelector('.tab__close');
+  closeButton.setAttribute('aria-label', `${session.name} 탭 닫기`);
+  closeButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeSession(session.id);
   });
@@ -5422,7 +5475,7 @@ function updateFilterIndicator() {
       indicator.className = 'tabs__filter-indicator';
       indicator.innerHTML = `
         <span class="tabs__filter-text">Filtered: <strong></strong></span>
-        <button class="tabs__filter-clear">&times;</button>
+        <button class="tabs__filter-clear" aria-label="필터 해제">&times;</button>
       `;
       indicator.querySelector('.tabs__filter-clear').addEventListener('click', clearProjectFilter);
       const tabsContainer = document.getElementById('tabsContainer');
@@ -5464,7 +5517,7 @@ function renderProjectCmdTrees() {
       const activeClass = session.id === state.activeSessionId ? ' sidebar__cmd-item--active' : '';
       const statusClass = `sidebar__cmd-status--${session.status}`;
       return `
-        <div class="sidebar__cmd-item${activeClass}" data-session-id="${session.id}" title="${escapeHtml(session.name)}">
+        <div class="sidebar__cmd-item${activeClass}" data-session-id="${session.id}" title="${escapeHtmlAttr(session.name)}">
           <span class="sidebar__cmd-status ${statusClass}">${getStatusIcon(session.status)}</span>
           <span class="sidebar__cmd-name">${escapeHtml(session.name)}</span>
           <button class="sidebar__cmd-close" data-session-id="${session.id}" aria-label="세션 닫기">&times;</button>
@@ -6883,7 +6936,10 @@ async function startSharing(sessionId) {
     // 공유 코드 표시
     const codeElement = document.getElementById('shareCode');
     if (codeElement) {
-      codeElement.innerHTML = `<span class="sharing-modal__code-text">${shareCode}</span>`;
+      const codeSpan = document.createElement('span');
+      codeSpan.className = 'sharing-modal__code-text';
+      codeSpan.textContent = shareCode;
+      codeElement.replaceChildren(codeSpan);
     }
 
     // 복사 버튼 활성화
@@ -6925,7 +6981,10 @@ async function startSharing(sessionId) {
 
     const codeElement = document.getElementById('shareCode');
     if (codeElement) {
-      codeElement.innerHTML = '<span class="sharing-modal__error">공유 시작 실패</span>';
+      const errorSpan = document.createElement('span');
+      errorSpan.className = 'sharing-modal__error';
+      errorSpan.textContent = '공유 시작 실패';
+      codeElement.replaceChildren(errorSpan);
     }
   }
 }
@@ -7079,10 +7138,10 @@ function renderGitPanel(panel, status, gitPath) {
         ${files.map((file, index) => `
           <div class="git-panel__file" data-index="${index}">
             <input type="checkbox" class="git-panel__file-checkbox"
-                   data-file="${escapeHtml(file.path)}"
+                   data-file="${escapeHtmlAttr(file.path)}"
                    ${file.staged ? 'checked' : ''} />
             <span class="git-panel__file-status git-panel__file-status--${file.status}">${file.status}</span>
-            <span class="git-panel__file-name" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</span>
+            <span class="git-panel__file-name" title="${escapeHtmlAttr(file.path)}">${escapeHtml(file.path)}</span>
           </div>
         `).join('')}
       </div>

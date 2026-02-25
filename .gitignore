@@ -3,3 +3,4 @@ dist/
 target/
 Cargo.lock
 coverage/
+.omx/
