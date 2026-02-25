@@ -83,6 +83,36 @@
 - `cargo fmt --all -- --check`
 - `PATH=\"$HOME/.local/bin:$PATH\" cargo check --target x86_64-pc-windows-gnu`
 
+#### chore(repo-hygiene): 문서/스크립트/코드 자산 포맷 정합화 1차
+
+**커밋**: `49bb4f9`
+
+##### 변경됨 (Changed)
+
+- 문서군(README, AGENTS, CLAUDE, 구현/리서치/QA 문서, 변경로그) 텍스트 자산 정합화
+- 운영 배치 스크립트(run/lint/test/setup/build) 포맷 통일
+- `.gitignore`에 `.omx/` 추가로 로컬 오케스트레이션 상태 파일 추적 방지
+
+#### chore(repo-hygiene): Tauri 백엔드/설정 자산 포맷 정합화 2차
+
+**커밋**: `0d72d08`
+
+##### 변경됨 (Changed)
+
+- `src-tauri` Rust 모듈(`ai`, `claude`, `pty`, `sharing`, `main`) 및 빌드 자산 포맷 정리
+- `tauri.conf.json`, capabilities, Android icon XML 등 설정/리소스 파일 정합화
+- 기능 로직 변경 없이 코드 리뷰 가독성을 높이기 위한 표현 계층 정리
+
+#### chore(repo-hygiene): 프론트엔드/UI/테스트 자산 포맷 정합화 3차
+
+**커밋**: `b734a47`
+
+##### 변경됨 (Changed)
+
+- 프론트엔드 스크립트/스타일 자산(`src/style.css`, `src/i18n/index.js` 등) 포맷 통일
+- E2E 회귀 테스트 파일 및 빌드 설정(`vite.config.js`, `package*.json`) 정합화
+- 기능 변경 없이 이후 기능 PR에서 의미 있는 로직 변경이 분리되도록 정리
+
 ### 2026-02-12
 
 #### fix(ops-scripts): 개발/릴리즈 실행 스크립트 충돌 처리 및 번들 식별자 경고 정비
