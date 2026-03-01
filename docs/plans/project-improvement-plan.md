@@ -17,7 +17,7 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
 |------|---------------------------|--------------------------|
 | `app.js` | 7,265줄 (단일 모놀리스) | 7,997줄 (보안 패치 + 포맷 변경) |
 | Rust 모듈 | 9개 (main, pty, project, settings, snippet, git, sharing, ai, claude) | 동일 + 입력 검증 강화 |
-| IPC 핸들러 | 47개 등록 + 6개 미등록 (`claude` 4개, `ai` 2개) | 동일 |
+| IPC 핸들러 | 48개 등록 + 6개 미등록 (`claude` 4개, `ai` 2개) | 동일 |
 | 테스트 | 27 JS (유효 커버리지 낮음) + 12 Rust | 동일 |
 | 보안 하드닝 | 미적용 | 경로 검증, XSS 이스케이프, 브랜치명 검증 적용 |
 
@@ -671,7 +671,7 @@ main
   3. `invoke_handler`에 선택된 명령 등록:
      ```rust
      .invoke_handler(tauri::generate_handler![
-         // ... 기존 47개 ...
+         // ... 기존 48개 ...
          claude::check_claude_installed,
          claude::get_claude_start_command,
          ai::translate_natural_language,
@@ -679,7 +679,7 @@ main
      ])
      ```
   4. `execute_claude_command` 함수 제거 (`claude.rs:79-94`)
-  5. `get_claude_version` 함수 제거 (`claude.rs:55-76`)
+  5. `get_claude_version` 공개 래퍼 함수 제거 (`claude.rs:54-58`, 내부 헬퍼 `get_claude_version_internal()` L61-74는 유지)
   6. `cargo build` + `cargo clippy -- -D warnings` 성공 확인
 - **인수 기준**:
   - `#[tauri::command]` 함수 중 `invoke_handler`에 미등록인 것 0개
@@ -721,7 +721,7 @@ main
   1. `src/components/` 디렉토리 참조 제거 (실제 미존재)
   2. `lib.rs` 참조 제거 (실제 미존재)
   3. IPC 명령 목록을 실제 코드와 동기화:
-     - 현재 등록: 47개 (Phase 3-1 이후 51개)
+     - 현재 등록: 48개 (Phase 3-1 이후 52개)
      - 각 명령의 모듈, 인자, 반환 타입 기술
   4. Phase 5 이후 추가된 기능 문서화:
      - 분할 패널 시스템 (break/join/move, sync, overlay, layout policy)
