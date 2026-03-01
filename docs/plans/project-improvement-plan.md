@@ -15,9 +15,9 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
 
 | 항목 | `feature/next-improvements` | 보안 하드닝 브랜치 (PR #4) |
 |------|---------------------------|--------------------------|
-| `app.js` | 7,997줄 (단일 모놀리스) | 7,997줄 + 보안 패치 |
+| `app.js` | 7,265줄 (단일 모놀리스) | 7,997줄 (보안 패치 + 포맷 변경) |
 | Rust 모듈 | 9개 (main, pty, project, settings, snippet, git, sharing, ai, claude) | 동일 + 입력 검증 강화 |
-| IPC 핸들러 | 49개 등록 + 6개 미등록 (`claude` 4개, `ai` 2개) | 동일 |
+| IPC 핸들러 | 47개 등록 + 6개 미등록 (`claude` 4개, `ai` 2개) | 동일 |
 | 테스트 | 27 JS (유효 커버리지 낮음) + 12 Rust | 동일 |
 | 보안 하드닝 | 미적용 | 경로 검증, XSS 이스케이프, 브랜치명 검증 적용 |
 
@@ -55,8 +55,8 @@ main
         ├── feat/module-design                    ← Phase 4-1
         ├── feat/state-eventbus                   ← Phase 4-2
         ├── feat/extract-shortcuts                ← Phase 4-3-a
-        ├── feat/extract-modals                   ← Phase 4-3-b
-        ├── feat/extract-settings                 ← Phase 4-3-c
+        ├── feat/extract-settings                 ← Phase 4-3-b
+        ├── feat/extract-modals                   ← Phase 4-3-c
         ├── feat/extract-git-panel                ← Phase 4-3-d
         ├── feat/extract-tab-manager              ← Phase 4-3-e
         ├── feat/extract-split-pane               ← Phase 4-3-f
@@ -228,7 +228,17 @@ main
      - 정규화된 경로가 등록된 프로젝트 경로의 하위 디렉토리인지 확인
      - `..` 컴포넌트로 프로젝트 루트 밖 탈출 차단
   3. 예외 처리: 프로젝트 미등록 상태에서 기본 경로 사용 시:
-     - 사용자 홈 디렉토리(`dirs::home_dir()`)는 허용
+     - 사용자 홈 디렉토리(`dirs::home_dir()`)는 명시적으로 허용:
+       ```rust
+       // 홈 디렉토리 예외 처리
+       if let Some(home) = dirs::home_dir() {
+           let canonical_home = std::fs::canonicalize(&home)
+               .map_err(|e| format!("Failed to canonicalize home: {}", e))?;
+           if canonical_dir == canonical_home {
+               return Ok(working_dir.to_string());
+           }
+       }
+       ```
      - 그 외 미등록 경로는 거부
 - **테스트 작성**:
   ```rust
@@ -258,13 +268,14 @@ main
 **브랜치**: `security/git-filepath-validation` → PR → `feature/next-improvements`
 **대상 파일**: `src-tauri/src/git.rs`
 
-- **현재 문제** (`git.rs:236, 252, 305`):
+- **현재 문제** (`git.rs:203, 221, 283`):
   ```rust
-  // git_stage, git_unstage, git_discard에서 files 인자를 그대로 git 명령에 전달
-  let mut args = vec!["add", "--"];
+  // git_stage(L203), git_unstage(L221), git_discard(L283)에서
+  // files 인자를 그대로 git 명령에 전달, -- 구분자 없음
+  let mut args = vec!["add"];
   let file_refs: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
   args.extend(file_refs);
-  // → ../../etc/passwd 같은 경로 탈출 가능
+  // → ../../etc/passwd 같은 경로 탈출 가능, 옵션 주입도 가능
   ```
 - **구현 상세**:
   1. 공통 유틸리티 함수 신규 작성:
@@ -303,21 +314,21 @@ main
          Ok(validated)
      }
      ```
-  2. `git_stage` (`git.rs:236`) 수정:
+  2. `git_stage` (`git.rs:203`) 수정:
      ```rust
      let validated_files = validate_paths_within_project(&validated_path, &files)?;
-     let mut args = vec!["add", "--"];
+     let mut args = vec!["add", "--"]; // -- 추가로 옵션 주입도 방지
      // validated_files 사용
      ```
-  3. `git_unstage` (`git.rs:252`) 동일 패턴 적용
-  4. `git_discard` (`git.rs:305`) 동일 패턴 적용
-  5. `git_commit` (`git.rs:268`) 메시지 길이 제한 추가:
+  3. `git_unstage` (`git.rs:221`) 동일 패턴 적용
+  4. `git_discard` (`git.rs:283`) 동일 패턴 적용
+  5. `git_commit` (`git.rs:239`) 메시지 길이 제한 추가:
      ```rust
      if message.len() > 10_000 {
          return Err("Commit message too long (max 10,000 chars)".to_string());
      }
      ```
-  6. `git_log` (`git.rs:205`) 제한값 상한 설정:
+  6. `git_log` (`git.rs:165`) 제한값 상한 설정:
      ```rust
      let safe_limit = limit.min(1000); // 최대 1000개
      ```
@@ -368,7 +379,11 @@ main
      - `npm run build` 후 번들된 HTML에 인라인 스크립트 존재 여부 확인
      - Vite의 `build.modulePreload` 설정 확인
      - 필요 시 `vite.config.js`에 CSP 관련 설정 추가
-  5. **검증**:
+  5. **개발/프로덕션 CSP 구분**:
+     - 개발 모드(`npm run tauri dev`): Vite HMR이 `ws://localhost:*`와 인라인 스크립트를 필요로 할 수 있으므로 개발 전용 CSP 완화 가능
+     - 프로덕션 빌드(`npm run tauri build`): 최종 CSP는 반드시 `'unsafe-eval'` 제거 상태
+     - `tauri.conf.json`의 CSP는 프로덕션 기준으로 설정하고, Vite dev server 프록시가 별도 처리
+  6. **검증**:
      - `npm run tauri dev` 실행
      - DevTools Console에서 CSP 위반 메시지 0건 확인
      - xterm.js 터미널 렌더링, 입력, 리사이즈 정상 동작
@@ -481,7 +496,7 @@ main
 **브랜치**: `security/tauri-capabilities` → PR → `feature/next-improvements`
 **대상 파일**: `src-tauri/capabilities/default.json`
 
-- **현재 문제**: `core:default` 사용으로 불필요한 권한 포함
+- **현재 문제**: `core:default`가 아직 포함되어 있어 불필요한 권한이 포함됨. 현재 `default.json`은 `core:default` + 개별 권한(`core:event:*`, `shell:allow-open`, `dialog:*`, `core:window:*`)이 혼재된 상태 → 핵심 변경은 `core:default`를 제거하고 필요한 개별 권한만 남기는 것
 - **구현 상세**:
   1. 현재 앱이 실제 사용하는 Tauri API 목록 정리:
      - IPC invoke (자동 허용)
@@ -641,12 +656,12 @@ main
 
      | 명령 | 프론트엔드 호출 | 보안 상태 | 결정 |
      |------|---------------|----------|------|
-     | `check_claude_installed` | `app.js:6642` | 저위험 (읽기) | 등록 |
-     | `get_claude_version` | 미사용 | 저위험 | 제거 |
+     | `check_claude_installed` | `app.js:5990` | 저위험 (읽기) | 등록 |
+     | `get_claude_version` | 미사용 | 저위험 | 제거 (단, 내부 헬퍼 `get_claude_version_internal()`은 유지) |
      | `execute_claude_command` | 미사용 | **고위험** (임의 명령) | **제거** |
-     | `get_claude_start_command` | `app.js:6732` | Phase 2-10 패치 | 등록 |
-     | `translate_natural_language` | `app.js:7233` | 중위험 (외부 패턴) | 조건부 등록 |
-     | `get_ai_patterns` | `app.js:7327` | 저위험 (읽기) | 등록 |
+     | `get_claude_start_command` | `app.js:6080` | Phase 2-10 패치 | 등록 |
+     | `translate_natural_language` | `app.js:6529` | 중위험 (외부 패턴) | 조건부 등록 |
+     | `get_ai_patterns` | `app.js:6623` | 저위험 (읽기) | 등록 |
 
   2. `main.rs`에 모듈 선언 추가:
      ```rust
@@ -656,14 +671,14 @@ main
   3. `invoke_handler`에 선택된 명령 등록:
      ```rust
      .invoke_handler(tauri::generate_handler![
-         // ... 기존 49개 ...
+         // ... 기존 47개 ...
          claude::check_claude_installed,
          claude::get_claude_start_command,
          ai::translate_natural_language,
          ai::get_ai_patterns,
      ])
      ```
-  4. `execute_claude_command` 함수 제거 (`claude.rs:79-93`)
+  4. `execute_claude_command` 함수 제거 (`claude.rs:79-94`)
   5. `get_claude_version` 함수 제거 (`claude.rs:55-76`)
   6. `cargo build` + `cargo clippy -- -D warnings` 성공 확인
 - **인수 기준**:
@@ -706,7 +721,7 @@ main
   1. `src/components/` 디렉토리 참조 제거 (실제 미존재)
   2. `lib.rs` 참조 제거 (실제 미존재)
   3. IPC 명령 목록을 실제 코드와 동기화:
-     - 현재 등록: 49개 (Phase 3-1 이후 53개)
+     - 현재 등록: 47개 (Phase 3-1 이후 51개)
      - 각 명령의 모듈, 인자, 반환 타입 기술
   4. Phase 5 이후 추가된 기능 문서화:
      - 분할 패널 시스템 (break/join/move, sync, overlay, layout policy)
@@ -715,7 +730,7 @@ main
      - 다국어 지원 (i18n)
      - 레이아웃 프리셋 (grid, main-sidebar 등)
   5. 프론트엔드 파일 목록 현행화:
-     - `src/app.js` — 메인 애플리케이션 (7,997줄)
+     - `src/app.js` — 메인 애플리케이션 (7,265줄, Phase 1 병합 후 약 7,997줄 예상)
      - `src/history-panel.js` — 히스토리 패널 (393줄)
      - `src/i18n/index.js` — 다국어 (240줄)
      - `src/ui-constants.js` — UI 상수 (37줄)
@@ -730,7 +745,7 @@ main
 
 ### Phase 4: 프론트엔드 아키텍처 개선 (app.js 모듈화)
 
-**목표**: 7,997줄의 `app.js` 모놀리스를 10+ ES 모듈로 분리
+**목표**: `app.js` 모놀리스(현재 7,265줄, Phase 1 병합 후 약 7,997줄)를 10+ ES 모듈로 분리
 **예상 소요**: 7-10일
 **선행 조건**: Phase 3 완료
 
@@ -838,6 +853,8 @@ main
 
 각 추출은 독립 브랜치에서 수행. 추출 순서: 의존성 적은 것 → 많은 것.
 
+> **병렬화 가능 구간**: 4-3-a(shortcuts)와 4-3-b(settings)는 상호 의존이 없으므로 동시 진행 가능. 4-3-d(git-panel)와 4-3-h(error-explanations)도 독립적이므로 병렬 가능. 단, 4-3-e(tab-manager) → 4-3-f(split-pane) → 4-3-g(terminal-session)은 의존 관계가 있으므로 순차 진행 필수.
+
 ##### 4-3-a. shortcuts.js 추출
 
 **브랜치**: `feat/extract-shortcuts` → PR → `feature/next-improvements`
@@ -846,21 +863,23 @@ main
 - 대상: 단축키 등록, 키 이벤트 처리, 커맨드 팔레트 단축키
 - `import { state, eventBus } from './state.js'` 참조
 
-##### 4-3-b. modals.js 추출
-
-**브랜치**: `feat/extract-modals` → PR → `feature/next-improvements`
-
-- 모달 다이얼로그 공통 로직 추출
-- 대상: 모달 열기/닫기, 폼 처리, 확인 대화상자
-- 프로젝트 추가 모달, 스니펫 모달, 설정 모달, 공유 모달 포함
-
-##### 4-3-c. settings.js 추출
+##### 4-3-b. settings.js 추출
 
 **브랜치**: `feat/extract-settings` → PR → `feature/next-improvements`
 
 - `loadSettings()`, `saveSettings()`, 설정 UI 바인딩 추출
 - 대상 줄: L1420-1600 및 설정 모달 관련 함수
 - `invoke("get_settings")`, `invoke("save_settings")` IPC 호출 포함
+- **순서 근거**: settings 모듈은 다른 모듈(modals 포함)이 의존하는 설정 값을 제공하므로 먼저 추출
+
+##### 4-3-c. modals.js 추출
+
+**브랜치**: `feat/extract-modals` → PR → `feature/next-improvements`
+
+- 모달 다이얼로그 공통 로직 추출
+- 대상: 모달 열기/닫기, 폼 처리, 확인 대화상자
+- 프로젝트 추가 모달, 스니펫 모달, 설정 모달, 공유 모달 포함
+- settings.js 추출 이후 진행 (설정 모달이 settings 모듈 참조)
 
 ##### 4-3-d. git-panel.js 추출
 
@@ -1008,16 +1027,16 @@ main
 - **현재 문제**: Phase 3-1에서 `mod` 선언 및 `invoke_handler` 등록 후, 프론트엔드 호출이 정상 연결되는지 확인 필요
 - **구현 상세**:
   1. `check_claude_installed` 정상 동작 확인:
-     - `app.js:6642` — Claude 설치 여부 체크
+     - `app.js:5990` — Claude 설치 여부 체크
      - 미설치 시 UI에 적절한 안내 표시
   2. `get_claude_start_command` 정상 동작 확인:
-     - `app.js:6732` — PTY에 Claude 시작 명령 전송
+     - `app.js:6080` — PTY에 Claude 시작 명령 전송
      - Phase 2-10 보안 패치 적용 상태
   3. `translate_natural_language` 동작 확인:
-     - `app.js:7233` — 자연어 → 셸 명령 변환
+     - `app.js:6529` — 자연어 → 셸 명령 변환
      - AI 패턴 매칭 로직 정상 동작
   4. `get_ai_patterns` 동작 확인:
-     - `app.js:7327` — AI 자동완성 패턴 로드
+     - `app.js:6623` — AI 자동완성 패턴 로드
   5. AI 기능 토글 동작 확인:
      - `isAiFeaturesEnabled()` (L1374) — 설정에 따른 AI UI 표시/숨김
 - **인수 기준**:
