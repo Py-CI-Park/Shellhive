@@ -231,6 +231,25 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### refactor(cleanup): 미등록 Claude/AI IPC 명령 정리
+
+**커밋**: `84ea155`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/main.rs`
+  - `mod ai;`, `mod claude;` 추가
+  - `invoke_handler`에 `claude::check_claude_installed`, `claude::get_claude_start_command`, `ai::translate_natural_language`, `ai::get_ai_patterns` 등록
+- `src-tauri/src/claude.rs`
+  - 미사용/고위험 `execute_claude_command` 제거
+  - 미사용 공개 래퍼 `get_claude_version` 제거(내부 버전 확인 헬퍼는 유지)
+
+##### 검증 (Verification)
+
+- 스크립트 점검 결과 `#[tauri::command]` 미등록 항목 0개
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
