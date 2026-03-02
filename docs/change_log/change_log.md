@@ -10,6 +10,48 @@
 
 ## [Unreleased]
 
+### 2026-03-02
+
+#### docs: 개선 계획 문서 PR 병합
+
+**커밋**: `36002db`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`를 `feature/next-improvements`에 통합
+- 코드베이스 전수 분석 기반 Phase/브랜치 전략 문서를 메인 개선 라인에 반영
+
+#### security: Phase 1 보안 하드닝 통합
+
+**커밋**: `81131f9`
+
+##### 변경됨 (Changed)
+
+- PR #4 보안 하드닝 변경을 `feature/next-improvements` 기반 라인에 통합
+- 프론트엔드 XSS/접근성 보강(`escapeHtmlAttr`, `textContent` 기반 렌더링) 반영
+- 백엔드 경로/입력 검증 강화(`ensure_registered_project_path`, branch name validation) 반영
+
+#### feat(security): PTY 셸 허용 목록 검증 추가
+
+**커밋**: `6e523fa`
+
+##### 추가됨 (Added)
+
+- `src-tauri/src/pty.rs`
+  - 허용 셸 목록 상수(`cmd.exe`, `powershell.exe`, `pwsh.exe`) 도입
+  - `validate_shell()` 구현으로 경로 기반 셸 실행/비허용 셸/경로 조작 입력 차단
+  - `create_pty`에서 셸 검증을 강제
+  - 셸 검증 단위 테스트 추가(허용/거부/경로 조작 케이스)
+- `src-tauri/src/project.rs`
+  - `add_project`, `update_project` 시 셸 값 검증 적용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+- `cargo test --manifest-path src-tauri/Cargo.toml test_validate_shell_allowed` ❌
+  - 실행 환경에서 `pkg-config` 및 GTK 계열 시스템 라이브러리 부재로 Rust 빌드 단계 실패
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
