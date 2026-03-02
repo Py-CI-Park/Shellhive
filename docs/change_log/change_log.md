@@ -451,6 +451,33 @@
 - `src/__tests__/shortcuts.test.js`
   - Ctrl+T 생성, 커맨드 팔레트 실행, 레이아웃 단축키 전달, Ctrl+R 히스토리 우선 처리 검증
 
+#### refactor(phase4-3-c): 모달 공통 로직 분리 (`modals.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/modals.js` 신규 추가
+  - `createModalController()` 팩토리 도입
+  - `showConfirmDialog`, `setupModalOverlayClose`, `closeVisibleModals` 공통 모달 유틸 분리
+- `src/app.js`
+  - Confirm dialog 구현 블록 제거 후 모듈 함수 사용
+  - 설정된 모달 대상의 overlay click/ESC 닫기 처리를 모듈 유틸로 대체
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (10 files, 43 tests)
+
+#### test(phase5-3): modals 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/modals.test.js`
+  - confirm/escape/overlay 닫기 동작 및 공통 close helper 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성

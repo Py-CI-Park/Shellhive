@@ -12,6 +12,7 @@ import { createHistoryPanel, showHistoryPanel } from './history-panel.js';
 import { LAYOUT_PRESETS, TAB_COLORS } from './ui-constants.js';
 import { createGitPanelController } from './git-panel.js';
 import { createErrorExplanationController } from './error-explanations.js';
+import { createModalController } from './modals.js';
 import { createSettingsController } from './settings.js';
 import { createShortcutsController } from './shortcuts.js';
 import {
@@ -55,6 +56,10 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+const { showConfirmDialog, setupModalOverlayClose, closeVisibleModals } = createModalController({
+  escapeHtml
+});
+
 const { showErrorExplanation, detectErrorPattern } = createErrorExplanationController({
   state,
   invoke,
@@ -63,52 +68,6 @@ const { showErrorExplanation, detectErrorPattern } = createErrorExplanationContr
   escapeHtml,
   escapeHtmlAttr
 });
-
-// Confirm dialog
-function showConfirmDialog(title, message) {
-  return new Promise((resolve) => {
-    const overlay = document.createElement('div');
-    overlay.className = 'confirm-dialog-overlay';
-    overlay.innerHTML = `
-      <div class="confirm-dialog">
-        <div class="confirm-dialog__header">
-          <h3 class="confirm-dialog__title">${escapeHtml(title)}</h3>
-        </div>
-        <div class="confirm-dialog__body">
-          <p class="confirm-dialog__message">${escapeHtml(message)}</p>
-        </div>
-        <div class="confirm-dialog__footer">
-          <button class="btn btn--secondary confirm-dialog__cancel">취소</button>
-          <button class="btn btn--danger confirm-dialog__confirm">삭제</button>
-        </div>
-      </div>
-    `;
-
-    const closeDialog = (result) => {
-      overlay.classList.add('confirm-dialog-overlay--hiding');
-      setTimeout(() => overlay.remove(), 200);
-      resolve(result);
-    };
-
-    overlay.querySelector('.confirm-dialog__cancel').addEventListener('click', () => closeDialog(false));
-    overlay.querySelector('.confirm-dialog__confirm').addEventListener('click', () => closeDialog(true));
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeDialog(false);
-    });
-
-    // ESC key to cancel
-    const handleKeydown = (e) => {
-      if (e.key === 'Escape') {
-        closeDialog(false);
-        document.removeEventListener('keydown', handleKeydown);
-      }
-    };
-    document.addEventListener('keydown', handleKeydown);
-
-    document.body.appendChild(overlay);
-    overlay.querySelector('.confirm-dialog__cancel').focus();
-  });
-}
 
 const DEBUG_LOG_ENABLED = (() => {
   if (import.meta.env?.DEV) return true;
@@ -5893,13 +5852,7 @@ function setupEventListeners() {
     : [addProjectModal, addSnippetModal, settingsModal, envVarsModal, layoutGalleryModal];
 
   // Close modals when clicking outside
-  modalTargets.forEach(modal => {
-    if (modal) {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.classList.remove('modal--visible');
-      });
-    }
-  });
+  setupModalOverlayClose(modalTargets);
 
   // Keyboard events
   document.addEventListener('keydown', (e) => {
@@ -5911,9 +5864,7 @@ function setupEventListeners() {
     }
 
     if (e.key === 'Escape') {
-      modalTargets.forEach(m => {
-        if (m) m.classList.remove('modal--visible');
-      });
+      closeVisibleModals(modalTargets);
       return;
     }
     if (
