@@ -105,6 +105,25 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### feat(security): Git 상태 CSS 클래스 허용 목록 적용
+
+**커밋**: `f0e9192`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - `GIT_STATUS_CLASS_MAP` 및 `getGitStatusClass()` 도입
+  - Git 상태 값을 검증된 클래스 이름으로 매핑 후 DOM에 렌더링
+  - 미허용 상태값은 `unknown` 클래스로 강등 처리
+- `src/style.css`
+  - `modified/added/deleted/renamed/copied/untracked/ignored/conflicted/unknown` 클래스 스타일 정의
+  - 기존 단일 문자 클래스(`M`, `A`, `D`, `U`, `?`)와 병행 호환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
