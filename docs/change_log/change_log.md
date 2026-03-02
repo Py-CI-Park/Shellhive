@@ -325,6 +325,40 @@
   - `session.test.js`: 인라인 정의 제거, `state.js` import 기반 검증
   - `settings.test.js`: 인라인 정의 제거, 실제 모듈(`state.js`, `ui-constants.js`) import 검증
 
+#### refactor(phase4-3-d): Git 패널 모듈 분리 (`git-panel.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/git-panel.js` 신규 추가
+  - `createGitPanelController()`로 Git 패널 토글/렌더/액션 로직 분리
+  - 브랜치 전환, 커밋 로그, discard, stage/unstage/commit/push/pull 흐름 캡슐화
+- `src/app.js`
+  - 기존 Git 패널 함수 블록 제거
+  - 모듈 컨트롤러 import/주입 방식으로 연결
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅
+
+#### test(phase5): Git 패널/IPC 등록 회귀 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/git-panel.test.js`
+  - 패널 토글, 경로 미지정 상태, 정상 repo 렌더링(브랜치/히스토리/discard) 검증
+- `src/__tests__/ipc-registration.test.js`
+  - `app.js` invoke 명령과 `main.rs` 등록 핸들러 간 Claude/AI IPC 일치성 검증
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/setup.js`
+  - Claude/AI 관련 invoke mock 기본 응답 보강
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성

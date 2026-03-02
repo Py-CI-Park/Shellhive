@@ -23,7 +23,7 @@ export const invokeMock = vi.fn(async (command) => {
     case 'list_session_logs':
       return [];
     case 'check_claude_installed':
-      return false;
+      return { installed: false, version: null };
     case 'load_session_state':
       return null;
     case 'get_home_dir':
@@ -31,6 +31,12 @@ export const invokeMock = vi.fn(async (command) => {
     case 'create_pty':
       ptyCounter += 1;
       return `pty-${ptyCounter}`;
+    case 'get_claude_start_command':
+      return 'claude\r';
+    case 'translate_natural_language':
+      return { success: false, command: null, description: '변환 실패', confidence: 0, alternatives: [] };
+    case 'get_ai_patterns':
+      return [];
     case 'resize_pty':
     case 'write_pty':
     case 'save_session_state':
