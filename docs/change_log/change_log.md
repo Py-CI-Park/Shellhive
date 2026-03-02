@@ -268,6 +268,20 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### docs(cleanup): AGENTS 및 개선계획 실행 현황 동기화
+
+**커밋**: `TBD`
+
+##### 문서화됨 (Documentation)
+
+- `AGENTS.md`
+  - 실제 저장소 구조 기준으로 디렉토리/모듈/IPC 현황(52개 커맨드) 최신화
+  - 존재하지 않는 `src/components`, `src-tauri/src/lib.rs` 참조 제거
+  - 현재 개발 라인(`feature/next-improvements`)과 Phase 진행 상태 반영
+- `docs/plans/project-improvement-plan.md`
+  - 실행 현황 섹션을 2026-03-02 기준 완료 상태(Phase 1~2, Phase 3-1/3-2)로 갱신
+  - 잔여 작업을 Phase 3-3 및 Phase 4~5로 명확화
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
