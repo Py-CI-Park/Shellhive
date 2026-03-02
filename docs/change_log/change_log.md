@@ -541,6 +541,33 @@
   - 4-3-e/4-3-f를 1차 분리 완료(상태/검색/전환, split tree 유틸)로 명시
   - Phase 5-3 테스트 확장 수치를 52개 기준으로 갱신
 
+#### refactor(phase4-3-g): 세션 로그 버퍼 모듈 분리 (`session-manager.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/session-manager.js` 신규 추가
+  - `createSessionManagerController()` 팩토리로 세션 로그 버퍼링/flush 로직 분리
+  - 버퍼 크기 제한, debounce flush, 세션 종료 시 버퍼 해제 API 제공
+- `src/app.js`
+  - 인라인 로그 버퍼(`logBuffer`, `logTimeouts`) 제거 후 모듈 사용
+  - 세션 종료 경로에서 `disposeSessionLogBuffer()` 호출 추가
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (13 files, 56 tests)
+
+#### test(phase5-3): session-manager 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/session-manager.test.js`
+  - flush 타이밍, 다중 write 배치, 버퍼 truncation, dispose 취소 동작 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
