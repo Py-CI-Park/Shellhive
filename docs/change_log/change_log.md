@@ -124,6 +124,26 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### feat(security): 환경변수 키/값 검증 및 위험 키 차단
+
+**커밋**: `4ff1778`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/pty.rs`
+  - `validate_env_key()`, `validate_env_value()` 도입
+  - 환경변수 키 길이/문자셋 검증 및 위험 키(`PATH`, `COMSPEC`, `LD_PRELOAD` 등) 차단
+  - 환경변수 값 길이/개행/널 문자 검증 적용
+  - `create_pty`에서 환경변수 적용 전 검증 강제
+  - 환경변수 검증 단위 테스트 6개 추가
+- `src-tauri/src/project.rs`
+  - `save_project_env` 저장 경로에서 환경변수 키/값 검증 적용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
