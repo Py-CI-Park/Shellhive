@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod ai;
+mod claude;
 mod git;
 mod project;
 mod pty;
@@ -101,6 +103,10 @@ fn main() {
             sharing::get_sharing_status,
             sharing::find_shared_session,
             sharing::list_shared_sessions,
+            claude::check_claude_installed,
+            claude::get_claude_start_command,
+            ai::translate_natural_language,
+            ai::get_ai_patterns,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
