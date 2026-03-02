@@ -1039,7 +1039,18 @@ const {
   filterTabsByQuery,
   switchToNextTab,
   switchToPreviousTab,
-  switchToTabByIndex
+  switchToTabByIndex,
+  handleTabDragStart,
+  handleTabDragEnter,
+  handleTabDragOver,
+  handleTabDragLeave,
+  handleTabDrop,
+  handleTabDragEnd,
+  setTabColor,
+  showColorPickerMenu,
+  togglePinTab,
+  storeClosedTabInfo,
+  restoreLastClosedTab
 } = createTabManagerController({
   state,
   SESSION_STATUS,
@@ -1049,6 +1060,9 @@ const {
   ensureSplitPaneHeader,
   renderSplitMinimap,
   activateSession,
+  createSession,
+  clearPaneDropIndicators,
+  TAB_COLORS,
   escapeHtml,
   escapeHtmlAttr,
   escapeDataAttr,
@@ -2182,58 +2196,6 @@ async function createSessionInDirectory(path, projectName, projectId = null) {
   await createSession(`${projectName}`, path, projectId);
 }
 
-// Tab drag and drop handlers
-function handleTabDragStart(e) {
-  state.draggedTab = e.currentTarget;
-  e.currentTarget.classList.add('tab--dragging');
-  e.dataTransfer.effectAllowed = 'move';
-  const sessionId = e.currentTarget.dataset.sessionId;
-  if (sessionId) {
-    e.dataTransfer.setData('text/plain', sessionId);
-  }
-}
-
-function handleTabDragEnter(e) {
-  if (e.currentTarget !== state.draggedTab) {
-    e.currentTarget.classList.add('tab--drop-target');
-  }
-}
-
-function handleTabDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  return false;
-}
-
-function handleTabDragLeave(e) {
-  e.currentTarget.classList.remove('tab--drop-target');
-}
-
-function handleTabDrop(e) {
-  e.stopPropagation();
-  if (state.draggedTab !== e.currentTarget) {
-    const allTabs = Array.from(tabsList.children);
-    const draggedIndex = allTabs.indexOf(state.draggedTab);
-    const targetIndex = allTabs.indexOf(e.currentTarget);
-    if (draggedIndex < targetIndex) {
-      tabsList.insertBefore(state.draggedTab, e.currentTarget.nextSibling);
-    } else {
-      tabsList.insertBefore(state.draggedTab, e.currentTarget);
-    }
-  }
-  e.currentTarget.classList.remove('tab--drop-target');
-  return false;
-}
-
-function handleTabDragEnd(e) {
-  e.currentTarget.classList.remove('tab--dragging');
-  document.querySelectorAll('.tab--drop-target').forEach(tab => {
-    tab.classList.remove('tab--drop-target');
-  });
-  clearPaneDropIndicators();
-  state.draggedTab = null;
-}
-
 function showTabContextMenu(e, sessionId) {
   const existingMenu = document.getElementById('tabContextMenu');
   if (existingMenu) existingMenu.remove();
@@ -2429,145 +2391,6 @@ function startTabRename(sessionId) {
 }
 
 // ===== Phase 3: Advanced Tab Management Functions =====
-
-// Toggle pin state of a tab
-function togglePinTab(sessionId) {
-  const session = state.sessions.get(sessionId);
-  if (!session) return;
-
-  session.pinned = !session.pinned;
-
-  // Update tab UI
-  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
-  if (tab) {
-    tab.classList.toggle('tab--pinned', session.pinned);
-
-    // Move pinned tabs to the front
-    if (session.pinned) {
-      const tabsList = document.getElementById('tabsList');
-      const firstUnpinnedTab = tabsList.querySelector('.tab:not(.tab--pinned):not(.tab-group)');
-      if (firstUnpinnedTab) {
-        tabsList.insertBefore(tab, firstUnpinnedTab);
-      }
-    }
-  }
-
-  debug('Tab pinned state toggled:', sessionId, session.pinned);
-}
-
-// Set tab color
-function setTabColor(sessionId, color) {
-  const session = state.sessions.get(sessionId);
-  if (!session) return;
-
-  const safeColor = getSafeTabColor(color);
-  session.color = safeColor;
-
-  // Update tab UI
-  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
-  if (tab) {
-    if (safeColor) {
-      tab.style.borderTopColor = safeColor;
-      tab.classList.add('tab--colored');
-    } else {
-      tab.style.borderTopColor = '';
-      tab.classList.remove('tab--colored');
-    }
-  }
-
-  debug('Tab color set:', sessionId, safeColor);
-}
-
-// Show color picker submenu in context menu
-function showColorPickerMenu(e, sessionId, parentMenu) {
-  // Remove existing color picker if any
-  const existingPicker = document.getElementById('colorPickerMenu');
-  if (existingPicker) existingPicker.remove();
-
-  const colorPicker = document.createElement('div');
-  colorPicker.id = 'colorPickerMenu';
-  colorPicker.className = 'context-menu context-menu--submenu';
-
-  const parentRect = parentMenu.getBoundingClientRect();
-  colorPicker.style.left = `${parentRect.right}px`;
-  colorPicker.style.top = `${e.clientY}px`;
-
-  const colorSwatches = TAB_COLORS.map(color => {
-    if (color.value === null) {
-      return `<div class="context-menu__item" data-color="null">
-        <span class="context-menu__color-swatch context-menu__color-swatch--none"></span>
-        <span>${escapeHtml(color.name)}</span>
-      </div>`;
-    }
-    return `<div class="context-menu__item" data-color="${escapeDataAttr(color.value)}">
-      <span class="context-menu__color-swatch" style="background-color: ${escapeHtmlAttr(color.value)}"></span>
-      <span>${escapeHtml(color.name)}</span>
-    </div>`;
-  }).join('');
-
-  colorPicker.innerHTML = colorSwatches;
-
-  colorPicker.addEventListener('click', (e) => {
-    const colorValue = e.target.closest('.context-menu__item')?.dataset.color;
-    if (colorValue !== undefined) {
-      setTabColor(sessionId, colorValue === 'null' ? null : colorValue);
-      parentMenu.remove();
-      colorPicker.remove();
-    }
-  });
-
-  document.body.appendChild(colorPicker);
-
-  // Remove when clicking outside
-  setTimeout(() => {
-    const closeColorPicker = (e) => {
-      if (!colorPicker.contains(e.target) && !parentMenu.contains(e.target)) {
-        colorPicker.remove();
-        document.removeEventListener('click', closeColorPicker);
-      }
-    };
-    document.addEventListener('click', closeColorPicker);
-  }, 0);
-}
-
-// Store info about closed tab
-function storeClosedTabInfo(session) {
-  const closedTab = {
-    name: session.name,
-    projectId: session.projectId,
-    projectPath: session.projectPath,
-    projectName: session.projectName,
-    closedAt: new Date()
-  };
-
-  state.closedTabs.unshift(closedTab);
-
-  // Keep only last 10
-  if (state.closedTabs.length > 10) {
-    state.closedTabs.pop();
-  }
-
-  debug('Closed tab stored:', closedTab.name);
-}
-
-// Restore the last closed tab
-async function restoreLastClosedTab() {
-  if (state.closedTabs.length === 0) {
-    debug('No closed tabs to restore');
-    return;
-  }
-
-  const closedTab = state.closedTabs.shift();
-
-  // Recreate session
-  if (closedTab.projectPath) {
-    await createSession(closedTab.name, closedTab.projectPath, closedTab.projectId);
-  } else {
-    await createSession(closedTab.name);
-  }
-
-  debug('Restored tab:', closedTab.name);
-}
 
 // ===== Terminal Search Functions =====
 

@@ -639,6 +639,34 @@
   - PR #40 반영으로 4-3-g 진행 상태를 2차 완료로 갱신
   - Phase 5-3 테스트 확장 수치를 63개 기준으로 갱신
 
+#### refactor(phase4-3-e): tab-manager 인터랙션 분리 2차
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/tab-manager.js`
+  - 탭 drag/drop 핸들러(`handleTabDragStart/Enter/Over/Leave/Drop/End`) 이동
+  - 고급 탭 관리 로직(`togglePinTab`, `setTabColor`, `showColorPickerMenu`) 이동
+  - 닫은 탭 복원 로직(`storeClosedTabInfo`, `restoreLastClosedTab`) 이동
+- `src/app.js`
+  - 상기 함수의 인라인 구현 제거 및 `createTabManagerController` 의존성/반환값 연결
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (15 files, 67 tests)
+
+#### test(phase5-3): tab-manager 테스트 확장
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/tab-manager.test.js`
+  - 기존 5개 → 9개로 확장
+  - pin 토글, 탭 색상 적용/해제, 닫은 탭 복원, drag/drop 정렬/정리 경로 검증 추가
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성

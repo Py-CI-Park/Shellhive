@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTabManagerController } from '../tab-manager.js';
+import { TAB_COLORS } from '../ui-constants.js';
 
 function createController(options = {}) {
   const SESSION_STATUS = {
@@ -12,7 +13,9 @@ function createController(options = {}) {
     splitMode: false,
     tabSearchVisible: false,
     activeSessionId: null,
-    sessions: new Map()
+    sessions: new Map(),
+    closedTabs: [],
+    draggedTab: null
   };
 
   const deps = {
@@ -28,6 +31,9 @@ function createController(options = {}) {
     ensureSplitPaneHeader: vi.fn(),
     renderSplitMinimap: vi.fn(),
     activateSession: vi.fn(),
+    createSession: vi.fn(),
+    clearPaneDropIndicators: vi.fn(),
+    TAB_COLORS,
     escapeHtml: (value) => String(value)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -139,5 +145,94 @@ describe('tab-manager module', () => {
     expect(deps.activateSession).toHaveBeenNthCalledWith(1, 's-2');
     expect(deps.activateSession).toHaveBeenNthCalledWith(2, 's-3');
     expect(deps.activateSession).toHaveBeenNthCalledWith(3, 's-3');
+  });
+
+  it('should toggle pin state and move tab before first unpinned tab', () => {
+    const { controller, state } = createController();
+    state.sessions.set('s-1', { id: 's-1', pinned: false });
+
+    document.body.innerHTML = `
+      <div id="tabsList">
+        <div class="tab" data-session-id="s-1"></div>
+        <div class="tab" data-session-id="s-2"></div>
+      </div>
+    `;
+
+    controller.togglePinTab('s-1');
+
+    const tab = document.querySelector('[data-session-id="s-1"]');
+    expect(state.sessions.get('s-1')?.pinned).toBe(true);
+    expect(tab.classList.contains('tab--pinned')).toBe(true);
+  });
+
+  it('should set tab color and clear color with null', () => {
+    const { controller, state } = createController();
+    state.sessions.set('s-1', { id: 's-1', color: null });
+
+    document.body.innerHTML = `
+      <div class="tab" data-session-id="s-1"></div>
+    `;
+
+    controller.setTabColor('s-1', '#f44336');
+    let tab = document.querySelector('[data-session-id="s-1"]');
+    expect(state.sessions.get('s-1')?.color).toBe('#f44336');
+    expect(tab.classList.contains('tab--colored')).toBe(true);
+
+    controller.setTabColor('s-1', null);
+    tab = document.querySelector('[data-session-id="s-1"]');
+    expect(state.sessions.get('s-1')?.color).toBeNull();
+    expect(tab.classList.contains('tab--colored')).toBe(false);
+  });
+
+  it('should store and restore closed tab info', async () => {
+    const { controller, state, deps } = createController();
+    const session = {
+      id: 's-1',
+      name: 'terminal',
+      projectId: 'p1',
+      projectPath: '/tmp/p1',
+      projectName: 'project-1'
+    };
+
+    controller.storeClosedTabInfo(session);
+    expect(state.closedTabs.length).toBe(1);
+
+    await controller.restoreLastClosedTab();
+    expect(deps.createSession).toHaveBeenCalledWith('terminal', '/tmp/p1', 'p1');
+    expect(state.closedTabs.length).toBe(0);
+  });
+
+  it('should reorder tabs on drop and clear drag state on drag end', () => {
+    const { controller, deps, state } = createController();
+
+    document.body.innerHTML = `
+      <div id="tabsList">
+        <div class="tab" data-session-id="s-1"></div>
+        <div class="tab" data-session-id="s-2"></div>
+      </div>
+    `;
+
+    const tabs = document.querySelectorAll('.tab');
+    const dragEvent = {
+      currentTarget: tabs[0],
+      dataTransfer: {
+        effectAllowed: '',
+        dropEffect: '',
+        setData: vi.fn()
+      }
+    };
+    controller.handleTabDragStart(dragEvent);
+    expect(state.draggedTab).toBe(tabs[0]);
+
+    controller.handleTabDrop({
+      currentTarget: tabs[1],
+      stopPropagation: vi.fn()
+    });
+
+    controller.handleTabDragEnd({
+      currentTarget: tabs[0]
+    });
+    expect(state.draggedTab).toBeNull();
+    expect(deps.clearPaneDropIndicators).toHaveBeenCalled();
   });
 });
