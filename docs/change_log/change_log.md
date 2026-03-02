@@ -161,6 +161,16 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### docs(plan): 개선 계획 문서 실행 현황 갱신
+
+**커밋**: `953f467`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - 2026-03-02 기준 실제 반영된 PR(Phase 1, Phase 2-1/2/3/4/5/9/10) 현황 추가
+  - 잔여 작업(Phase 2-7, 2-8, Phase 3~5) 구간 명시
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
