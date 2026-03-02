@@ -398,7 +398,7 @@
 
 #### refactor(phase4-3-b): 설정 모듈 분리 (`settings.js`)
 
-**커밋**: `TBD`
+**커밋**: `75bf0c4`
 
 ##### 변경됨 (Changed)
 
@@ -416,7 +416,7 @@
 
 #### test(phase5-3): settings 모듈 실코드 테스트 전환
 
-**커밋**: `TBD`
+**커밋**: `75bf0c4`
 
 ##### 변경됨 (Changed)
 
@@ -426,7 +426,7 @@
 
 #### refactor(phase4-3-a): 단축키/커맨드 팔레트 모듈 분리 (`shortcuts.js`)
 
-**커밋**: `TBD`
+**커밋**: `37aaf8f`
 
 ##### 변경됨 (Changed)
 
@@ -444,7 +444,7 @@
 
 #### test(phase5-3): shortcuts 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `37aaf8f`
 
 ##### 추가됨 (Added)
 
@@ -453,7 +453,7 @@
 
 #### refactor(phase4-3-c): 모달 공통 로직 분리 (`modals.js`)
 
-**커밋**: `TBD`
+**커밋**: `5257b09`
 
 ##### 변경됨 (Changed)
 
@@ -471,7 +471,7 @@
 
 #### test(phase5-3): modals 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `5257b09`
 
 ##### 추가됨 (Added)
 
@@ -480,7 +480,7 @@
 
 #### refactor(phase4-3-e): 탭 상태/검색/전환 모듈 분리 (`tab-manager.js`)
 
-**커밋**: `TBD`
+**커밋**: `e88f5b7`
 
 ##### 변경됨 (Changed)
 
@@ -498,7 +498,7 @@
 
 #### test(phase5-3): tab-manager 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `e88f5b7`
 
 ##### 추가됨 (Added)
 
@@ -507,7 +507,7 @@
 
 #### refactor(phase4-3-f): split 트리 유틸 모듈 분리 (`split-pane.js`)
 
-**커밋**: `TBD`
+**커밋**: `f333f07`
 
 ##### 변경됨 (Changed)
 
@@ -523,7 +523,7 @@
 
 #### test(phase5-3): split-pane 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `f333f07`
 
 ##### 추가됨 (Added)
 
@@ -532,7 +532,7 @@
 
 #### docs(plan): Phase 4/5 실행 현황 동기화
 
-**커밋**: `TBD`
+**커밋**: `484e062`
 
 ##### 문서화됨 (Documentation)
 
@@ -543,7 +543,7 @@
 
 #### refactor(phase4-3-g): 세션 로그 버퍼 모듈 분리 (`session-manager.js`)
 
-**커밋**: `TBD`
+**커밋**: `6ccd339`
 
 ##### 변경됨 (Changed)
 
@@ -561,7 +561,7 @@
 
 #### test(phase5-3): session-manager 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `6ccd339`
 
 ##### 추가됨 (Added)
 
@@ -570,7 +570,7 @@
 
 #### refactor(phase4-4): DOM 초기화 엔트리 분리 1차 (`dom-elements.js`)
 
-**커밋**: `TBD`
+**커밋**: `499568a`
 
 ##### 변경됨 (Changed)
 
@@ -586,7 +586,7 @@
 
 #### test(phase5-3): dom-elements 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `499568a`
 
 ##### 추가됨 (Added)
 
@@ -595,7 +595,7 @@
 
 #### docs(plan): Phase 4-3-g/4-4 및 테스트 지표 동기화
 
-**커밋**: `TBD`
+**커밋**: `04913bf`
 
 ##### 문서화됨 (Documentation)
 
