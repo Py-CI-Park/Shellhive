@@ -718,6 +718,16 @@
 - `src/__tests__/file-drag-drop.test.js`
   - 활성 세션 없음 경고, 폴더 드롭 cd 명령, 다중 파일 경로 주입, 드롭 하이라이트 토글 검증
 
+#### docs(plan): Phase 4 2차 분리 진행 현황 및 테스트 지표 동기화
+
+**커밋**: `TBD`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - PR #43/#44/#45 반영으로 4-3-e/4-3-f/4-4 진행 상태를 2차 기준으로 갱신
+  - Phase 5-3 테스트 확장 수치를 74개 기준으로 갱신
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
