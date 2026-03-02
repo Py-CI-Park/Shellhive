@@ -10,6 +10,15 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { setLocale } from './i18n/index.js';
 import { createHistoryPanel, showHistoryPanel } from './history-panel.js';
 import { LAYOUT_PRESETS, TAB_COLORS } from './ui-constants.js';
+import {
+  state,
+  elements,
+  TabGroup,
+  TERMINAL_THEMES,
+  SESSION_STATUS,
+  SESSION_STATUS_LABELS,
+  eventBus
+} from './state.js';
 
 // Toast notification system
 const toastContainer = document.createElement('div');
@@ -297,26 +306,9 @@ function debug(...args) {
   console.log('[Shellhive]', ...args);
 }
 
-// Session status constants
-const SESSION_STATUS = {
-  CONNECTING: 'connecting',
-  RUNNING: 'running',
-  EXITED: 'exited'
-};
-
-const SESSION_STATUS_LABELS = Object.freeze({
-  connecting: '연결 중',
-  running: '실행 중',
-  exited: '종료됨'
-});
-
 const SAFE_SESSION_STATUSES = new Set(Object.values(SESSION_STATUS));
 
-const ALLOWED_TAB_COLOR_VALUES = new Set(
-  TAB_COLORS
-    .map((color) => (typeof color.value === 'string' ? color.value.trim() : null))
-    .filter(Boolean)
-);
+const ALLOWED_TAB_COLOR_VALUES = state.allowedTabColorValues;
 
 function getSessionStatusClass(status) {
   if (typeof status !== 'string') return SESSION_STATUS.EXITED;
@@ -344,35 +336,6 @@ const LAYOUT_PRESET_DESCRIPTIONS = Object.freeze({
   'three-columns': '좌우 3분할',
   'main-sidebar': '메인 작업 + 보조 패널'
 });
-
-// TabGroup class for organizing tabs
-class TabGroup {
-  constructor(id, name, options = {}) {
-    this.id = id;
-    this.name = name;
-    this.color = options.color || '#0e639c';
-    this.collapsed = false;
-    this.tabIds = new Set();
-    this.projectId = options.projectId || null;
-    this.isAutoGroup = options.isAutoGroup || false;
-  }
-
-  addTab(sessionId) {
-    this.tabIds.add(sessionId);
-  }
-
-  removeTab(sessionId) {
-    this.tabIds.delete(sessionId);
-  }
-
-  get size() {
-    return this.tabIds.size;
-  }
-
-  isEmpty() {
-    return this.tabIds.size === 0;
-  }
-}
 
 // ===== Command Block System (Warp-style) =====
 // Note: CommandBlock class is defined below with BlockManager (line ~900+)
@@ -1198,154 +1161,6 @@ class SplitNode {
   }
 }
 
-// Terminal themes
-const TERMINAL_THEMES = {
-  dark: {
-    background: '#1e1e1e',
-    foreground: '#cccccc',
-    cursor: '#ffffff',
-    cursorAccent: '#1e1e1e',
-    selectionBackground: '#264f78',
-    black: '#000000',
-    red: '#cd3131',
-    green: '#0dbc79',
-    yellow: '#e5e510',
-    blue: '#2472c8',
-    magenta: '#bc3fbc',
-    cyan: '#11a8cd',
-    white: '#e5e5e5',
-    brightBlack: '#666666',
-    brightRed: '#f14c4c',
-    brightGreen: '#23d18b',
-    brightYellow: '#f5f543',
-    brightBlue: '#3b8eea',
-    brightMagenta: '#d670d6',
-    brightCyan: '#29b8db',
-    brightWhite: '#ffffff',
-  },
-  light: {
-    background: '#ffffff',
-    foreground: '#1e1e1e',
-    cursor: '#000000',
-    cursorAccent: '#ffffff',
-    selectionBackground: '#add6ff',
-    black: '#000000',
-    red: '#cd3131',
-    green: '#008000',
-    yellow: '#795e25',
-    blue: '#0451a5',
-    magenta: '#bc05bc',
-    cyan: '#0598bc',
-    white: '#555555',
-    brightBlack: '#666666',
-    brightRed: '#cd3131',
-    brightGreen: '#14ce14',
-    brightYellow: '#b5ba00',
-    brightBlue: '#0451a5',
-    brightMagenta: '#bc05bc',
-    brightCyan: '#0598bc',
-    brightWhite: '#a5a5a5',
-  },
-  monokai: {
-    background: '#272822',
-    foreground: '#f8f8f2',
-    cursor: '#f8f8f0',
-    cursorAccent: '#272822',
-    selectionBackground: '#49483e',
-    black: '#272822',
-    red: '#f92672',
-    green: '#a6e22e',
-    yellow: '#f4bf75',
-    blue: '#66d9ef',
-    magenta: '#ae81ff',
-    cyan: '#a1efe4',
-    white: '#f8f8f2',
-    brightBlack: '#75715e',
-    brightRed: '#f92672',
-    brightGreen: '#a6e22e',
-    brightYellow: '#f4bf75',
-    brightBlue: '#66d9ef',
-    brightMagenta: '#ae81ff',
-    brightCyan: '#a1efe4',
-    brightWhite: '#f9f8f5',
-  },
-  'high-contrast': {
-    background: '#000000',
-    foreground: '#ffffff',
-    cursor: '#00ff00',
-    cursorAccent: '#000000',
-    selectionBackground: '#00ffff',
-    black: '#000000',
-    red: '#ff0000',
-    green: '#00ff00',
-    yellow: '#ffff00',
-    blue: '#0000ff',
-    magenta: '#ff00ff',
-    cyan: '#00ffff',
-    white: '#ffffff',
-    brightBlack: '#808080',
-    brightRed: '#ff0000',
-    brightGreen: '#00ff00',
-    brightYellow: '#ffff00',
-    brightBlue: '#0000ff',
-    brightMagenta: '#ff00ff',
-    brightCyan: '#00ffff',
-    brightWhite: '#ffffff',
-  },
-};
-
-// State
-const state = {
-  sessions: new Map(),
-  activeSessionId: null,
-  sessionCounter: 0,
-  draggedTab: null,
-  dropTarget: null,
-  settings: {
-    theme: 'dark',
-    fontSize: 14,
-    fontFamily: 'Consolas',
-    enableLogging: true,
-    enableNotifications: true,
-    enableSnippetSuggestions: true,
-    snippetSuggestionThreshold: 3,
-    enableBlockMode: false,  // Warp-style block output
-    enableAiFeatures: false,
-    locale: 'ko',
-  },
-  blockManagers: new Map(),  // Map<sessionId, BlockManager>
-  snippets: [],
-  projects: [],
-  categories: [],             // Project categories
-  activeProjectFilter: null,
-  projectTabMap: new Map(),
-  tabGroups: new Map(),       // Map<groupId, TabGroup>
-  tabToGroup: new Map(),      // Map<sessionId, groupId>
-  autoGroupByProject: true,   // Auto-group tabs by project
-  groupCounter: 0,            // Counter for generating group IDs
-  closedTabs: [],             // Store last 10 closed tabs
-  tabSearchVisible: false,    // Tab search overlay state
-  tabSearchQuery: '',         // Current search query
-  searchVisible: false,       // Terminal search visible state
-  searchQuery: '',            // Terminal search query
-  splitRoot: null,            // SplitNode root for active layout
-  splitMode: false,           // Whether split mode is active
-  tabLayouts: new Map(),      // Map<sessionId, { splitRoot, splitMode }> - per-tab layouts
-  swapTargetSession: null,    // Swap target session ID
-  maximizedSession: null,     // Maximized session ID (for split mode)
-  splitInProgress: false,     // Prevent race condition in splitActivePane
-  splitRenderRaf: null,       // requestAnimationFrame handle for split render batching
-  splitMinimapVisible: true,  // Split minimap panel visibility
-  selectedLayoutPreset: null, // Selected preset in layout gallery modal
-  autocompleteVisible: false, // Autocomplete popup visible state
-  autocompleteQuery: '',      // Current input for autocomplete
-  autocompleteSelected: 0,    // Selected suggestion index
-  autocompleteSuggestions: [], // Current suggestions
-  currentLineBuffer: '',      // Track current line input for autocomplete
-  gitPanelVisible: false,     // Git 패널 표시 상태
-  currentGitPath: null,       // 현재 Git 리포지토리 경로
-};
-
 // DOM Elements - will be initialized after DOM loads
 let tabsList, terminalContainer, newTabBtn, projectList, addProjectBtn;
 let addProjectModal, closeAddProjectModal, cancelAddProject, confirmAddProject;
@@ -1436,6 +1251,7 @@ async function loadSettings() {
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
     applyAiFeatureVisibility();
     applyBlockModeToSessions(state.settings.enableBlockMode);
+    eventBus.emit('settings:loaded', { settings: { ...state.settings } });
 
     return state.settings;
   } catch (error) {
@@ -1476,6 +1292,7 @@ async function saveSettings(settings) {
     commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
     applyAiFeatureVisibility();
     applyBlockModeToSessions(state.settings.enableBlockMode);
+    eventBus.emit('settings:updated', { settings: { ...state.settings } });
 
     debug('Settings saved');
     showToast('설정이 저장되었습니다', 'success');
@@ -2541,6 +2358,11 @@ async function createSession(name = null, workingDir = null, projectId = null, o
   blockManager.setContainer(blockContainer);
   state.blockManagers.set(id, blockManager);
   wrapper.classList.toggle('terminal-wrapper--block-mode', state.settings.enableBlockMode);
+  eventBus.emit('session:created', {
+    sessionId: id,
+    projectId: session.projectId,
+    status: session.status
+  });
 
   // Link session to project
   if (projectId) {
@@ -2753,6 +2575,7 @@ function activateSession(id, options = {}) {
   }
 
   state.activeSessionId = id;
+  eventBus.emit('session:activated', { sessionId: id });
 
   // Restore new tab's layout after switching
   if (keepCurrentSplit) {
@@ -2810,6 +2633,7 @@ async function closeSession(id) {
 
   state.sessions.delete(id);
   state.blockManagers.delete(id);
+  eventBus.emit('session:closed', { sessionId: id });
 
   // Claude 세션 정리
   onClaudeSessionClose(id);
@@ -6376,6 +6200,42 @@ function initializeDOMElements() {
   settingsBlockMode = document.getElementById('settingsBlockMode');
   clearLogsBtn = document.getElementById('clearLogsBtn');
 
+  Object.assign(elements, {
+    tabsList,
+    terminalContainer,
+    newTabBtn,
+    projectList,
+    addProjectBtn,
+    addProjectModal,
+    closeAddProjectModal,
+    cancelAddProject,
+    confirmAddProject,
+    projectNameInput,
+    projectPathInput,
+    browsePathBtn,
+    snippetList,
+    addSnippetBtn,
+    addSnippetModal,
+    closeAddSnippetModal,
+    cancelAddSnippet,
+    confirmAddSnippet,
+    snippetNameInput,
+    snippetCommandInput,
+    settingsBtn,
+    settingsModal,
+    closeSettingsModal,
+    cancelSettings,
+    saveSettingsBtn,
+    settingsTheme,
+    settingsFontSize,
+    fontSizeValue,
+    settingsFontFamily,
+    settingsEnableLogging,
+    settingsEnableNotifications,
+    settingsBlockMode,
+    clearLogsBtn
+  });
+
   debug('DOM elements initialized');
 }
 
@@ -7090,6 +6950,7 @@ function updateTabSharingIndicator(sessionId, isSharing) {
 function toggleGitPanel() {
   state.gitPanelVisible = !state.gitPanelVisible;
   const gitPanel = document.getElementById('gitPanel');
+  eventBus.emit('git:panel-visibility-changed', { visible: state.gitPanelVisible });
 
   if (gitPanel) {
     gitPanel.style.display = state.gitPanelVisible ? 'block' : 'none';
@@ -7121,6 +6982,7 @@ async function refreshGitStatus() {
         <p>프로젝트 폴더를 선택하세요</p>
       </div>
     `;
+    eventBus.emit('git:status-missing-path');
     return;
   }
 
@@ -7143,12 +7005,32 @@ async function refreshGitStatus() {
           <p>Git 저장소가 아닙니다</p>
         </div>
       `;
+      eventBus.emit('git:status-updated', { path: gitPath, isRepo: false });
       return;
     }
 
-    renderGitPanel(gitPanel, gitStatus, gitPath);
+    const [branches, commits] = await Promise.all([
+      invoke('git_branches', { path: gitPath }).catch((error) => {
+        debug('Failed to load branches:', error);
+        return [];
+      }),
+      invoke('git_log', { path: gitPath, limit: 10 }).catch((error) => {
+        debug('Failed to load git log:', error);
+        return [];
+      })
+    ]);
+
+    const gitViewModel = {
+      ...gitStatus,
+      branches: Array.isArray(branches) ? branches : [],
+      commits: Array.isArray(commits) ? commits : []
+    };
+
+    eventBus.emit('git:status-updated', { path: gitPath, isRepo: true, status: gitViewModel });
+    renderGitPanel(gitPanel, gitViewModel, gitPath);
   } catch (error) {
     debug('Git 상태 확인 실패:', error);
+    eventBus.emit('git:status-error', { path: gitPath, error: error?.toString?.() ?? String(error) });
     gitPanel.innerHTML = `
       <div class="git-panel__error">
         Git 상태를 확인할 수 없습니다: ${escapeHtml(error.toString())}
@@ -7175,18 +7057,96 @@ function getGitStatusClass(status) {
   return GIT_STATUS_CLASS_MAP[status] || 'unknown';
 }
 
+function formatCommitDate(date) {
+  if (!date) return '';
+  return escapeHtml(String(date));
+}
+
+function renderGitBranchOptions(branches, currentBranch) {
+  if (!Array.isArray(branches) || branches.length === 0) {
+    return `<option value="${escapeHtmlAttr(currentBranch || '')}" selected>${escapeHtml(currentBranch || 'HEAD')}</option>`;
+  }
+
+  const uniqueBranches = [];
+  const seen = new Set();
+  for (const branch of branches) {
+    if (!branch || typeof branch.name !== 'string') continue;
+    if (seen.has(branch.name)) continue;
+    seen.add(branch.name);
+    uniqueBranches.push(branch);
+  }
+
+  return uniqueBranches.map((branch) => {
+    const branchName = branch.name;
+    const isCurrent = branch.is_current || branchName === currentBranch;
+    const remotePrefix = branch.is_remote ? '[remote] ' : '';
+    return `<option value="${escapeHtmlAttr(branchName)}" ${isCurrent ? 'selected' : ''}>${escapeHtml(remotePrefix + branchName)}</option>`;
+  }).join('');
+}
+
+function renderGitHistory(commits) {
+  if (!Array.isArray(commits) || commits.length === 0) {
+    return `
+      <div class="git-panel__empty git-panel__empty--compact">
+        <p>표시할 커밋이 없습니다</p>
+      </div>
+    `;
+  }
+
+  return `
+    <ul class="git-panel__history-list">
+      ${commits.map((commit) => `
+        <li class="git-panel__history-item">
+          <div class="git-panel__history-line">
+            <code class="git-panel__history-hash">${escapeHtml(commit.hash || '-')}</code>
+            <span class="git-panel__history-message" title="${escapeHtmlAttr(commit.message || '')}">${escapeHtml(commit.message || '(no message)')}</span>
+          </div>
+          <div class="git-panel__history-meta">
+            <span>${escapeHtml(commit.author || 'unknown')}</span>
+            <span>${formatCommitDate(commit.date)}</span>
+          </div>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+}
+
 // Git 패널 렌더링
 function renderGitPanel(panel, status, gitPath) {
   const files = status.files || [];
   const hasChanges = files.length > 0;
+  const currentBranch = status.branch || 'HEAD';
+  const branches = status.branches || [];
+  const commits = status.commits || [];
 
   panel.innerHTML = `
     <div class="git-panel__branch">
       <span class="git-panel__branch-icon">⎇</span>
-      <span class="git-panel__branch-name">${escapeHtml(status.branch || 'HEAD')}</span>
+      <span class="git-panel__branch-name">${escapeHtml(currentBranch)}</span>
+      <span class="git-panel__branch-sync">↑${Number(status.ahead || 0)} ↓${Number(status.behind || 0)}</span>
+    </div>
+
+    <div class="git-panel__section">
+      <div class="git-panel__section-title">브랜치 전환</div>
+      <div class="git-panel__branch-controls">
+        <label class="git-panel__sr-only" for="gitBranchSelect">브랜치 선택</label>
+        <select class="git-panel__branch-select" id="gitBranchSelect">
+          ${renderGitBranchOptions(branches, currentBranch)}
+        </select>
+        <button class="git-panel__btn" id="gitCheckoutBtn">Checkout</button>
+      </div>
+    </div>
+
+    <div class="git-panel__section">
+      <div class="git-panel__section-title">최근 커밋 (최대 10개)</div>
+      ${renderGitHistory(commits)}
     </div>
 
     ${hasChanges ? `
+      <div class="git-panel__section">
+        <div class="git-panel__section-title">변경 파일</div>
+      </div>
+
       <div class="git-panel__files">
         ${files.map((file, index) => `
           <div class="git-panel__file" data-index="${index}">
@@ -7195,6 +7155,13 @@ function renderGitPanel(panel, status, gitPath) {
                    ${file.staged ? 'checked' : ''} />
             <span class="git-panel__file-status git-panel__file-status--${getGitStatusClass(file.status)}">${escapeHtml(file.status || '?')}</span>
             <span class="git-panel__file-name" title="${escapeHtmlAttr(file.path)}">${escapeHtml(file.path)}</span>
+            ${file.staged ? '' : `
+              <button class="git-panel__file-discard"
+                      data-file="${escapeHtmlAttr(file.path)}"
+                      aria-label="${escapeHtmlAttr(`${file.path} 변경 폐기`)}">
+                Discard
+              </button>
+            `}
           </div>
         `).join('')}
       </div>
@@ -7225,6 +7192,7 @@ function renderGitPanel(panel, status, gitPath) {
     </div>
   `;
 
+  panel.dataset.currentBranch = currentBranch;
   // 이벤트 리스너 추가
   setupGitPanelListeners(panel, gitPath);
 }
@@ -7235,6 +7203,43 @@ function setupGitPanelListeners(panel, gitPath) {
   const refreshBtn = panel.querySelector('#gitRefreshBtn');
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => refreshGitStatus());
+  }
+
+  const branchSelect = panel.querySelector('#gitBranchSelect');
+  const checkoutBtn = panel.querySelector('#gitCheckoutBtn');
+  const runCheckout = async () => {
+    if (!branchSelect) return;
+    const selectedBranch = branchSelect.value;
+    const currentBranch = panel.dataset.currentBranch || '';
+    if (!selectedBranch) {
+      showToast('브랜치를 선택하세요', 'warning');
+      return;
+    }
+    if (selectedBranch === currentBranch) {
+      showToast('이미 해당 브랜치를 사용 중입니다', 'info');
+      return;
+    }
+
+    try {
+      await invoke('git_checkout', { path: gitPath, branch: selectedBranch });
+      showToast(`브랜치를 ${selectedBranch}(으)로 전환했습니다`, 'success');
+      eventBus.emit('git:branch-checked-out', { path: gitPath, branch: selectedBranch });
+      refreshGitStatus();
+    } catch (error) {
+      showToast('브랜치 전환 실패: ' + error, 'error');
+    }
+  };
+
+  if (checkoutBtn) {
+    checkoutBtn.addEventListener('click', runCheckout);
+  }
+  if (branchSelect) {
+    branchSelect.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        runCheckout();
+      }
+    });
   }
 
   // Stage All 버튼
@@ -7309,6 +7314,30 @@ function setupGitPanelListeners(panel, gitPath) {
       }
     });
   }
+
+  const discardButtons = panel.querySelectorAll('.git-panel__file-discard');
+  discardButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const filePath = button.dataset.file;
+      if (!filePath) return;
+
+      const confirmed = await showConfirmDialog(
+        '변경 내용 폐기',
+        `${filePath}의 변경 내용을 되돌릴까요? 이 작업은 되돌릴 수 없습니다.`
+      );
+
+      if (!confirmed) return;
+
+      try {
+        await invoke('git_discard', { path: gitPath, files: [filePath] });
+        showToast(`변경을 폐기했습니다: ${filePath}`, 'success');
+        eventBus.emit('git:file-discarded', { path: gitPath, file: filePath });
+        refreshGitStatus();
+      } catch (error) {
+        showToast('변경 폐기 실패: ' + error, 'error');
+      }
+    });
+  });
 
   // 개별 파일 체크박스 (stage/unstage)
   const checkboxes = panel.querySelectorAll('.git-panel__file-checkbox');

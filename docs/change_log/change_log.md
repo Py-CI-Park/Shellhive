@@ -270,7 +270,7 @@
 
 #### docs(cleanup): AGENTS 및 개선계획 실행 현황 동기화
 
-**커밋**: `TBD`
+**커밋**: `86d2b4f`
 
 ##### 문서화됨 (Documentation)
 
@@ -284,7 +284,7 @@
 
 #### docs(plan): Phase 4-1 모듈 경계 설계 문서 추가
 
-**커밋**: `TBD`
+**커밋**: `2213862`
 
 ##### 추가됨 (Added)
 
@@ -292,6 +292,38 @@
   - `app.js` 모듈 분리를 위한 목표 모듈(14개) 책임/우선순위 정의
   - 순환 의존 방지용 상태 레이어/이벤트 버스 설계 명시
   - 추출 순서(저결합→고결합) 및 검증 체크리스트/리스크 대응 정리
+
+#### feat(frontend): state/eventbus 추출 및 Git 패널 확장 착수
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/state.js` 신규 도입
+  - `state`, `elements`, `eventBus` 중심 공유 상태 모듈 추가
+  - `SESSION_STATUS`, `TERMINAL_THEMES`, `TabGroup` 공용 정의 분리
+- `src/app.js`
+  - 상태/테마/탭그룹 상수를 `state.js`에서 import하도록 전환
+  - `initializeDOMElements`에서 `elements` 레지스트리 동기화
+  - `settings:*`, `session:*`, `git:*` 이벤트 버스 emit 추가
+  - Git 패널 확장: 브랜치 전환 UI, 최근 커밋 10개 표시, 파일별 Discard 동작 추가
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅
+
+#### test(frontend): 상태 모듈 실커버리지 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/state.test.js`
+  - 상태 초기화/리셋, EventBus on/off/emit/clear, TabGroup 동작 검증
+- 기존 허위 커버리지 테스트 개선
+  - `session.test.js`: 인라인 정의 제거, `state.js` import 기반 검증
+  - `settings.test.js`: 인라인 정의 제거, 실제 모듈(`state.js`, `ui-constants.js`) import 검증
 
 ### 2026-03-01
 
