@@ -4,13 +4,20 @@
   "description": "Shellhive default capabilities",
   "windows": ["main"],
   "permissions": [
-    "core:default",
     "core:event:default",
     "core:event:allow-listen",
     "core:event:allow-emit",
-    "shell:allow-open",
+    "core:window:default",
     "dialog:default",
     "dialog:allow-open",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        {
+          "url": "https://*"
+        }
+      ]
+    },
     {
       "identifier": "core:app:allow-app-show",
       "allow": []

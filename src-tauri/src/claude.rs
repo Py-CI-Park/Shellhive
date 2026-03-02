@@ -51,12 +51,6 @@ pub fn check_claude_installed() -> Result<ClaudeStatus, String> {
     }
 }
 
-/// Claude Code 버전 정보 반환
-#[tauri::command]
-pub fn get_claude_version() -> Result<String, String> {
-    get_claude_version_internal()
-}
-
 /// 내부용 버전 확인 함수
 fn get_claude_version_internal() -> Result<String, String> {
     let output = Command::new("cmd")
@@ -73,33 +67,27 @@ fn get_claude_version_internal() -> Result<String, String> {
     }
 }
 
-/// Claude 명령어 실행 (동기)
-/// 간단한 명령어 실행용 (--help 등)
-#[tauri::command]
-pub fn execute_claude_command(args: Vec<String>) -> Result<String, String> {
-    let mut cmd_args = vec!["/C".to_string(), "claude".to_string()];
-    cmd_args.extend(args);
+fn sanitize_project_path_for_cmd(path: &str) -> Result<String, String> {
+    let canonical_path = crate::project::ensure_registered_project_path_or_subdir(path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
-    let output = Command::new("cmd")
-        .args(&cmd_args)
-        .output()
-        .map_err(|e| format!("Claude 명령어 실행 실패: {}", e))?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        let error = String::from_utf8_lossy(&output.stderr).to_string();
-        Err(format!("Claude 명령어 실패: {}", error))
+    if canonical_str.contains('\"') || canonical_str.contains('\n') || canonical_str.contains('\r') {
+        return Err("Invalid project path for command execution".to_string());
     }
+
+    Ok(canonical_str)
 }
 
 /// Claude 세션 시작을 위한 명령어 문자열 생성
 /// PTY에서 직접 실행할 명령어 반환
 #[tauri::command]
-pub fn get_claude_start_command(project_path: Option<String>) -> String {
+pub fn get_claude_start_command(project_path: Option<String>) -> Result<String, String> {
     match project_path {
-        Some(path) => format!("cd /d \"{}\" && claude\r", path),
-        None => "claude\r".to_string(),
+        Some(path) => {
+            let safe_path = sanitize_project_path_for_cmd(&path)?;
+            Ok(format!("cd /d \"{}\" && claude\r", safe_path))
+        }
+        None => Ok("claude\r".to_string()),
     }
 }
 
@@ -121,15 +109,20 @@ mod tests {
     }
 
     #[test]
-    fn test_get_claude_start_command_with_path() {
-        let cmd = get_claude_start_command(Some("C:\\Projects\\test".to_string()));
-        assert!(cmd.contains("cd /d"));
-        assert!(cmd.contains("claude"));
+    fn test_get_claude_start_command_returns_claude_without_path() {
+        let cmd = get_claude_start_command(None).unwrap();
+        assert_eq!(cmd, "claude\r");
     }
 
     #[test]
-    fn test_get_claude_start_command_without_path() {
-        let cmd = get_claude_start_command(None);
-        assert_eq!(cmd, "claude\r");
+    fn test_get_claude_start_command_path_with_quotes_rejected() {
+        let result = sanitize_project_path_for_cmd("C:\\bad\"path");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_claude_start_command_path_with_ampersand_rejected() {
+        let result = sanitize_project_path_for_cmd("C:\\temp&&whoami");
+        assert!(result.is_err());
     }
 }

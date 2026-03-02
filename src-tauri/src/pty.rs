@@ -2,9 +2,108 @@ use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::process::Command;
 use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter};
+
+const ALLOWED_SHELLS: &[&str] = &["cmd.exe", "powershell.exe", "pwsh.exe"];
+const BLOCKED_ENV_KEYS: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "COMSPEC",
+    "SHELL",
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+];
+
+pub(crate) fn validate_shell(shell: &str) -> Result<String, String> {
+    let trimmed = shell.trim();
+    if trimmed.is_empty() {
+        return Err("Shell cannot be empty".to_string());
+    }
+
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed.contains(':') {
+        return Err(format!("Shell path is not allowed: {}", shell));
+    }
+
+    let file_name = std::path::Path::new(trimmed)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid shell name: {}", shell))?;
+
+    let allowed_shell = ALLOWED_SHELLS
+        .iter()
+        .find(|allowed| file_name.eq_ignore_ascii_case(allowed))
+        .ok_or_else(|| format!("Shell not allowed: {}", shell))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("where")
+            .arg(allowed_shell)
+            .status()
+            .map_err(|e| format!("Failed to resolve shell '{}': {}", allowed_shell, e))?;
+
+        if !status.success() {
+            return Err(format!("Shell not found in PATH: {}", allowed_shell));
+        }
+    }
+
+    Ok((*allowed_shell).to_string())
+}
+
+fn validate_working_directory(working_dir: &str) -> Result<std::path::PathBuf, String> {
+    let canonical_dir = std::fs::canonicalize(working_dir).map_err(|e| {
+        format!(
+            "Failed to canonicalize working directory '{}': {}",
+            working_dir, e
+        )
+    })?;
+
+    if let Some(home_dir) = dirs::home_dir() {
+        let canonical_home = std::fs::canonicalize(home_dir)
+            .map_err(|e| format!("Failed to canonicalize home directory: {}", e))?;
+
+        if canonical_dir == canonical_home {
+            return Ok(canonical_dir);
+        }
+    }
+
+    crate::project::ensure_registered_project_path_or_subdir(working_dir)
+}
+
+pub(crate) fn validate_env_key(key: &str) -> Result<String, String> {
+    let trimmed = key.trim();
+
+    if trimmed.is_empty() || trimmed.len() > 256 {
+        return Err("Env key must be 1-256 characters".to_string());
+    }
+
+    if !trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(format!("Invalid env key: {}", key));
+    }
+
+    let upper = trimmed.to_ascii_uppercase();
+    if BLOCKED_ENV_KEYS.contains(&upper.as_str()) {
+        return Err(format!("Blocked env key: {}", key));
+    }
+
+    Ok(trimmed.to_string())
+}
+
+pub(crate) fn validate_env_value(value: &str) -> Result<String, String> {
+    if value.len() > 4096 {
+        return Err("Env value too long (max 4096)".to_string());
+    }
+    if value.contains('\0') || value.contains('\n') || value.contains('\r') {
+        return Err("Env value contains invalid characters".to_string());
+    }
+    Ok(value.to_string())
+}
 
 // Store both the master PTY handle and the writer
 struct PtySessionData {
@@ -43,7 +142,9 @@ pub async fn create_pty(
     let id = uuid::Uuid::new_v4().to_string();
 
     // Use cmd.exe for Windows - most compatible
-    let shell_cmd = shell.unwrap_or_else(|| "cmd.exe".to_string());
+    let requested_shell = shell.unwrap_or_else(|| "cmd.exe".to_string());
+    let shell_cmd = validate_shell(&requested_shell)?;
+    let validated_working_dir = validate_working_directory(&working_dir)?;
 
     println!("[PTY] Creating session {} with shell: {}", id, shell_cmd);
     println!("[PTY] Working directory: {}", working_dir);
@@ -68,13 +169,15 @@ pub async fn create_pty(
 
     // Create command
     let mut cmd = CommandBuilder::new(&shell_cmd);
-    cmd.cwd(&working_dir);
+    cmd.cwd(&validated_working_dir);
 
     // Add environment variables if provided
     if let Some(vars) = env_vars {
         println!("[PTY] Setting {} environment variables", vars.len());
         for (key, value) in vars {
-            cmd.env(key, value);
+            let valid_key = validate_env_key(&key)?;
+            let valid_value = validate_env_value(&value)?;
+            cmd.env(valid_key, valid_value);
         }
     }
 
@@ -300,6 +403,67 @@ pub async fn kill_pty(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_validate_shell_allowed() {
+        assert_eq!(validate_shell("cmd.exe").unwrap(), "cmd.exe");
+        assert_eq!(validate_shell("powershell.exe").unwrap(), "powershell.exe");
+        assert_eq!(validate_shell("pwsh.exe").unwrap(), "pwsh.exe");
+        assert_eq!(validate_shell("CMD.EXE").unwrap(), "cmd.exe");
+    }
+
+    #[test]
+    fn test_validate_shell_rejected() {
+        assert!(validate_shell("calc.exe").is_err());
+        assert!(validate_shell("/bin/bash").is_err());
+        assert!(validate_shell("C:\\malware\\evil.exe").is_err());
+        assert!(validate_shell("cmd.exe && whoami").is_err());
+    }
+
+    #[test]
+    fn test_validate_shell_path_traversal() {
+        assert!(validate_shell("..\\..\\Windows\\System32\\cmd.exe").is_err());
+    }
+
+    #[test]
+    fn test_validate_working_directory_home_allowed() {
+        let home_dir = dirs::home_dir().expect("home directory should exist");
+        let home_str = home_dir.to_str().expect("home path should be valid UTF-8");
+        assert!(validate_working_directory(home_str).is_ok());
+    }
+
+    #[test]
+    fn test_valid_env_key() {
+        assert!(validate_env_key("API_TOKEN").is_ok());
+        assert!(validate_env_key("MY_VAR_123").is_ok());
+    }
+
+    #[test]
+    fn test_env_key_with_equals_rejected() {
+        assert!(validate_env_key("BAD=KEY").is_err());
+    }
+
+    #[test]
+    fn test_env_key_path_blocked() {
+        assert!(validate_env_key("PATH").is_err());
+        assert!(validate_env_key("comspec").is_err());
+    }
+
+    #[test]
+    fn test_env_value_newline_rejected() {
+        assert!(validate_env_value("line1\nline2").is_err());
+    }
+
+    #[test]
+    fn test_env_value_too_long_rejected() {
+        let long_value = "a".repeat(4097);
+        assert!(validate_env_value(&long_value).is_err());
+    }
+
+    #[test]
+    fn test_env_value_null_byte_rejected() {
+        assert!(validate_env_value("abc\0def").is_err());
+    }
 
     #[test]
     fn test_pty_manager_creation() {
