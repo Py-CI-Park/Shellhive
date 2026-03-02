@@ -171,6 +171,22 @@
   - 2026-03-02 기준 실제 반영된 PR(Phase 1, Phase 2-1/2/3/4/5/9/10) 현황 추가
   - 잔여 작업(Phase 2-7, 2-8, Phase 3~5) 구간 명시
 
+#### feat(security): Tauri 권한 범위 축소
+
+**커밋**: `a7e997a`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/capabilities/default.json`
+  - `core:default` 제거
+  - 필요한 권한만 명시적으로 유지(`core:event:*`, `core:window:default`, `dialog:*` 등)
+  - `shell:allow-open` 권한을 객체형으로 전환하고 HTTPS URL 스코프로 제한
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
