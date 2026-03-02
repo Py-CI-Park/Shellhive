@@ -250,6 +250,24 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### chore(cleanup): 미사용 파일 정리
+
+**커밋**: `56bbff9`
+
+##### 변경됨 (Changed)
+
+- 삭제:
+  - `src/app.js.backup`
+  - `src/history-panel-integration.js`
+  - `command-palette-code.js`
+- `.gitignore`
+  - `*.backup` 무시 규칙 추가
+
+##### 검증 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
