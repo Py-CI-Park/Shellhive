@@ -693,6 +693,31 @@
   - 기존 4개 → 7개로 확장
   - leaf 탐색, leaf 제거/트리 축소, leaf 수집/분기 라벨 검증 추가
 
+#### refactor(phase4-4): 파일 드래그앤드롭 모듈 분리 2차 (`file-drag-drop.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/file-drag-drop.js` 신규 추가
+  - 파일/폴더 드롭 처리, 드롭 존 하이라이트, 기본 이벤트 차단 로직 분리
+- `src/app.js`
+  - drag&drop 인라인 함수 제거 후 `createFileDragDropController` 주입 방식으로 전환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (16 files, 74 tests)
+
+#### test(phase5-3): file-drag-drop 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/file-drag-drop.test.js`
+  - 활성 세션 없음 경고, 폴더 드롭 cd 명령, 다중 파일 경로 주입, 드롭 하이라이트 토글 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성

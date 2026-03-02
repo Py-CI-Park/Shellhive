@@ -29,6 +29,7 @@ import {
 import { createTabManagerController } from './tab-manager.js';
 import { initializeDomElementsRegistry } from './dom-elements.js';
 import { createTerminalManagerController } from './terminal-manager.js';
+import { createFileDragDropController } from './file-drag-drop.js';
 import {
   state,
   elements,
@@ -1094,6 +1095,13 @@ const {
   showToast,
   getAllLeafNodes,
   activateSession
+});
+
+const { setupFileDragDrop } = createFileDragDropController({
+  invoke,
+  debug,
+  showToast,
+  getActiveSession: () => state.sessions.get(state.activeSessionId)
 });
 
 // ===== Session State Persistence =====
@@ -4753,110 +4761,6 @@ function onClaudeSessionClose(sessionId) {
 }
 
 // ===== File Drag and Drop Functions =====
-
-function setupFileDragDrop() {
-  const container = document.getElementById('terminalContainer');
-
-  // Prevent default drag behaviors
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    container.addEventListener(eventName, preventDefaults, false);
-    document.body.addEventListener(eventName, preventDefaults, false);
-  });
-
-  // Highlight drop zone
-  ['dragenter', 'dragover'].forEach(eventName => {
-    container.addEventListener(eventName, highlightDropZone, false);
-  });
-
-  ['dragleave', 'drop'].forEach(eventName => {
-    container.addEventListener(eventName, unhighlightDropZone, false);
-  });
-
-  // Handle dropped files
-  container.addEventListener('drop', handleFileDrop, false);
-}
-
-function preventDefaults(e) {
-  e.preventDefault();
-  e.stopPropagation();
-}
-
-function highlightDropZone(e) {
-  // Only highlight if dragging files
-  if (e.dataTransfer.types.includes('Files')) {
-    e.dataTransfer.dropEffect = 'copy';
-    document.getElementById('terminalContainer').classList.add('terminal-container--drop-active');
-  }
-}
-
-function unhighlightDropZone() {
-  document.getElementById('terminalContainer').classList.remove('terminal-container--drop-active');
-}
-
-async function handleFileDrop(e) {
-  const session = state.sessions.get(state.activeSessionId);
-  if (!session || !session.ptySessionId) {
-    showToast('활성 터미널 세션이 없습니다', 'warning');
-    return;
-  }
-
-  const files = e.dataTransfer.files;
-  if (files.length === 0) return;
-
-  // Check if single directory was dropped
-  if (files.length === 1) {
-    const file = files[0];
-    try {
-      const metadata = await invoke('get_file_metadata', { path: file.path });
-      if (metadata.is_dir) {
-        // For directories, use cd command
-        let path = file.path;
-        if (path.includes(' ')) {
-          path = `"${path}"`;
-        }
-        const cdCommand = `cd ${path}`;
-
-        await invoke('write_pty', {
-          sessionId: session.ptySessionId,
-          data: cdCommand
-        });
-
-        showToast('폴더로 이동 명령 입력됨', 'success', 2000);
-        debug('CD command inserted:', cdCommand);
-        return;
-      }
-    } catch (error) {
-      debug('Failed to get file metadata:', error);
-      // Continue with normal file handling
-    }
-  }
-
-  // Build path string (quote paths with spaces)
-  const paths = [];
-  for (let i = 0; i < files.length; i++) {
-    let path = files[i].path;
-    // Quote path if it contains spaces
-    if (path.includes(' ')) {
-      path = `"${path}"`;
-    }
-    paths.push(path);
-  }
-
-  const pathString = paths.join(' ');
-
-  try {
-    await invoke('write_pty', {
-      sessionId: session.ptySessionId,
-      data: pathString
-    });
-
-    showToast(`${files.length}개 파일 경로 입력됨`, 'success', 2000);
-    debug('File paths inserted:', pathString);
-  } catch (error) {
-    debug('Failed to insert file paths:', error);
-    showToast('파일 경로 입력 실패', 'error');
-  }
-}
 
 // ===== Initialize DOM Elements =====
 function initializeDOMElements() {
