@@ -424,6 +424,33 @@
   - 상수 존재 검증 중심 테스트를 `createSettingsController` 기반 실동작 테스트로 전환
   - `loadSettings` 정규화/이벤트 emit, `saveSettings` payload 매핑, preview/cancel 롤백 시나리오 검증 추가
 
+#### refactor(phase4-3-a): 단축키/커맨드 팔레트 모듈 분리 (`shortcuts.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/shortcuts.js` 신규 추가
+  - `createShortcutsController()` 팩토리로 키보드 단축키 처리와 커맨드 팔레트 로직 분리
+  - Command palette 렌더링/검색/실행, 최근 명령어 추적, 단축키 라우팅을 모듈화
+- `src/app.js`
+  - 단축키/커맨드 팔레트 블록 제거 후 controller 주입 방식으로 연결
+  - 단축키 전용 액션(`closeActiveSessionByShortcut`, `toggleRecordingByShortcut`, `changeTheme`)을 분리
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (9 files, 40 tests)
+
+#### test(phase5-3): shortcuts 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/shortcuts.test.js`
+  - Ctrl+T 생성, 커맨드 팔레트 실행, 레이아웃 단축키 전달, Ctrl+R 히스토리 우선 처리 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
