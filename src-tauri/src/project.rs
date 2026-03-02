@@ -160,6 +160,11 @@ pub async fn add_project(
         return Err(format!("Path is not a directory: {}", path));
     }
 
+    let validated_shell = shell
+        .as_ref()
+        .map(|raw_shell| crate::pty::validate_shell(raw_shell))
+        .transpose()?;
+
     // 기존 프로젝트 목록 로드
     let mut projects = load_projects()?;
 
@@ -173,7 +178,7 @@ pub async fn add_project(
         id: uuid::Uuid::new_v4().to_string(),
         name,
         path,
-        shell,
+        shell: validated_shell,
         created_at: Utc::now(),
         category_id: None,
         env_vars: HashMap::new(),
@@ -245,7 +250,8 @@ pub async fn update_project(
     }
 
     if let Some(new_shell) = shell {
-        projects[project_idx].shell = Some(new_shell);
+        let validated_shell = crate::pty::validate_shell(&new_shell)?;
+        projects[project_idx].shell = Some(validated_shell);
     }
 
     let updated_project = projects[project_idx].clone();
