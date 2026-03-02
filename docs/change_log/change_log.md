@@ -505,6 +505,31 @@
 - `src/__tests__/tab-manager.test.js`
   - 상태 아이콘/라벨, 탭 상태 업데이트, 탭 검색 필터/클릭 활성화, 탭 전환(next/prev/index) 검증
 
+#### refactor(phase4-3-f): split 트리 유틸 모듈 분리 (`split-pane.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/split-pane.js` 신규 추가
+  - `SplitNode` 클래스, `serializeSplitTree`, `deserializeSplitTree`, `updateSessionIdsInTree` 분리
+- `src/app.js`
+  - split 트리 클래스/직렬화 함수 블록 제거 후 모듈 import 사용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (12 files, 52 tests)
+
+#### test(phase5-3): split-pane 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/split-pane.test.js`
+  - SplitNode 분할, 직렬화/역직렬화, 세션 ID 매핑 업데이트, null 입력 처리 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성

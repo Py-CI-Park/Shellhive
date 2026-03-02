@@ -15,6 +15,7 @@ import { createErrorExplanationController } from './error-explanations.js';
 import { createModalController } from './modals.js';
 import { createSettingsController } from './settings.js';
 import { createShortcutsController } from './shortcuts.js';
+import { SplitNode, serializeSplitTree, deserializeSplitTree, updateSessionIdsInTree } from './split-pane.js';
 import { createTabManagerController } from './tab-manager.js';
 import {
   state,
@@ -913,33 +914,6 @@ class BlockManager {
   }
 }
 
-// Split pane management
-class SplitNode {
-  constructor(type = 'leaf', sessionId = null) {
-    this.type = type; // 'horizontal', 'vertical', 'leaf'
-    this.ratio = 0.5;
-    this.children = null; // [SplitNode, SplitNode] for non-leaf
-    this.sessionId = sessionId; // for leaf nodes only
-  }
-
-  isLeaf() {
-    return this.type === 'leaf';
-  }
-
-  split(direction, newSessionId) {
-    if (!this.isLeaf()) return null;
-
-    const oldSessionId = this.sessionId;
-    this.type = direction; // 'horizontal' or 'vertical'
-    this.sessionId = null;
-    this.children = [
-      new SplitNode('leaf', oldSessionId),
-      new SplitNode('leaf', newSessionId)
-    ];
-    return this.children[1];
-  }
-}
-
 // DOM Elements - will be initialized after DOM loads
 let tabsList, terminalContainer, newTabBtn, projectList, addProjectBtn;
 let addProjectModal, closeAddProjectModal, cancelAddProject, confirmAddProject;
@@ -1079,67 +1053,6 @@ const {
 });
 
 // ===== Session State Persistence =====
-
-// Serialize split tree to JSON
-function serializeSplitTree(node) {
-  if (!node) return null;
-  if (node.isLeaf()) {
-    return {
-      type: 'leaf',
-      sessionId: node.sessionId
-    };
-  }
-  return {
-    type: node.type,
-    ratio: node.ratio,
-    children: [
-      serializeSplitTree(node.children[0]),
-      serializeSplitTree(node.children[1])
-    ]
-  };
-}
-
-// Deserialize split tree from JSON
-function deserializeSplitTree(data) {
-  if (!data) return null;
-  const node = new SplitNode(data.type, data.sessionId || null);
-  if (data.type !== 'leaf') {
-    node.ratio = data.ratio || 0.5;
-    node.children = [
-      deserializeSplitTree(data.children[0]),
-      deserializeSplitTree(data.children[1])
-    ];
-  }
-  return node;
-}
-
-// Helper function to update session IDs in a split tree using the ID mapping
-function updateSessionIdsInTree(node, idMap) {
-  if (!node) return null;
-
-  // Deserialize first
-  const deserializedNode = deserializeSplitTree(node);
-
-  // Recursively update session IDs
-  function updateNode(n) {
-    if (!n) return null;
-
-    if (n.type === 'leaf') {
-      // Update leaf node's session ID
-      if (n.sessionId && idMap.has(n.sessionId)) {
-        n.sessionId = idMap.get(n.sessionId);
-      }
-    } else {
-      // Recursively update children
-      if (n.children) {
-        n.children.forEach(child => updateNode(child));
-      }
-    }
-    return n;
-  }
-
-  return updateNode(deserializedNode);
-}
 
 async function saveSessionState() {
   try {
