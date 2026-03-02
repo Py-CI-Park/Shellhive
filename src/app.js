@@ -10,6 +10,36 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { setLocale } from './i18n/index.js';
 import { createHistoryPanel, showHistoryPanel } from './history-panel.js';
 import { LAYOUT_PRESETS, TAB_COLORS } from './ui-constants.js';
+import { createGitPanelController } from './git-panel.js';
+import { createErrorExplanationController } from './error-explanations.js';
+import { createModalController } from './modals.js';
+import { createSettingsController } from './settings.js';
+import { createShortcutsController } from './shortcuts.js';
+import { createSessionManagerController } from './session-manager.js';
+import {
+  SplitNode,
+  serializeSplitTree,
+  deserializeSplitTree,
+  updateSessionIdsInTree,
+  findLeafNode,
+  removeLeafNode,
+  getAllLeafNodes,
+  getSplitBranchLabel
+} from './split-pane.js';
+import { createTabManagerController } from './tab-manager.js';
+import { createTabOrganizationController } from './tab-organization.js';
+import { initializeDomElementsRegistry } from './dom-elements.js';
+import { createTerminalManagerController } from './terminal-manager.js';
+import { createFileDragDropController } from './file-drag-drop.js';
+import {
+  state,
+  elements,
+  TabGroup,
+  TERMINAL_THEMES,
+  SESSION_STATUS,
+  SESSION_STATUS_LABELS,
+  eventBus
+} from './state.js';
 
 // Toast notification system
 const toastContainer = document.createElement('div');
@@ -23,7 +53,7 @@ function showToast(message, type = 'info', duration = 3000) {
   toast.innerHTML = `
     <span class="toast__icon">${type === 'error' ? '⚠' : type === 'success' ? '✓' : 'ℹ'}</span>
     <span class="toast__message">${escapeHtml(message)}</span>
-    <button class="toast__close">&times;</button>
+    <button class="toast__close" aria-label="알림 닫기">&times;</button>
   `;
 
   toast.querySelector('.toast__close').addEventListener('click', () => {
@@ -42,263 +72,48 @@ function showToast(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
-// Error explanation database
-const ERROR_EXPLANATIONS = {
-  'command not found': {
-    cause: '명령어가 설치되지 않았거나 시스템 PATH에 없습니다.',
-    solutions: [
-      '명령어를 설치하세요 (예: npm install -g <package>)',
-      'PATH 환경 변수를 확인하세요',
-      '명령어 철자가 올바른지 확인하세요'
-    ],
-    command: null
-  },
-  'Permission denied': {
-    cause: '파일이나 폴더에 대한 접근 권한이 없습니다.',
-    solutions: [
-      '관리자 권한으로 터미널을 실행하세요',
-      'chmod 명령어로 파일 권한을 변경하세요',
-      '파일 소유자를 확인하고 필요시 chown으로 변경하세요'
-    ],
-    command: null
-  },
-  'No such file or directory': {
-    cause: '지정한 파일이나 디렉토리가 존재하지 않습니다.',
-    solutions: [
-      '파일 경로가 올바른지 확인하세요',
-      'ls 명령어로 현재 디렉토리의 내용을 확인하세요',
-      '상대 경로 대신 절대 경로를 사용해보세요'
-    ],
-    command: 'ls'
-  },
-  'error[E': {
-    cause: 'Rust 컴파일 오류가 발생했습니다.',
-    solutions: [
-      '오류 메시지를 자세히 읽고 문제가 있는 코드를 확인하세요',
-      'cargo check 명령어로 자세한 오류 정보를 확인하세요',
-      'Rust 문서나 컴파일러 제안을 참고하세요'
-    ],
-    command: 'cargo check'
-  },
-  'npm ERR!': {
-    cause: 'npm 명령 실행 중 오류가 발생했습니다.',
-    solutions: [
-      'node_modules 폴더와 package-lock.json을 삭제 후 다시 설치하세요',
-      'npm cache clean --force로 캐시를 정리하세요',
-      'npm 버전을 업데이트하세요'
-    ],
-    command: 'npm cache clean --force'
-  },
-  'SyntaxError': {
-    cause: 'JavaScript 문법 오류가 있습니다.',
-    solutions: [
-      '오류 메시지의 줄 번호와 파일을 확인하세요',
-      '괄호, 중괄호, 따옴표가 올바르게 닫혔는지 확인하세요',
-      '최신 JavaScript 문법을 사용 중이라면 Babel 설정을 확인하세요'
-    ],
-    command: null
-  },
-  'TypeError': {
-    cause: 'JavaScript 타입 관련 오류가 발생했습니다.',
-    solutions: [
-      '변수가 undefined나 null이 아닌지 확인하세요',
-      '함수 호출 시 올바른 인자를 전달했는지 확인하세요',
-      'TypeScript를 사용 중이라면 타입 정의를 확인하세요'
-    ],
-    command: null
-  },
-  'ENOENT': {
-    cause: '파일 시스템에서 요청한 항목을 찾을 수 없습니다.',
-    solutions: [
-      '파일이나 디렉토리 경로가 올바른지 확인하세요',
-      '필요한 파일이 생성되었는지 확인하세요',
-      '프로젝트 루트 디렉토리에서 실행 중인지 확인하세요'
-    ],
-    command: null
-  },
-  'EACCES': {
-    cause: '파일 접근 권한이 거부되었습니다.',
-    solutions: [
-      '관리자 권한으로 실행하세요',
-      '파일/폴더 권한을 확인하고 필요시 변경하세요',
-      'sudo를 사용하여 실행하세요 (Linux/Mac)'
-    ],
-    command: null
+const { showConfirmDialog, setupModalOverlayClose, closeVisibleModals } = createModalController({
+  escapeHtml
+});
+
+const { showErrorExplanation, detectErrorPattern } = createErrorExplanationController({
+  state,
+  invoke,
+  debug,
+  showToast,
+  escapeHtml,
+  escapeHtmlAttr
+});
+
+const DEBUG_LOG_ENABLED = (() => {
+  if (import.meta.env?.DEV) return true;
+  try {
+    return localStorage.getItem('shellhive:debug') === '1';
+  } catch (_) {
+    return false;
   }
-};
-
-// Error explanation cooldown (prevent spam)
-const errorExplanationCooldown = new Map();
-const ERROR_EXPLANATION_COOLDOWN_MS = 5000;
-
-// Show error explanation panel
-function showErrorExplanation(sessionId, errorPattern, errorText) {
-  const session = state.sessions.get(sessionId);
-  if (!session) return;
-
-  // Check cooldown
-  const now = Date.now();
-  const cooldownKey = `${sessionId}:${errorPattern}`;
-  const lastExplanation = errorExplanationCooldown.get(cooldownKey);
-
-  if (lastExplanation && now - lastExplanation < ERROR_EXPLANATION_COOLDOWN_MS) {
-    debug('Error explanation cooldown active, skipping:', errorPattern);
-    return;
-  }
-
-  const explanation = ERROR_EXPLANATIONS[errorPattern];
-  if (!explanation) return;
-
-  // Remove existing error explanation panel
-  const existingPanel = session.container.querySelector('.error-explanation');
-  if (existingPanel) {
-    existingPanel.remove();
-  }
-
-  // Create error explanation panel
-  const panel = document.createElement('div');
-  panel.className = 'error-explanation';
-
-  const solutionsHtml = explanation.solutions
-    .map(solution => `<li>${escapeHtml(solution)}</li>`)
-    .join('');
-
-  panel.innerHTML = `
-    <div class="error-explanation__header">
-      <span class="error-explanation__icon">💡</span>
-      <span class="error-explanation__title">에러 설명</span>
-      <button class="error-explanation__close" aria-label="닫기">&times;</button>
-    </div>
-    <div class="error-explanation__content">
-      <div class="error-explanation__error">
-        <strong>에러:</strong> ${escapeHtml(errorText.trim().substring(0, 100))}${errorText.length > 100 ? '...' : ''}
-      </div>
-      <div class="error-explanation__cause">
-        <strong>원인:</strong> ${escapeHtml(explanation.cause)}
-      </div>
-      <div class="error-explanation__solutions">
-        <strong>해결 방법:</strong>
-        <ul>${solutionsHtml}</ul>
-      </div>
-      ${explanation.command ? `
-        <button class="error-explanation__apply" data-command="${escapeHtml(explanation.command)}">
-          해결 명령어 실행: ${escapeHtml(explanation.command)}
-        </button>
-      ` : ''}
-    </div>
-  `;
-
-  // Close button handler
-  panel.querySelector('.error-explanation__close').addEventListener('click', () => {
-    panel.classList.add('error-explanation--hiding');
-    setTimeout(() => panel.remove(), 300);
-  });
-
-  // Apply command button handler
-  const applyButton = panel.querySelector('.error-explanation__apply');
-  if (applyButton) {
-    applyButton.addEventListener('click', async () => {
-      const command = applyButton.dataset.command;
-      if (command && session.ptySessionId) {
-        try {
-          await invoke('write_pty', {
-            sessionId: session.ptySessionId,
-            data: command + '\r'
-          });
-          panel.classList.add('error-explanation--hiding');
-          setTimeout(() => panel.remove(), 300);
-          showToast('명령어가 실행되었습니다', 'success', 2000);
-        } catch (error) {
-          debug('Failed to execute command:', error);
-          showToast('명령어 실행 실패', 'error');
-        }
-      }
-    });
-  }
-
-  session.container.appendChild(panel);
-  errorExplanationCooldown.set(cooldownKey, now);
-  debug('Error explanation shown:', errorPattern);
-}
-
-// Detect error patterns in terminal output
-function detectErrorPattern(text) {
-  // Strip ANSI escape codes for pattern matching
-  // eslint-disable-next-line no-control-regex
-  const cleanText = text.replace(/\x1b\[[0-9;]*m/g, '');
-
-  for (const pattern in ERROR_EXPLANATIONS) {
-    if (cleanText.includes(pattern)) {
-      return { pattern, text: cleanText };
-    }
-  }
-
-  return null;
-}
-
-// Confirm dialog
-function showConfirmDialog(title, message) {
-  return new Promise((resolve) => {
-    const overlay = document.createElement('div');
-    overlay.className = 'confirm-dialog-overlay';
-    overlay.innerHTML = `
-      <div class="confirm-dialog">
-        <div class="confirm-dialog__header">
-          <h3 class="confirm-dialog__title">${escapeHtml(title)}</h3>
-        </div>
-        <div class="confirm-dialog__body">
-          <p class="confirm-dialog__message">${escapeHtml(message)}</p>
-        </div>
-        <div class="confirm-dialog__footer">
-          <button class="btn btn--secondary confirm-dialog__cancel">취소</button>
-          <button class="btn btn--danger confirm-dialog__confirm">삭제</button>
-        </div>
-      </div>
-    `;
-
-    const closeDialog = (result) => {
-      overlay.classList.add('confirm-dialog-overlay--hiding');
-      setTimeout(() => overlay.remove(), 200);
-      resolve(result);
-    };
-
-    overlay.querySelector('.confirm-dialog__cancel').addEventListener('click', () => closeDialog(false));
-    overlay.querySelector('.confirm-dialog__confirm').addEventListener('click', () => closeDialog(true));
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeDialog(false);
-    });
-
-    // ESC key to cancel
-    const handleKeydown = (e) => {
-      if (e.key === 'Escape') {
-        closeDialog(false);
-        document.removeEventListener('keydown', handleKeydown);
-      }
-    };
-    document.addEventListener('keydown', handleKeydown);
-
-    document.body.appendChild(overlay);
-    overlay.querySelector('.confirm-dialog__cancel').focus();
-  });
-}
+})();
 
 // Debug logging
 function debug(...args) {
+  if (!DEBUG_LOG_ENABLED) return;
   console.log('[Shellhive]', ...args);
 }
 
-// Session status constants
-const SESSION_STATUS = {
-  CONNECTING: 'connecting',
-  RUNNING: 'running',
-  EXITED: 'exited'
-};
+const SAFE_SESSION_STATUSES = new Set(Object.values(SESSION_STATUS));
 
-const SESSION_STATUS_LABELS = Object.freeze({
-  connecting: '연결 중',
-  running: '실행 중',
-  exited: '종료됨'
-});
+const ALLOWED_TAB_COLOR_VALUES = state.allowedTabColorValues;
+
+function getSessionStatusClass(status) {
+  if (typeof status !== 'string') return SESSION_STATUS.EXITED;
+  return SAFE_SESSION_STATUSES.has(status) ? status : SESSION_STATUS.EXITED;
+}
+
+function getSafeTabColor(color) {
+  if (typeof color !== 'string') return null;
+  const normalized = color.trim();
+  return ALLOWED_TAB_COLOR_VALUES.has(normalized) ? normalized : null;
+}
 
 const LAYOUT_PRESET_TITLES = Object.freeze({
   'two-columns': '2열',
@@ -315,35 +130,6 @@ const LAYOUT_PRESET_DESCRIPTIONS = Object.freeze({
   'three-columns': '좌우 3분할',
   'main-sidebar': '메인 작업 + 보조 패널'
 });
-
-// TabGroup class for organizing tabs
-class TabGroup {
-  constructor(id, name, options = {}) {
-    this.id = id;
-    this.name = name;
-    this.color = options.color || '#0e639c';
-    this.collapsed = false;
-    this.tabIds = new Set();
-    this.projectId = options.projectId || null;
-    this.isAutoGroup = options.isAutoGroup || false;
-  }
-
-  addTab(sessionId) {
-    this.tabIds.add(sessionId);
-  }
-
-  removeTab(sessionId) {
-    this.tabIds.delete(sessionId);
-  }
-
-  get size() {
-    return this.tabIds.size;
-  }
-
-  isEmpty() {
-    return this.tabIds.size === 0;
-  }
-}
 
 // ===== Command Block System (Warp-style) =====
 // Note: CommandBlock class is defined below with BlockManager (line ~900+)
@@ -1142,180 +928,6 @@ class BlockManager {
   }
 }
 
-// Split pane management
-class SplitNode {
-  constructor(type = 'leaf', sessionId = null) {
-    this.type = type; // 'horizontal', 'vertical', 'leaf'
-    this.ratio = 0.5;
-    this.children = null; // [SplitNode, SplitNode] for non-leaf
-    this.sessionId = sessionId; // for leaf nodes only
-  }
-
-  isLeaf() {
-    return this.type === 'leaf';
-  }
-
-  split(direction, newSessionId) {
-    if (!this.isLeaf()) return null;
-
-    const oldSessionId = this.sessionId;
-    this.type = direction; // 'horizontal' or 'vertical'
-    this.sessionId = null;
-    this.children = [
-      new SplitNode('leaf', oldSessionId),
-      new SplitNode('leaf', newSessionId)
-    ];
-    return this.children[1];
-  }
-}
-
-// Terminal themes
-const TERMINAL_THEMES = {
-  dark: {
-    background: '#1e1e1e',
-    foreground: '#cccccc',
-    cursor: '#ffffff',
-    cursorAccent: '#1e1e1e',
-    selectionBackground: '#264f78',
-    black: '#000000',
-    red: '#cd3131',
-    green: '#0dbc79',
-    yellow: '#e5e510',
-    blue: '#2472c8',
-    magenta: '#bc3fbc',
-    cyan: '#11a8cd',
-    white: '#e5e5e5',
-    brightBlack: '#666666',
-    brightRed: '#f14c4c',
-    brightGreen: '#23d18b',
-    brightYellow: '#f5f543',
-    brightBlue: '#3b8eea',
-    brightMagenta: '#d670d6',
-    brightCyan: '#29b8db',
-    brightWhite: '#ffffff',
-  },
-  light: {
-    background: '#ffffff',
-    foreground: '#1e1e1e',
-    cursor: '#000000',
-    cursorAccent: '#ffffff',
-    selectionBackground: '#add6ff',
-    black: '#000000',
-    red: '#cd3131',
-    green: '#008000',
-    yellow: '#795e25',
-    blue: '#0451a5',
-    magenta: '#bc05bc',
-    cyan: '#0598bc',
-    white: '#555555',
-    brightBlack: '#666666',
-    brightRed: '#cd3131',
-    brightGreen: '#14ce14',
-    brightYellow: '#b5ba00',
-    brightBlue: '#0451a5',
-    brightMagenta: '#bc05bc',
-    brightCyan: '#0598bc',
-    brightWhite: '#a5a5a5',
-  },
-  monokai: {
-    background: '#272822',
-    foreground: '#f8f8f2',
-    cursor: '#f8f8f0',
-    cursorAccent: '#272822',
-    selectionBackground: '#49483e',
-    black: '#272822',
-    red: '#f92672',
-    green: '#a6e22e',
-    yellow: '#f4bf75',
-    blue: '#66d9ef',
-    magenta: '#ae81ff',
-    cyan: '#a1efe4',
-    white: '#f8f8f2',
-    brightBlack: '#75715e',
-    brightRed: '#f92672',
-    brightGreen: '#a6e22e',
-    brightYellow: '#f4bf75',
-    brightBlue: '#66d9ef',
-    brightMagenta: '#ae81ff',
-    brightCyan: '#a1efe4',
-    brightWhite: '#f9f8f5',
-  },
-  'high-contrast': {
-    background: '#000000',
-    foreground: '#ffffff',
-    cursor: '#00ff00',
-    cursorAccent: '#000000',
-    selectionBackground: '#00ffff',
-    black: '#000000',
-    red: '#ff0000',
-    green: '#00ff00',
-    yellow: '#ffff00',
-    blue: '#0000ff',
-    magenta: '#ff00ff',
-    cyan: '#00ffff',
-    white: '#ffffff',
-    brightBlack: '#808080',
-    brightRed: '#ff0000',
-    brightGreen: '#00ff00',
-    brightYellow: '#ffff00',
-    brightBlue: '#0000ff',
-    brightMagenta: '#ff00ff',
-    brightCyan: '#00ffff',
-    brightWhite: '#ffffff',
-  },
-};
-
-// State
-const state = {
-  sessions: new Map(),
-  activeSessionId: null,
-  sessionCounter: 0,
-  draggedTab: null,
-  dropTarget: null,
-  settings: {
-    theme: 'dark',
-    fontSize: 14,
-    fontFamily: 'Consolas',
-    enableLogging: true,
-    enableNotifications: true,
-    enableSnippetSuggestions: true,
-    snippetSuggestionThreshold: 3,
-    enableBlockMode: false,  // Warp-style block output
-    enableAiFeatures: false,
-    locale: 'ko',
-  },
-  blockManagers: new Map(),  // Map<sessionId, BlockManager>
-  snippets: [],
-  categories: [],             // Project categories
-  activeProjectFilter: null,
-  projectTabMap: new Map(),
-  tabGroups: new Map(),       // Map<groupId, TabGroup>
-  tabToGroup: new Map(),      // Map<sessionId, groupId>
-  autoGroupByProject: true,   // Auto-group tabs by project
-  groupCounter: 0,            // Counter for generating group IDs
-  closedTabs: [],             // Store last 10 closed tabs
-  tabSearchVisible: false,    // Tab search overlay state
-  tabSearchQuery: '',         // Current search query
-  searchVisible: false,       // Terminal search visible state
-  searchQuery: '',            // Terminal search query
-  splitRoot: null,            // SplitNode root for active layout
-  splitMode: false,           // Whether split mode is active
-  tabLayouts: new Map(),      // Map<sessionId, { splitRoot, splitMode }> - per-tab layouts
-  swapTargetSession: null,    // Swap target session ID
-  maximizedSession: null,     // Maximized session ID (for split mode)
-  splitInProgress: false,     // Prevent race condition in splitActivePane
-  splitRenderRaf: null,       // requestAnimationFrame handle for split render batching
-  splitMinimapVisible: true,  // Split minimap panel visibility
-  selectedLayoutPreset: null, // Selected preset in layout gallery modal
-  autocompleteVisible: false, // Autocomplete popup visible state
-  autocompleteQuery: '',      // Current input for autocomplete
-  autocompleteSelected: 0,    // Selected suggestion index
-  autocompleteSuggestions: [], // Current suggestions
-  currentLineBuffer: '',      // Track current line input for autocomplete
-  gitPanelVisible: false,     // Git 패널 표시 상태
-  currentGitPath: null,       // 현재 Git 리포지토리 경로
-};
-
 // DOM Elements - will be initialized after DOM loads
 let tabsList, terminalContainer, newTabBtn, projectList, addProjectBtn;
 let addProjectModal, closeAddProjectModal, cancelAddProject, confirmAddProject;
@@ -1325,304 +937,202 @@ let cancelAddSnippet, confirmAddSnippet, snippetNameInput, snippetCommandInput;
 let settingsBtn, settingsModal, closeSettingsModal, cancelSettings, saveSettingsBtn;
 let settingsTheme, settingsFontSize, fontSizeValue, settingsFontFamily;
 let settingsEnableLogging, settingsEnableNotifications, settingsBlockMode, clearLogsBtn;
-let settingsBackup = null;
 
 // ===== Settings Functions =====
 
-function normalizeSettings(settings) {
+function getSettingsElements() {
   return {
-    theme: settings.theme || 'dark',
-    fontSize: settings.font_size ?? 14,
-    fontFamily: settings.font_family || 'Consolas',
-    enableLogging: settings.enable_logging ?? true,
-    enableNotifications: settings.enable_notifications ?? true,
-    enableSnippetSuggestions: settings.enable_snippet_suggestions ?? true,
-    snippetSuggestionThreshold: settings.snippet_suggestion_threshold ?? 3,
-    enableBlockMode: settings.enable_block_mode ?? false,
-    // AI 기능은 현재 릴리즈 범위에서 제외
-    enableAiFeatures: false,
-    locale: settings.locale || 'ko',
+    settingsModal,
+    settingsTheme,
+    settingsFontSize,
+    fontSizeValue,
+    settingsFontFamily,
+    settingsEnableLogging,
+    settingsEnableNotifications,
+    settingsBlockMode
   };
 }
 
-function isAiFeaturesEnabled() {
-  return state.settings.enableAiFeatures === true;
-}
+const {
+  loadSettings,
+  saveSettings,
+  showSettingsModal,
+  hideSettingsModal,
+  cancelSettingsModal,
+  previewSettings,
+  isAiFeaturesEnabled
+} = createSettingsController({
+  state,
+  eventBus,
+  invoke,
+  debug,
+  showToast,
+  setLocale,
+  commandHistory,
+  TERMINAL_THEMES,
+  getElements: getSettingsElements
+});
 
-function applyAiFeatureVisibility() {
-  const aiEnabled = isAiFeaturesEnabled();
-  const claudeSection = document.querySelector('.sidebar__claude');
-  const aiInputBar = document.getElementById('aiInputBar');
-  const aiPreviewModal = document.getElementById('aiPreviewModal');
-  const aiHelpModal = document.getElementById('aiHelpModal');
+function closeActiveSessionByShortcut() {
+  if (!state.activeSessionId) return;
 
-  if (claudeSection) {
-    claudeSection.style.display = aiEnabled ? '' : 'none';
-  }
-  if (aiInputBar) {
-    aiInputBar.style.display = aiEnabled ? '' : 'none';
-  }
-  if (aiPreviewModal) {
-    aiPreviewModal.style.display = aiEnabled ? '' : 'none';
-    if (!aiEnabled) {
-      aiPreviewModal.classList.remove('modal--visible');
-    }
-  }
-  if (aiHelpModal) {
-    aiHelpModal.style.display = aiEnabled ? '' : 'none';
-    if (!aiEnabled) {
-      aiHelpModal.classList.remove('modal--visible');
-    }
+  const session = state.sessions.get(state.activeSessionId);
+  if (session && !session.pinned) {
+    closeSession(state.activeSessionId);
   }
 }
 
-function applyBlockModeToSessions(enableBlockMode) {
-  state.sessions.forEach((session, sessionId) => {
-    if (session.wrapper) {
-      session.wrapper.classList.toggle('terminal-wrapper--block-mode', enableBlockMode);
-    }
-    if (session.blockContainer) {
-      session.blockContainer.style.display = enableBlockMode ? 'block' : 'none';
-    }
-    const blockManager = state.blockManagers.get(sessionId);
-    if (blockManager && session.blockContainer) {
-      blockManager.setContainer(session.blockContainer);
-    }
-  });
-}
-
-async function loadSettings() {
-  try {
-    const settings = await invoke('get_settings');
-    debug('Settings loaded:', settings);
-    state.settings = normalizeSettings(settings);
-
-    applyTheme(state.settings.theme);
-
-    if (state.settings.locale) {
-      setLocale(state.settings.locale);
-    }
-
-    commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
-    applyAiFeatureVisibility();
-    applyBlockModeToSessions(state.settings.enableBlockMode);
-
-    return state.settings;
-  } catch (error) {
-    debug('Failed to load settings:', error);
-    applyAiFeatureVisibility();
-    return state.settings;
+function toggleRecordingByShortcut() {
+  if (recordingManager.isRecording()) {
+    stopRecordingUI();
+  } else {
+    startRecordingUI();
   }
 }
 
-async function saveSettings(settings) {
-  try {
-    const backendSettings = {
-      theme: settings.theme,
-      font_size: settings.fontSize,
-      font_family: settings.fontFamily,
-      enable_logging: settings.enableLogging,
-      enable_notifications: settings.enableNotifications,
-      enable_snippet_suggestions: settings.enableSnippetSuggestions,
-      snippet_suggestion_threshold: settings.snippetSuggestionThreshold,
-      enable_block_mode: settings.enableBlockMode,
-      enable_ai_features: false,
-      locale: settings.locale,
-    };
-    await invoke('save_settings', { settings: backendSettings });
-    state.settings = { ...settings };
+function changeTheme(theme) {
+  const root = document.documentElement;
+  root.className = `theme-${theme}`;
 
-    applyTheme(state.settings.theme);
-
-    if (state.settings.locale) {
-      setLocale(state.settings.locale);
-    }
-
-    // Update all existing terminals
-    state.sessions.forEach((session) => {
-      updateTerminalSettings(session.terminal, state.settings);
-    });
-
-    commandHistory.minUsageCount = state.settings.snippetSuggestionThreshold;
-    applyAiFeatureVisibility();
-    applyBlockModeToSessions(state.settings.enableBlockMode);
-
-    debug('Settings saved');
-    showToast('설정이 저장되었습니다', 'success');
-  } catch (error) {
-    debug('Failed to save settings:', error);
-    showToast(`설정 저장 실패: ${error}`, 'error');
-  }
-}
-
-function applyTheme(theme) {
-  document.documentElement.classList.remove('theme-light', 'theme-monokai', 'theme-high-contrast');
-  if (theme === 'light') {
-    document.documentElement.classList.add('theme-light');
-  } else if (theme === 'monokai') {
-    document.documentElement.classList.add('theme-monokai');
-  } else if (theme === 'high-contrast') {
-    document.documentElement.classList.add('theme-high-contrast');
-  }
-}
-
-function updateTerminalSettings(terminal, settings) {
-  const theme = TERMINAL_THEMES[settings.theme] || TERMINAL_THEMES.dark;
-  terminal.options.theme = theme;
-  terminal.options.fontSize = settings.fontSize || 14;
-  terminal.options.fontFamily = `${settings.fontFamily || 'Consolas'}, "Courier New", monospace`;
-}
-
-function showSettingsModal() {
-  debug('Opening settings modal');
-
-  // Backup current settings for cancel functionality
-  settingsBackup = {
-    theme: state.settings.theme,
-    fontSize: state.settings.fontSize || 14,
-    fontFamily: state.settings.fontFamily || 'Consolas',
-    enableLogging: state.settings.enableLogging ?? true,
-    enableNotifications: state.settings.enableNotifications ?? true,
-    enableSnippetSuggestions: state.settings.enableSnippetSuggestions ?? true,
-    snippetSuggestionThreshold: state.settings.snippetSuggestionThreshold || 3,
-    enableBlockMode: state.settings.enableBlockMode ?? false,
-    enableAiFeatures: state.settings.enableAiFeatures ?? false,
-    locale: state.settings.locale || 'ko',
-  };
-
-  settingsModal.classList.add('modal--visible');
-  settingsTheme.value = state.settings.theme;
-  settingsFontSize.value = state.settings.fontSize || 14;
-  fontSizeValue.textContent = `${settingsFontSize.value}px`;
-  settingsFontFamily.value = state.settings.fontFamily || 'Consolas';
-  settingsEnableLogging.checked = state.settings.enableLogging ?? true;
-  settingsEnableNotifications.checked = state.settings.enableNotifications ?? true;
-  if (settingsBlockMode) {
-    settingsBlockMode.checked = state.settings.enableBlockMode ?? false;
+  if (typeof settingsTheme !== 'undefined' && settingsTheme) {
+    settingsTheme.value = theme;
   }
 
-  const settingsLocale = document.getElementById('settingsLocale');
-  if (settingsLocale) {
-    settingsLocale.value = state.settings.locale || 'ko';
-  }
-
-  // Snippet suggestion settings
-  const settingsEnableSnippetSuggestions = document.getElementById('settingsEnableSnippetSuggestions');
-  const settingsSnippetThreshold = document.getElementById('settingsSnippetThreshold');
-  const snippetThresholdValue = document.getElementById('snippetThresholdValue');
-
-  if (settingsEnableSnippetSuggestions) {
-    settingsEnableSnippetSuggestions.checked = state.settings.enableSnippetSuggestions ?? true;
-  }
-  if (settingsSnippetThreshold) {
-    const threshold = state.settings.snippetSuggestionThreshold || 3;
-    settingsSnippetThreshold.value = threshold;
-    if (snippetThresholdValue) {
-      snippetThresholdValue.textContent = `${threshold} times`;
-    }
-  }
+  showToast(`테마가 ${theme}로 변경되었습니다`, 'success');
 }
 
-function hideSettingsModal() {
-  settingsModal.classList.remove('modal--visible');
-  settingsBackup = null;
-}
-
-function cancelSettingsModal() {
-  if (settingsBackup) {
-    // Restore previous settings
-    applyTheme(settingsBackup.theme);
-    state.sessions.forEach((session) => {
-      updateTerminalSettings(session.terminal, {
-        theme: settingsBackup.theme,
-        fontSize: settingsBackup.fontSize,
-        fontFamily: settingsBackup.fontFamily
-      });
-    });
+const { handleKeyboardShortcuts } = createShortcutsController({
+  escapeHtml,
+  showToast,
+  debug,
+  actions: {
+    createSession: () => createSession(),
+    closeActiveSession: closeActiveSessionByShortcut,
+    restoreLastClosedTab: () => restoreLastClosedTab(),
+    splitDefault: () => splitDefault(),
+    splitHorizontal: () => splitHorizontal(),
+    splitVertical: () => splitVertical(),
+    focusLayoutPresetSelector: () => focusLayoutPresetSelector(),
+    openLayoutGalleryModal: (preset) => openLayoutGalleryModal(preset),
+    getLayoutPresetValue: () => document.getElementById('layoutPresetSelect')?.value || null,
+    mergePane: () => mergePane(),
+    toggleMaximize: () => toggleMaximize(),
+    showTerminalSearch: () => showTerminalSearch(),
+    showTabSearch: () => showTabSearch(),
+    showSettingsModal: () => showSettingsModal(),
+    showAddProjectModal: () => showAddProjectModal(),
+    showAddSnippetModal: () => showAddSnippetModal(),
+    toggleRecording: toggleRecordingByShortcut,
+    clearTerminalScreen: () => clearTerminalScreen(),
+    clearTerminalScrollback: () => clearTerminalScrollback(),
+    toggleFullscreen: () => toggleFullscreen(),
+    showHistoryPanel: () => showHistoryPanel(commandHistory, state, escapeHtml),
+    toggleGitPanel: () => toggleGitPanel(),
+    switchToNextTab: () => switchToNextTab(),
+    switchToPreviousTab: () => switchToPreviousTab(),
+    switchToTabByIndex: (index) => switchToTabByIndex(index),
+    focusPaneByDirection: (direction) => focusPaneByDirection(direction),
+    changeTheme: (theme) => changeTheme(theme)
   }
-  hideSettingsModal();
-}
+});
 
-function previewSettings() {
-  const previewTheme = settingsTheme.value;
-  const previewFontSize = parseInt(settingsFontSize.value);
-  const previewFontFamily = settingsFontFamily.value;
+const {
+  getStatusIcon,
+  getStatusLabel,
+  getCompactPathLabel,
+  getSplitPaneSubtitle,
+  updateTabStatus,
+  showTabSearch,
+  switchToNextTab,
+  switchToPreviousTab,
+  switchToTabByIndex,
+  handleTabDragStart,
+  handleTabDragEnter,
+  handleTabDragOver,
+  handleTabDragLeave,
+  handleTabDrop,
+  handleTabDragEnd,
+  showColorPickerMenu,
+  togglePinTab,
+  storeClosedTabInfo,
+  restoreLastClosedTab
+} = createTabManagerController({
+  state,
+  SESSION_STATUS,
+  SESSION_STATUS_LABELS,
+  getSessionStatusClass,
+  getSafeTabColor,
+  ensureSplitPaneHeader,
+  renderSplitMinimap,
+  activateSession,
+  createSession,
+  clearPaneDropIndicators,
+  TAB_COLORS,
+  escapeHtml,
+  escapeHtmlAttr,
+  escapeDataAttr,
+  debug
+});
 
-  // Apply theme preview
-  applyTheme(previewTheme);
+const {
+  createTabGroup,
+  removeTabFromGroup,
+  autoGroupSessionByProject,
+  renderTabGroups,
+  createTabElement,
+  setProjectFilter,
+  clearProjectFilter,
+  linkSessionToProject,
+  unlinkSessionFromProject,
+  updateProjectTabCount,
+  renderProjectCmdTrees
+} = createTabOrganizationController({
+  state,
+  TabGroup,
+  getSafeTabColor,
+  getSessionStatusClass,
+  getStatusIcon,
+  escapeHtml,
+  escapeHtmlAttr,
+  escapeDataAttr,
+  activateSession,
+  closeSession,
+  startTabRename,
+  showTabContextMenu,
+  handleTabDragStart,
+  handleTabDragEnter,
+  handleTabDragOver,
+  handleTabDragLeave,
+  handleTabDrop,
+  handleTabDragEnd
+});
 
-  // Apply terminal settings preview to all sessions
-  state.sessions.forEach((session) => {
-    updateTerminalSettings(session.terminal, {
-      theme: previewTheme,
-      fontSize: previewFontSize,
-      fontFamily: previewFontFamily
-    });
-  });
-}
+const { logSessionOutput, disposeSessionLogBuffer } = createSessionManagerController({
+  invoke,
+  debug
+});
+
+const {
+  clearTerminalScreen,
+  clearTerminalScrollback,
+  toggleFullscreen,
+  focusPaneByDirection
+} = createTerminalManagerController({
+  state,
+  debug,
+  showToast,
+  getAllLeafNodes,
+  activateSession
+});
+
+const { setupFileDragDrop } = createFileDragDropController({
+  invoke,
+  debug,
+  showToast,
+  getActiveSession: () => state.sessions.get(state.activeSessionId)
+});
 
 // ===== Session State Persistence =====
-
-// Serialize split tree to JSON
-function serializeSplitTree(node) {
-  if (!node) return null;
-  if (node.isLeaf()) {
-    return {
-      type: 'leaf',
-      sessionId: node.sessionId
-    };
-  }
-  return {
-    type: node.type,
-    ratio: node.ratio,
-    children: [
-      serializeSplitTree(node.children[0]),
-      serializeSplitTree(node.children[1])
-    ]
-  };
-}
-
-// Deserialize split tree from JSON
-function deserializeSplitTree(data) {
-  if (!data) return null;
-  const node = new SplitNode(data.type, data.sessionId || null);
-  if (data.type !== 'leaf') {
-    node.ratio = data.ratio || 0.5;
-    node.children = [
-      deserializeSplitTree(data.children[0]),
-      deserializeSplitTree(data.children[1])
-    ];
-  }
-  return node;
-}
-
-// Helper function to update session IDs in a split tree using the ID mapping
-function updateSessionIdsInTree(node, idMap) {
-  if (!node) return null;
-
-  // Deserialize first
-  const deserializedNode = deserializeSplitTree(node);
-
-  // Recursively update session IDs
-  function updateNode(n) {
-    if (!n) return null;
-
-    if (n.type === 'leaf') {
-      // Update leaf node's session ID
-      if (n.sessionId && idMap.has(n.sessionId)) {
-        n.sessionId = idMap.get(n.sessionId);
-      }
-    } else {
-      // Recursively update children
-      if (n.children) {
-        n.children.forEach(child => updateNode(child));
-      }
-    }
-    return n;
-  }
-
-  return updateNode(deserializedNode);
-}
 
 async function saveSessionState() {
   try {
@@ -1798,22 +1308,28 @@ async function loadSnippets() {
 }
 
 function renderSnippetList(snippets) {
+  const snippetById = new Map(snippets.map((snippet) => [snippet.id, snippet]));
+
   snippetList.innerHTML = snippets.map(s => `
-    <li class="sidebar__item" data-snippet-id="${s.id}" data-command='${JSON.stringify(s.command)}' data-tooltip="${escapeHtml(s.command)}">
+    <li class="sidebar__item" data-snippet-id="${escapeDataAttr(s.id)}">
       <span class="sidebar__item-icon">></span>
       <span class="sidebar__item-name">${escapeHtml(s.name)}</span>
-      <button class="sidebar__item-delete" data-snippet-id="${s.id}">&times;</button>
+      <button class="sidebar__item-delete" data-snippet-id="${escapeDataAttr(s.id)}" aria-label="스니펫 삭제">&times;</button>
     </li>
   `).join('');
 
   document.querySelectorAll('#snippetList .sidebar__item').forEach(item => {
-    const command = JSON.parse(item.dataset.command);
+    const snippet = snippetById.get(item.dataset.snippetId);
+    if (!snippet) return;
+    item.dataset.tooltip = snippet.command;
+
     item.addEventListener('click', (e) => {
       if (!e.target.classList.contains('sidebar__item-delete')) {
-        executeSnippet(command);
+        executeSnippet(snippet.command);
       }
     });
     const deleteBtn = item.querySelector('.sidebar__item-delete');
+    deleteBtn.setAttribute('aria-label', `${snippet.name} 스니펫 삭제`);
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       await removeSnippet(deleteBtn.dataset.snippetId);
@@ -1825,6 +1341,22 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+function escapeHtmlAttr(text) {
+  return escapeHtml(text)
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeDataAttr(value) {
+  return escapeHtmlAttr(String(value ?? ''));
+}
+
+function normalizeCategoryColor(color) {
+  if (typeof color !== 'string') return null;
+  const trimmed = color.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : null;
 }
 
 async function addSnippet(name, command) {
@@ -1897,10 +1429,12 @@ async function loadCategories() {
 async function loadProjects() {
   try {
     const projects = await invoke('list_projects');
+    state.projects = projects;
     debug('Projects loaded:', projects.length);
     renderProjectList(projects);
   } catch (error) {
     debug('Failed to load projects:', error);
+    state.projects = [];
   }
 }
 
@@ -1929,8 +1463,8 @@ function renderProjectList(projects) {
     const catProjects = categorized.get(cat.id);
     if (catProjects && catProjects.length > 0) {
       html += `
-        <li class="sidebar__category" data-category-id="${cat.id}">
-          <div class="sidebar__category-header" style="border-left-color: ${cat.color || 'var(--accent)'}">
+        <li class="sidebar__category" data-category-id="${escapeDataAttr(cat.id)}">
+          <div class="sidebar__category-header" data-category-color="${escapeHtmlAttr(cat.color || '')}">
             <span class="sidebar__category-name">${escapeHtml(cat.name)}</span>
             <span class="sidebar__category-count">${catProjects.length}</span>
           </div>
@@ -1949,18 +1483,24 @@ function renderProjectList(projects) {
   }
 
   projectList.innerHTML = html;
+
+  projectList.querySelectorAll('.sidebar__category-header').forEach((header) => {
+    const color = normalizeCategoryColor(header.dataset.categoryColor);
+    header.style.borderLeftColor = color || 'var(--accent)';
+  });
+
   setupProjectListeners();
 }
 
 function renderProjectItems(projects) {
   return projects.map(p => `
-    <li class="sidebar__item sidebar__item--project" data-project-id="${p.id}" data-path='${JSON.stringify(p.path)}'>
+    <li class="sidebar__item sidebar__item--project" data-project-id="${escapeDataAttr(p.id)}">
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
-      <button class="sidebar__item-env" data-project-id="${p.id}" data-project-path='${JSON.stringify(p.path)}' title="Environment Variables">⚙</button>
-      <button class="sidebar__item-filter" data-project-id="${p.id}" title="Filter tabs">🔍</button>
-      <button class="sidebar__item-delete" data-project-id="${p.id}">&times;</button>
-      <div class="sidebar__cmd-tree" data-project-cmd-tree="${p.id}"></div>
+      <button class="sidebar__item-env" data-project-id="${escapeDataAttr(p.id)}" title="Environment Variables" aria-label="환경 변수 관리">⚙</button>
+      <button class="sidebar__item-filter" data-project-id="${escapeDataAttr(p.id)}" title="Filter tabs" aria-label="탭 필터">🔍</button>
+      <button class="sidebar__item-delete" data-project-id="${escapeDataAttr(p.id)}" aria-label="프로젝트 삭제">&times;</button>
+      <div class="sidebar__cmd-tree" data-project-cmd-tree="${escapeDataAttr(p.id)}"></div>
     </li>
   `).join('');
 }
@@ -1968,8 +1508,11 @@ function renderProjectItems(projects) {
 function setupProjectListeners() {
   document.querySelectorAll('#projectList .sidebar__item').forEach(item => {
     const projectId = item.dataset.projectId;
-    const projectPath = JSON.parse(item.dataset.path);
-    const projectName = item.querySelector('.sidebar__item-name').textContent;
+    const project = state.projects.find((p) => p.id === projectId);
+    if (!project) return;
+
+    const projectPath = project.path;
+    const projectName = project.name;
 
     item.addEventListener('click', (e) => {
       const blocked = e.target.closest('.sidebar__item-delete, .sidebar__item-filter, .sidebar__item-env, .sidebar__cmd-tree');
@@ -1978,12 +1521,14 @@ function setupProjectListeners() {
     });
 
     const envBtn = item.querySelector('.sidebar__item-env');
+    envBtn.setAttribute('aria-label', `${projectName} 환경 변수 관리`);
     envBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       showEnvVarsModal(projectPath);
     });
 
     const filterBtn = item.querySelector('.sidebar__item-filter');
+    filterBtn.setAttribute('aria-label', `${projectName} 탭 필터`);
     filterBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (state.activeProjectFilter === projectId) {
@@ -1994,6 +1539,7 @@ function setupProjectListeners() {
     });
 
     const deleteBtn = item.querySelector('.sidebar__item-delete');
+    deleteBtn.setAttribute('aria-label', `${projectName} 프로젝트 삭제`);
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const confirmed = await showConfirmDialog(
@@ -2079,13 +1625,21 @@ function renderEnvVarsList(envVars) {
     return;
   }
 
-  envVarsList.innerHTML = entries.map(([key, value], index) => `
+  envVarsList.innerHTML = entries.map(([_key, _value], index) => `
     <div class="env-var-row" data-index="${index}">
-      <input type="text" class="env-var-key" value="${escapeHtml(key)}" placeholder="KEY">
-      <input type="text" class="env-var-value" value="${escapeHtml(value)}" placeholder="value">
-      <button class="env-var-delete" title="Delete">&times;</button>
+      <input type="text" class="env-var-key" value="" placeholder="KEY">
+      <input type="text" class="env-var-value" value="" placeholder="value">
+      <button class="env-var-delete" title="Delete" aria-label="환경 변수 삭제">&times;</button>
     </div>
   `).join('');
+
+  envVarsList.querySelectorAll('.env-var-row').forEach((row, index) => {
+    const [key, value] = entries[index];
+    const keyInput = row.querySelector('.env-var-key');
+    const valueInput = row.querySelector('.env-var-value');
+    keyInput.value = key;
+    valueInput.value = value;
+  });
 
   // Add delete listeners
   envVarsList.querySelectorAll('.env-var-delete').forEach(btn => {
@@ -2113,7 +1667,7 @@ function addEnvVarRow() {
   row.innerHTML = `
     <input type="text" class="env-var-key" value="" placeholder="KEY">
     <input type="text" class="env-var-value" value="" placeholder="value">
-    <button class="env-var-delete" title="Delete">&times;</button>
+    <button class="env-var-delete" title="Delete" aria-label="환경 변수 삭제">&times;</button>
   `;
 
   row.querySelector('.env-var-delete').addEventListener('click', () => {
@@ -2467,16 +2021,33 @@ async function createSession(name = null, workingDir = null, projectId = null, o
   blockManager.setContainer(blockContainer);
   state.blockManagers.set(id, blockManager);
   wrapper.classList.toggle('terminal-wrapper--block-mode', state.settings.enableBlockMode);
+  eventBus.emit('session:created', {
+    sessionId: id,
+    projectId: session.projectId,
+    status: session.status
+  });
 
   // Link session to project
+  let shouldRenderGroupedTabs = state.tabGroups.size > 0;
+  let groupedByAutoGroup = false;
   if (projectId) {
     linkSessionToProject(id, projectId);
     // Auto-group by project if enabled
     autoGroupSessionByProject(id, projectId, name);
+    groupedByAutoGroup = state.autoGroupByProject && state.tabToGroup.has(id);
+    if (!groupedByAutoGroup) {
+      shouldRenderGroupedTabs = shouldRenderGroupedTabs || state.tabToGroup.has(id);
+    }
   }
 
   // Create tab
-  createTab(session);
+  if (groupedByAutoGroup) {
+    // autoGroupSessionByProject() already calls renderTabGroups()
+  } else if (shouldRenderGroupedTabs) {
+    renderTabGroups();
+  } else {
+    createTab(session);
+  }
 
   // Activate session
   if (activate) {
@@ -2517,128 +2088,9 @@ async function createSession(name = null, workingDir = null, projectId = null, o
   return session;
 }
 
-let logBuffer = {};
-let logTimeouts = {};
-
-// Limit log buffer size per session
-const MAX_LOG_BUFFER_SIZE = 10000; // characters
-
-function logSessionOutput(sessionId, data) {
-  if (!logBuffer[sessionId]) {
-    logBuffer[sessionId] = '';
-  }
-
-  logBuffer[sessionId] += data;
-
-  // Truncate if too large
-  if (logBuffer[sessionId].length > MAX_LOG_BUFFER_SIZE) {
-    logBuffer[sessionId] = logBuffer[sessionId].slice(-MAX_LOG_BUFFER_SIZE);
-  }
-
-  if (logTimeouts[sessionId]) {
-    clearTimeout(logTimeouts[sessionId]);
-  }
-
-  logTimeouts[sessionId] = setTimeout(async () => {
-    const buffer = logBuffer[sessionId];
-    logBuffer[sessionId] = '';
-    try {
-      await invoke('log_session_output', { sessionId, data: buffer });
-    } catch (error) {
-      debug('Failed to log session output:', error);
-    }
-  }, 500);
-}
-
 function createTab(session) {
-  const tab = document.createElement('div');
-  tab.className = 'tab';
-  tab.dataset.sessionId = session.id;
-  tab.draggable = true;
-
-  const statusIcon = getStatusIcon(session.status);
-  tab.innerHTML = `
-    <span class="tab__status tab__status--${session.status}">${statusIcon}</span>
-    <span class="tab__title">${escapeHtml(session.name)}</span>
-    <button class="tab__close">&times;</button>
-  `;
-
-  tab.addEventListener('click', (e) => {
-    if (!e.target.classList.contains('tab__close')) {
-      activateSession(session.id);
-    }
-  });
-
-  // Double-click to rename
-  tab.addEventListener('dblclick', (e) => {
-    if (!e.target.classList.contains('tab__close')) {
-      e.preventDefault();
-      startTabRename(session.id);
-    }
-  });
-
-  tab.querySelector('.tab__close').addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeSession(session.id);
-  });
-
-  tab.addEventListener('dragstart', handleTabDragStart);
-  tab.addEventListener('dragenter', handleTabDragEnter);
-  tab.addEventListener('dragover', handleTabDragOver);
-  tab.addEventListener('dragleave', handleTabDragLeave);
-  tab.addEventListener('drop', handleTabDrop);
-  tab.addEventListener('dragend', handleTabDragEnd);
-
-  tab.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    showTabContextMenu(e, session.id);
-  });
-
+  const tab = createTabElement(session);
   tabsList.appendChild(tab);
-}
-
-function getStatusIcon(status) {
-  switch (status) {
-    case SESSION_STATUS.CONNECTING: return '●';
-    case SESSION_STATUS.RUNNING: return '●';
-    case SESSION_STATUS.EXITED: return '○';
-    default: return '○';
-  }
-}
-
-function getStatusLabel(status) {
-  return SESSION_STATUS_LABELS[status] || '상태 미확인';
-}
-
-function getCompactPathLabel(pathValue) {
-  if (!pathValue) return '로컬 셸';
-
-  const normalized = String(pathValue).replace(/\//g, '\\');
-  const parts = normalized.split('\\').filter(Boolean);
-  if (parts.length <= 2) return normalized;
-  return `...\\${parts.slice(-2).join('\\')}`;
-}
-
-function getSplitPaneSubtitle(session) {
-  if (!session) return '상태 미확인';
-  return `${getStatusLabel(session.status)} · ${getCompactPathLabel(session.projectPath)}`;
-}
-
-function updateTabStatus(sessionId, status) {
-  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
-  if (!tab) return;
-  const statusElement = tab.querySelector('.tab__status');
-  if (statusElement) {
-    statusElement.textContent = getStatusIcon(status);
-    statusElement.className = `tab__status tab__status--${status}`;
-  }
-  if (state.splitMode) {
-    const session = state.sessions.get(sessionId);
-    if (session) {
-      ensureSplitPaneHeader(session);
-    }
-    renderSplitMinimap();
-  }
 }
 
 function activateSession(id, options = {}) {
@@ -2675,6 +2127,7 @@ function activateSession(id, options = {}) {
   }
 
   state.activeSessionId = id;
+  eventBus.emit('session:activated', { sessionId: id });
 
   // Restore new tab's layout after switching
   if (keepCurrentSplit) {
@@ -2726,12 +2179,14 @@ async function closeSession(id) {
 
   session.terminal.dispose();
   session.wrapper.remove();
+  disposeSessionLogBuffer(id);
 
   const tab = document.querySelector(`[data-session-id="${id}"]`);
   if (tab) tab.remove();
 
   state.sessions.delete(id);
   state.blockManagers.delete(id);
+  eventBus.emit('session:closed', { sessionId: id });
 
   // Claude 세션 정리
   onClaudeSessionClose(id);
@@ -2751,58 +2206,6 @@ async function closeSession(id) {
 
 async function createSessionInDirectory(path, projectName, projectId = null) {
   await createSession(`${projectName}`, path, projectId);
-}
-
-// Tab drag and drop handlers
-function handleTabDragStart(e) {
-  state.draggedTab = e.currentTarget;
-  e.currentTarget.classList.add('tab--dragging');
-  e.dataTransfer.effectAllowed = 'move';
-  const sessionId = e.currentTarget.dataset.sessionId;
-  if (sessionId) {
-    e.dataTransfer.setData('text/plain', sessionId);
-  }
-}
-
-function handleTabDragEnter(e) {
-  if (e.currentTarget !== state.draggedTab) {
-    e.currentTarget.classList.add('tab--drop-target');
-  }
-}
-
-function handleTabDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  return false;
-}
-
-function handleTabDragLeave(e) {
-  e.currentTarget.classList.remove('tab--drop-target');
-}
-
-function handleTabDrop(e) {
-  e.stopPropagation();
-  if (state.draggedTab !== e.currentTarget) {
-    const allTabs = Array.from(tabsList.children);
-    const draggedIndex = allTabs.indexOf(state.draggedTab);
-    const targetIndex = allTabs.indexOf(e.currentTarget);
-    if (draggedIndex < targetIndex) {
-      tabsList.insertBefore(state.draggedTab, e.currentTarget.nextSibling);
-    } else {
-      tabsList.insertBefore(state.draggedTab, e.currentTarget);
-    }
-  }
-  e.currentTarget.classList.remove('tab--drop-target');
-  return false;
-}
-
-function handleTabDragEnd(e) {
-  e.currentTarget.classList.remove('tab--dragging');
-  document.querySelectorAll('.tab--drop-target').forEach(tab => {
-    tab.classList.remove('tab--drop-target');
-  });
-  clearPaneDropIndicators();
-  state.draggedTab = null;
 }
 
 function showTabContextMenu(e, sessionId) {
@@ -3000,253 +2403,6 @@ function startTabRename(sessionId) {
 }
 
 // ===== Phase 3: Advanced Tab Management Functions =====
-
-// Toggle pin state of a tab
-function togglePinTab(sessionId) {
-  const session = state.sessions.get(sessionId);
-  if (!session) return;
-
-  session.pinned = !session.pinned;
-
-  // Update tab UI
-  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
-  if (tab) {
-    tab.classList.toggle('tab--pinned', session.pinned);
-
-    // Move pinned tabs to the front
-    if (session.pinned) {
-      const tabsList = document.getElementById('tabsList');
-      const firstUnpinnedTab = tabsList.querySelector('.tab:not(.tab--pinned):not(.tab-group)');
-      if (firstUnpinnedTab) {
-        tabsList.insertBefore(tab, firstUnpinnedTab);
-      }
-    }
-  }
-
-  debug('Tab pinned state toggled:', sessionId, session.pinned);
-}
-
-// Set tab color
-function setTabColor(sessionId, color) {
-  const session = state.sessions.get(sessionId);
-  if (!session) return;
-
-  session.color = color;
-
-  // Update tab UI
-  const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
-  if (tab) {
-    if (color) {
-      tab.style.borderTopColor = color;
-      tab.classList.add('tab--colored');
-    } else {
-      tab.style.borderTopColor = '';
-      tab.classList.remove('tab--colored');
-    }
-  }
-
-  debug('Tab color set:', sessionId, color);
-}
-
-// Show color picker submenu in context menu
-function showColorPickerMenu(e, sessionId, parentMenu) {
-  // Remove existing color picker if any
-  const existingPicker = document.getElementById('colorPickerMenu');
-  if (existingPicker) existingPicker.remove();
-
-  const colorPicker = document.createElement('div');
-  colorPicker.id = 'colorPickerMenu';
-  colorPicker.className = 'context-menu context-menu--submenu';
-
-  const parentRect = parentMenu.getBoundingClientRect();
-  colorPicker.style.left = `${parentRect.right}px`;
-  colorPicker.style.top = `${e.clientY}px`;
-
-  const colorSwatches = TAB_COLORS.map(color => {
-    if (color.value === null) {
-      return `<div class="context-menu__item" data-color="null">
-        <span class="context-menu__color-swatch context-menu__color-swatch--none"></span>
-        <span>${color.name}</span>
-      </div>`;
-    }
-    return `<div class="context-menu__item" data-color="${color.value}">
-      <span class="context-menu__color-swatch" style="background-color: ${color.value}"></span>
-      <span>${color.name}</span>
-    </div>`;
-  }).join('');
-
-  colorPicker.innerHTML = colorSwatches;
-
-  colorPicker.addEventListener('click', (e) => {
-    const colorValue = e.target.closest('.context-menu__item')?.dataset.color;
-    if (colorValue !== undefined) {
-      setTabColor(sessionId, colorValue === 'null' ? null : colorValue);
-      parentMenu.remove();
-      colorPicker.remove();
-    }
-  });
-
-  document.body.appendChild(colorPicker);
-
-  // Remove when clicking outside
-  setTimeout(() => {
-    const closeColorPicker = (e) => {
-      if (!colorPicker.contains(e.target) && !parentMenu.contains(e.target)) {
-        colorPicker.remove();
-        document.removeEventListener('click', closeColorPicker);
-      }
-    };
-    document.addEventListener('click', closeColorPicker);
-  }, 0);
-}
-
-// Store info about closed tab
-function storeClosedTabInfo(session) {
-  const closedTab = {
-    name: session.name,
-    projectId: session.projectId,
-    projectPath: session.projectPath,
-    projectName: session.projectName,
-    closedAt: new Date()
-  };
-
-  state.closedTabs.unshift(closedTab);
-
-  // Keep only last 10
-  if (state.closedTabs.length > 10) {
-    state.closedTabs.pop();
-  }
-
-  debug('Closed tab stored:', closedTab.name);
-}
-
-// Restore the last closed tab
-async function restoreLastClosedTab() {
-  if (state.closedTabs.length === 0) {
-    debug('No closed tabs to restore');
-    return;
-  }
-
-  const closedTab = state.closedTabs.shift();
-
-  // Recreate session
-  if (closedTab.projectPath) {
-    await createSession(closedTab.name, closedTab.projectPath, closedTab.projectId);
-  } else {
-    await createSession(closedTab.name);
-  }
-
-  debug('Restored tab:', closedTab.name);
-}
-
-// Show tab search overlay
-function showTabSearch() {
-  state.tabSearchVisible = true;
-
-  let searchEl = document.getElementById('tabSearch');
-  if (!searchEl) {
-    searchEl = document.createElement('div');
-    searchEl.id = 'tabSearch';
-    searchEl.className = 'tab-search';
-    searchEl.innerHTML = `
-      <input type="text" class="tab-search__input" id="tabSearchInput" placeholder="Search tabs..." autocomplete="off">
-      <div class="tab-search__results" id="tabSearchResults"></div>
-    `;
-    document.querySelector('.main').insertBefore(searchEl, document.querySelector('.tabs'));
-
-    const input = document.getElementById('tabSearchInput');
-    input.addEventListener('input', (e) => filterTabsByQuery(e.target.value));
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        hideTabSearch();
-      } else if (e.key === 'Enter') {
-        const firstResult = document.querySelector('.tab-search__result');
-        if (firstResult) {
-          activateSession(firstResult.dataset.sessionId);
-          hideTabSearch();
-        }
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const results = document.querySelectorAll('.tab-search__result');
-        if (results.length > 0) {
-          results[0].focus();
-        }
-      }
-    });
-  }
-
-  searchEl.classList.add('tab-search--visible');
-  const input = document.getElementById('tabSearchInput');
-  input.focus();
-  input.value = '';
-  filterTabsByQuery('');
-
-  debug('Tab search opened');
-}
-
-// Hide tab search overlay
-function hideTabSearch() {
-  state.tabSearchVisible = false;
-  const searchEl = document.getElementById('tabSearch');
-  if (searchEl) {
-    searchEl.classList.remove('tab-search--visible');
-  }
-
-  debug('Tab search closed');
-}
-
-// Filter tabs by search query
-function filterTabsByQuery(query) {
-  const resultsEl = document.getElementById('tabSearchResults');
-  if (!resultsEl) return;
-
-  const lowerQuery = query.toLowerCase();
-  const matches = [];
-
-  state.sessions.forEach((session) => {
-    if (!query || session.name.toLowerCase().includes(lowerQuery)) {
-      matches.push(session);
-    }
-  });
-
-  resultsEl.innerHTML = matches.map(session => `
-    <div class="tab-search__result" data-session-id="${session.id}" tabindex="0">
-      <span class="tab-search__result-status tab__status--${session.status}">${getStatusIcon(session.status)}</span>
-      <span class="tab-search__result-name">${escapeHtml(session.name)}</span>
-      ${session.pinned ? '<span class="tab-search__result-pin">📌</span>' : ''}
-      ${session.color ? `<span class="tab-search__result-color" style="background-color: ${session.color}"></span>` : ''}
-    </div>
-  `).join('');
-
-  // Add click and keyboard handlers
-  resultsEl.querySelectorAll('.tab-search__result').forEach((result) => {
-    result.addEventListener('click', () => {
-      activateSession(result.dataset.sessionId);
-      hideTabSearch();
-    });
-
-    result.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        activateSession(result.dataset.sessionId);
-        hideTabSearch();
-      } else if (e.key === 'Escape') {
-        hideTabSearch();
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const next = result.nextElementSibling;
-        if (next) next.focus();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        const prev = result.previousElementSibling;
-        if (prev) {
-          prev.focus();
-        } else {
-          document.getElementById('tabSearchInput').focus();
-        }
-      }
-    });
-  });
-}
 
 // ===== Terminal Search Functions =====
 
@@ -3710,7 +2866,7 @@ function showAllSessionsResults(results, query) {
     const resultHtml = Object.keys(groupedResults).map(sessionId => {
       const group = groupedResults[sessionId];
       const matchesHtml = group.matches.slice(0, 10).map(match => `
-        <div class="search-results-panel__item" data-session-id="${match.sessionId}" data-line="${match.lineNumber}">
+        <div class="search-results-panel__item" data-session-id="${escapeDataAttr(match.sessionId)}" data-line="${match.lineNumber}">
           <span class="search-results-panel__line">Line ${match.lineNumber}</span>
           <span class="search-results-panel__text">${escapeHtml(match.lineText.substring(0, 100))}</span>
         </div>
@@ -3922,7 +3078,7 @@ function showRecordingsList() {
         ` : `
           <div class="recordings-list">
             ${recordings.map(r => `
-              <div class="recordings-list__item" data-recording-id="${r.id}">
+              <div class="recordings-list__item" data-recording-id="${escapeDataAttr(r.id)}">
                 <div class="recordings-list__info">
                   <span class="recordings-list__title">${escapeHtml(r.metadata?.title || 'Untitled')}</span>
                   <span class="recordings-list__meta">
@@ -3931,9 +3087,9 @@ function showRecordingsList() {
                   </span>
                 </div>
                 <div class="recordings-list__actions">
-                  <button class="btn btn--small btn--primary recordings-list__play" data-id="${r.id}">재생</button>
-                  <button class="btn btn--small btn--secondary recordings-list__export" data-id="${r.id}">내보내기</button>
-                  <button class="btn btn--small btn--danger recordings-list__delete" data-id="${r.id}">삭제</button>
+                  <button class="btn btn--small btn--primary recordings-list__play" data-id="${escapeDataAttr(r.id)}">재생</button>
+                  <button class="btn btn--small btn--secondary recordings-list__export" data-id="${escapeDataAttr(r.id)}">내보내기</button>
+                  <button class="btn btn--small btn--danger recordings-list__delete" data-id="${escapeDataAttr(r.id)}">삭제</button>
                 </div>
               </div>
             `).join('')}
@@ -4416,15 +3572,6 @@ async function splitActivePane(direction) {
   }
 }
 
-function findLeafNode(node, sessionId) {
-  if (!node) return null;
-  if (node.isLeaf()) {
-    return node.sessionId === sessionId ? node : null;
-  }
-  return findLeafNode(node.children[0], sessionId) ||
-         findLeafNode(node.children[1], sessionId);
-}
-
 function scheduleSplitRender() {
   if (state.splitRenderRaf) return;
   state.splitRenderRaf = requestAnimationFrame(() => {
@@ -4608,30 +3755,6 @@ function closeSplitPane(sessionId) {
   return false;
 }
 
-function removeLeafNode(node, sessionId) {
-  if (!node) return false;
-
-  if (node.isLeaf()) {
-    return node.sessionId === sessionId;
-  }
-
-  // Check children
-  for (let i = 0; i < 2; i++) {
-    if (node.children[i].isLeaf() && node.children[i].sessionId === sessionId) {
-      // Replace this node with the other child
-      const otherChild = node.children[1 - i];
-      node.type = otherChild.type;
-      node.sessionId = otherChild.sessionId;
-      node.children = otherChild.children;
-      node.ratio = otherChild.ratio;
-      return true;
-    }
-  }
-
-  return removeLeafNode(node.children[0], sessionId) ||
-         removeLeafNode(node.children[1], sessionId);
-}
-
 function exitSplitMode() {
   state.maximizedSession = null;
   state.splitMode = false;
@@ -4774,8 +3897,9 @@ function ensureSplitPaneHeader(session) {
   const subtitleEl = header.querySelector('.split-pane-header__subtitle');
 
   if (statusEl) {
-    statusEl.textContent = getStatusIcon(session.status);
-    statusEl.className = `split-pane-header__status split-pane-header__status--${session.status}`;
+    const statusClass = getSessionStatusClass(session.status);
+    statusEl.textContent = getStatusIcon(statusClass);
+    statusEl.className = `split-pane-header__status split-pane-header__status--${statusClass}`;
     statusEl.title = getStatusLabel(session.status);
   }
   if (titleEl) {
@@ -4785,10 +3909,6 @@ function ensureSplitPaneHeader(session) {
     subtitleEl.textContent = getSplitPaneSubtitle(session);
     subtitleEl.title = session.projectPath || '로컬 셸';
   }
-}
-
-function getSplitBranchLabel(nodeType) {
-  return nodeType === 'horizontal' ? '가로 분할' : '세로 분할';
 }
 
 function buildSplitMinimapNode(node, depth = 0) {
@@ -4806,8 +3926,9 @@ function buildSplitMinimapNode(node, depth = 0) {
     }
 
     const icon = document.createElement('span');
-    icon.className = `split-minimap__status split-minimap__status--${session?.status || SESSION_STATUS.EXITED}`;
-    icon.textContent = getStatusIcon(session?.status || SESSION_STATUS.EXITED);
+    const statusClass = getSessionStatusClass(session?.status || SESSION_STATUS.EXITED);
+    icon.className = `split-minimap__status split-minimap__status--${statusClass}`;
+    icon.textContent = getStatusIcon(statusClass);
 
     const title = document.createElement('span');
     title.className = 'split-minimap__leaf-title';
@@ -4988,16 +4109,6 @@ function moveSessionToSplitPane(draggedSessionId, targetSessionId, dropPosition)
   return true;
 }
 
-// Get all leaf nodes from split tree
-function getAllLeafNodes(node) {
-  if (!node) return [];
-  if (node.isLeaf()) return [node];
-  return [
-    ...getAllLeafNodes(node.children[0]),
-    ...getAllLeafNodes(node.children[1])
-  ];
-}
-
 // Apply a layout preset
 async function applyLayoutPreset(presetKey) {
   if (!state.activeSessionId) {
@@ -5074,896 +4185,6 @@ function restoreTabLayout(sessionId) {
   renderSplitLayout();
 }
 
-// ===== Tab Grouping Functions =====
-
-// Create a new tab group
-function createTabGroup(name, tabIds = [], options = {}) {
-  const id = `group-${++state.groupCounter}`;
-  const group = new TabGroup(id, name, options);
-
-  tabIds.forEach(sessionId => {
-    group.addTab(sessionId);
-    state.tabToGroup.set(sessionId, id);
-  });
-
-  state.tabGroups.set(id, group);
-  renderTabGroups();
-  return group;
-}
-
-// Add a tab to an existing group
-function addTabToGroup(sessionId, groupId) {
-  // Remove from current group if exists
-  const currentGroupId = state.tabToGroup.get(sessionId);
-  if (currentGroupId) {
-    removeTabFromGroup(sessionId, false);
-  }
-
-  const group = state.tabGroups.get(groupId);
-  if (group) {
-    group.addTab(sessionId);
-    state.tabToGroup.set(sessionId, groupId);
-    renderTabGroups();
-  }
-}
-
-// Remove a tab from its group
-function removeTabFromGroup(sessionId, rerender = true) {
-  const groupId = state.tabToGroup.get(sessionId);
-  if (!groupId) return;
-
-  const group = state.tabGroups.get(groupId);
-  if (group) {
-    group.removeTab(sessionId);
-    state.tabToGroup.delete(sessionId);
-
-    // Remove empty auto-groups
-    if (group.isEmpty() && group.isAutoGroup) {
-      state.tabGroups.delete(groupId);
-    }
-  }
-
-  if (rerender) renderTabGroups();
-}
-
-// Toggle group collapse state
-function toggleGroupCollapse(groupId) {
-  const group = state.tabGroups.get(groupId);
-  if (group) {
-    group.collapsed = !group.collapsed;
-    renderTabGroups();
-  }
-}
-
-// Auto-group a session by its project
-function autoGroupSessionByProject(sessionId, projectId, projectName) {
-  if (!state.autoGroupByProject || !projectId) return;
-
-  // Find existing group for this project
-  let existingGroupId = null;
-  state.tabGroups.forEach((group, id) => {
-    if (group.projectId === projectId) {
-      existingGroupId = id;
-    }
-  });
-
-  if (existingGroupId) {
-    addTabToGroup(sessionId, existingGroupId);
-  } else {
-    // Create new group for this project
-    createTabGroup(projectName || 'Project', [sessionId], {
-      projectId: projectId,
-      isAutoGroup: true,
-      color: getProjectColor(projectId)
-    });
-  }
-}
-
-// Get a consistent color for a project
-function getProjectColor(projectId) {
-  const colors = ['#0e639c', '#6a9955', '#ce9178', '#dcdcaa', '#9cdcfe', '#c586c0', '#4ec9b0'];
-  const hash = projectId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
-}
-
-// Render tabs with grouping support
-function renderTabGroups() {
-  const tabsList = document.getElementById('tabsList');
-  if (!tabsList) return;
-
-  // Clear current tabs
-  tabsList.innerHTML = '';
-
-  // Get grouped and ungrouped tabs
-  const groupedSessionIds = new Set(state.tabToGroup.keys());
-  const ungroupedSessions = [];
-
-  state.sessions.forEach((session, sessionId) => {
-    if (!groupedSessionIds.has(sessionId)) {
-      ungroupedSessions.push(session);
-    }
-  });
-
-  // Phase 3: Separate pinned and unpinned ungrouped tabs
-  const pinnedSessions = ungroupedSessions.filter(s => s.pinned);
-  const unpinnedSessions = ungroupedSessions.filter(s => !s.pinned);
-
-  // Render groups first
-  state.tabGroups.forEach((group) => {
-    const groupElement = createGroupElement(group);
-    tabsList.appendChild(groupElement);
-  });
-
-  // Phase 3: Render pinned tabs first (at the front)
-  pinnedSessions.forEach(session => {
-    const tab = createTabElement(session);
-    tabsList.appendChild(tab);
-  });
-
-  // Render unpinned tabs
-  unpinnedSessions.forEach(session => {
-    const tab = createTabElement(session);
-    tabsList.appendChild(tab);
-  });
-
-  // Apply filter if active
-  renderFilteredTabs();
-}
-
-// Create group container element
-function createGroupElement(group) {
-  const groupEl = document.createElement('div');
-  groupEl.className = `tab-group ${group.collapsed ? 'tab-group--collapsed' : ''}`;
-  groupEl.dataset.groupId = group.id;
-
-  // Group header
-  const header = document.createElement('div');
-  header.className = 'tab-group__header';
-  header.style.borderLeftColor = group.color;
-  header.innerHTML = `
-    <span class="tab-group__collapse">${group.collapsed ? '▶' : '▼'}</span>
-    <span class="tab-group__name">${escapeHtml(group.name)}</span>
-    <span class="tab-group__count">${group.size}</span>
-  `;
-
-  header.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleGroupCollapse(group.id);
-  });
-
-  // Group tabs container
-  const tabsContainer = document.createElement('div');
-  tabsContainer.className = 'tab-group__tabs';
-
-  if (!group.collapsed) {
-    group.tabIds.forEach(sessionId => {
-      const session = state.sessions.get(sessionId);
-      if (session) {
-        const tab = createTabElement(session, true);
-        tabsContainer.appendChild(tab);
-      }
-    });
-  }
-
-  groupEl.appendChild(header);
-  groupEl.appendChild(tabsContainer);
-
-  return groupEl;
-}
-
-// Create tab element (extracted from createTab for reuse)
-function createTabElement(session, isGrouped = false) {
-  const tab = document.createElement('div');
-  tab.className = `tab ${isGrouped ? 'tab--grouped' : ''}`;
-  tab.dataset.sessionId = session.id;
-  tab.draggable = true;
-
-  // Accessibility attributes
-  tab.setAttribute('role', 'tab');
-  tab.setAttribute('aria-selected', session.id === state.activeSessionId ? 'true' : 'false');
-  tab.setAttribute('tabindex', session.id === state.activeSessionId ? '0' : '-1');
-
-  if (session.id === state.activeSessionId) {
-    tab.classList.add('tab--active');
-  }
-
-  // Phase 3: Add pinned state
-  if (session.pinned) {
-    tab.classList.add('tab--pinned');
-  }
-
-  // Phase 3: Add color indicator if session has color
-  if (session.color) {
-    tab.style.borderTopColor = session.color;
-    tab.classList.add('tab--colored');
-  }
-
-  const statusIcon = getStatusIcon(session.status);
-  tab.innerHTML = `
-    <span class="tab__status tab__status--${session.status}">${statusIcon}</span>
-    <span class="tab__title">${escapeHtml(session.name)}</span>
-    <button class="tab__close">&times;</button>
-  `;
-
-  tab.addEventListener('click', (e) => {
-    if (!e.target.classList.contains('tab__close')) {
-      activateSession(session.id);
-    }
-  });
-
-  // Double-click to rename
-  tab.addEventListener('dblclick', (e) => {
-    if (!e.target.classList.contains('tab__close')) {
-      e.preventDefault();
-      startTabRename(session.id);
-    }
-  });
-
-  tab.querySelector('.tab__close').addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeSession(session.id);
-  });
-
-  // Drag handlers
-  tab.addEventListener('dragstart', handleTabDragStart);
-  tab.addEventListener('dragenter', handleTabDragEnter);
-  tab.addEventListener('dragover', handleTabDragOver);
-  tab.addEventListener('dragleave', handleTabDragLeave);
-  tab.addEventListener('drop', handleTabDrop);
-  tab.addEventListener('dragend', handleTabDragEnd);
-
-  tab.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    showTabContextMenu(e, session.id);
-  });
-
-  return tab;
-}
-
-// ===== Project Filtering Functions =====
-
-function setProjectFilter(projectId) {
-  state.activeProjectFilter = projectId;
-  renderFilteredTabs();
-  updateFilterIndicator();
-  updateProjectFilterButtons();
-}
-
-function clearProjectFilter() {
-  state.activeProjectFilter = null;
-  renderFilteredTabs();
-  updateFilterIndicator();
-  updateProjectFilterButtons();
-}
-
-function renderFilteredTabs() {
-  const tabs = document.querySelectorAll('.tab');
-  const groups = document.querySelectorAll('.tab-group');
-
-  tabs.forEach(tab => {
-    const sessionId = tab.dataset.sessionId;
-    const session = state.sessions.get(sessionId);
-    if (!state.activeProjectFilter) {
-      tab.style.display = '';
-    } else if (session && session.projectId === state.activeProjectFilter) {
-      tab.style.display = '';
-    } else {
-      tab.style.display = 'none';
-    }
-  });
-
-  // Handle group visibility
-  groups.forEach(groupEl => {
-    const groupId = groupEl.dataset.groupId;
-    const group = state.tabGroups.get(groupId);
-    if (!group) return;
-
-    if (!state.activeProjectFilter) {
-      groupEl.style.display = '';
-    } else if (group.projectId === state.activeProjectFilter) {
-      groupEl.style.display = '';
-    } else {
-      groupEl.style.display = 'none';
-    }
-  });
-}
-
-function linkSessionToProject(sessionId, projectId) {
-  if (!projectId) return;
-  if (!state.projectTabMap.has(projectId)) {
-    state.projectTabMap.set(projectId, new Set());
-  }
-  state.projectTabMap.get(projectId).add(sessionId);
-  updateProjectTabCount(projectId);
-  renderProjectCmdTrees();
-}
-
-function unlinkSessionFromProject(sessionId) {
-  const session = state.sessions.get(sessionId);
-  if (session && session.projectId) {
-    const projectId = session.projectId;
-    const tabSet = state.projectTabMap.get(projectId);
-    if (tabSet) {
-      tabSet.delete(sessionId);
-      updateProjectTabCount(projectId);
-    }
-  }
-  renderProjectCmdTrees();
-}
-
-function updateProjectTabCount(projectId) {
-  const projectItem = document.querySelector(`[data-project-id="${projectId}"]`);
-  if (!projectItem) return;
-
-  const tabSet = state.projectTabMap.get(projectId);
-  const count = tabSet ? tabSet.size : 0;
-
-  let badge = projectItem.querySelector('.sidebar__item-tab-count');
-  if (count > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'sidebar__item-tab-count';
-      projectItem.insertBefore(badge, projectItem.querySelector('.sidebar__item-filter'));
-    }
-    badge.textContent = count;
-  } else if (badge) {
-    badge.remove();
-  }
-}
-
-function updateFilterIndicator() {
-  let indicator = document.querySelector('.tabs__filter-indicator');
-  if (state.activeProjectFilter) {
-    const projectItem = document.querySelector(`[data-project-id="${state.activeProjectFilter}"]`);
-    const projectName = projectItem ? projectItem.querySelector('.sidebar__item-name').textContent : 'Project';
-
-    if (!indicator) {
-      indicator = document.createElement('div');
-      indicator.className = 'tabs__filter-indicator';
-      indicator.innerHTML = `
-        <span class="tabs__filter-text">Filtered: <strong></strong></span>
-        <button class="tabs__filter-clear">&times;</button>
-      `;
-      indicator.querySelector('.tabs__filter-clear').addEventListener('click', clearProjectFilter);
-      const tabsContainer = document.getElementById('tabsContainer');
-      tabsContainer.insertBefore(indicator, tabsContainer.firstChild);
-    }
-    indicator.querySelector('strong').textContent = projectName;
-  } else if (indicator) {
-    indicator.remove();
-  }
-}
-
-function updateProjectFilterButtons() {
-  document.querySelectorAll('.sidebar__item-filter').forEach(btn => {
-    const projectId = btn.dataset.projectId;
-    if (state.activeProjectFilter === projectId) {
-      btn.classList.add('sidebar__item-filter--active');
-    } else {
-      btn.classList.remove('sidebar__item-filter--active');
-    }
-  });
-}
-
-function renderProjectCmdTrees() {
-  document.querySelectorAll('[data-project-cmd-tree]').forEach((treeEl) => {
-    const projectId = treeEl.dataset.projectCmdTree;
-    const sessionSet = state.projectTabMap.get(projectId);
-    const sessionIds = sessionSet ? Array.from(sessionSet) : [];
-    const sessions = sessionIds
-      .map((sessionId) => state.sessions.get(sessionId))
-      .filter(Boolean);
-
-    if (sessions.length === 0) {
-      treeEl.innerHTML = '';
-      treeEl.classList.remove('sidebar__cmd-tree--visible');
-      return;
-    }
-
-    const cmdItems = sessions.map((session) => {
-      const activeClass = session.id === state.activeSessionId ? ' sidebar__cmd-item--active' : '';
-      const statusClass = `sidebar__cmd-status--${session.status}`;
-      return `
-        <div class="sidebar__cmd-item${activeClass}" data-session-id="${session.id}" title="${escapeHtml(session.name)}">
-          <span class="sidebar__cmd-status ${statusClass}">${getStatusIcon(session.status)}</span>
-          <span class="sidebar__cmd-name">${escapeHtml(session.name)}</span>
-          <button class="sidebar__cmd-close" data-session-id="${session.id}" aria-label="세션 닫기">&times;</button>
-        </div>
-      `;
-    }).join('');
-
-    treeEl.innerHTML = `
-      <div class="sidebar__cmd-tree-header">CMD ${sessions.length}</div>
-      <div class="sidebar__cmd-tree-list">${cmdItems}</div>
-    `;
-    treeEl.classList.add('sidebar__cmd-tree--visible');
-  });
-
-  document.querySelectorAll('.sidebar__cmd-item').forEach((item) => {
-    item.onclick = (e) => {
-      if (e.target.closest('.sidebar__cmd-close')) return;
-      e.stopPropagation();
-      const { sessionId } = item.dataset;
-      if (sessionId && state.sessions.has(sessionId)) {
-        activateSession(sessionId);
-      }
-    };
-  });
-
-  document.querySelectorAll('.sidebar__cmd-close').forEach((btn) => {
-    btn.onclick = (e) => {
-      e.stopPropagation();
-      const { sessionId } = btn.dataset;
-      if (sessionId && state.sessions.has(sessionId)) {
-        closeSession(sessionId);
-      }
-    };
-  });
-}
-
-// ===== Command Palette =====
-
-// 커맨드 정의 (모든 앱 기능)
-const COMMANDS = [
-  { id: 'new-tab', name: '새 탭', shortcut: 'Ctrl+T', action: () => createSession() },
-  { id: 'close-tab', name: '탭 닫기', shortcut: 'Ctrl+W', action: () => state.activeSessionId && closeSession(state.activeSessionId) },
-  { id: 'restore-tab', name: '닫은 탭 복원', shortcut: 'Ctrl+Shift+T', action: () => restoreLastClosedTab() },
-  { id: 'split-default', name: '기본 분할 (오른쪽)', shortcut: 'Ctrl+\\', action: () => splitDefault() },
-  { id: 'split-horizontal', name: '아래로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
-  { id: 'split-vertical', name: '오른쪽 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
-  { id: 'layout-preset-selector', name: '레이아웃 선택기 열기', shortcut: 'Ctrl+Shift+S', action: () => focusLayoutPresetSelector() },
-  { id: 'layout-gallery', name: '레이아웃 갤러리 열기', shortcut: 'Ctrl+Shift+L', action: () => openLayoutGalleryModal() },
-  { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
-  { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
-  { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
-  { id: 'search-tabs', name: '탭 검색', shortcut: 'Ctrl+Shift+F', action: () => showTabSearch() },
-  { id: 'settings', name: '설정 열기', shortcut: 'Ctrl+,', action: () => showSettingsModal() },
-  { id: 'add-project', name: '프로젝트 추가', shortcut: '', action: () => showAddProjectModal() },
-  { id: 'add-snippet', name: '스니펫 추가', shortcut: '', action: () => showAddSnippetModal() },
-  { id: 'toggle-recording', name: '녹화 시작/중지', shortcut: 'Ctrl+Shift+R', action: () => {
-    if (recordingManager.isRecording()) {
-      stopRecordingUI();
-    } else {
-      startRecordingUI();
-    }
-  }},
-  { id: 'clear-screen', name: '화면 지우기', shortcut: 'Ctrl+L', action: () => clearTerminalScreen() },
-  { id: 'clear-scrollback', name: '스크롤백 지우기', shortcut: 'Ctrl+K', action: () => clearTerminalScrollback() },
-  { id: 'fullscreen', name: '전체화면 전환', shortcut: 'F11', action: () => toggleFullscreen() },
-  { id: 'history', name: '명령어 히스토리', shortcut: 'Ctrl+R', action: () => showHistoryPanel(commandHistory, state, escapeHtml) },
-  { id: 'git-panel', name: 'Git 패널 토글', shortcut: 'Ctrl+G', action: () => toggleGitPanel() },
-  { id: 'next-tab', name: '다음 탭', shortcut: 'Ctrl+Tab', action: () => switchToNextTab() },
-  { id: 'prev-tab', name: '이전 탭', shortcut: 'Ctrl+Shift+Tab', action: () => switchToPreviousTab() },
-  { id: 'theme-dark', name: '테마: 다크', shortcut: '', action: () => changeTheme('dark') },
-  { id: 'theme-light', name: '테마: 라이트', shortcut: '', action: () => changeTheme('light') },
-  { id: 'theme-monokai', name: '테마: Monokai', shortcut: '', action: () => changeTheme('monokai') },
-  { id: 'theme-high-contrast', name: '테마: 고대비', shortcut: '', action: () => changeTheme('high-contrast') },
-];
-
-// 최근 사용 명령어 추적
-const recentCommands = [];
-const MAX_RECENT_COMMANDS = 5;
-
-// 커맨드 팔레트 상태
-let commandPaletteState = {
-  isVisible: false,
-  selectedIndex: 0,
-  filteredCommands: [...COMMANDS]
-};
-
-function showCommandPalette() {
-  commandPaletteState.isVisible = true;
-  commandPaletteState.selectedIndex = 0;
-
-  // 최근 명령어를 먼저 표시
-  const recentIds = new Set(recentCommands);
-  const recentCmds = COMMANDS.filter(cmd => recentIds.has(cmd.id));
-  const otherCmds = COMMANDS.filter(cmd => !recentIds.has(cmd.id));
-  commandPaletteState.filteredCommands = [...recentCmds, ...otherCmds];
-
-  renderCommandPalette();
-
-  // 입력 필드에 포커스
-  const input = document.querySelector('.command-palette__input');
-  if (input) {
-    input.focus();
-  }
-}
-
-function hideCommandPalette() {
-  commandPaletteState.isVisible = false;
-  const palette = document.querySelector('.command-palette');
-  if (palette) {
-    palette.remove();
-  }
-}
-
-function renderCommandPalette() {
-  // 기존 팔레트 제거
-  const existing = document.querySelector('.command-palette');
-  if (existing) {
-    existing.remove();
-  }
-
-  // 팔레트 생성
-  const palette = document.createElement('div');
-  palette.className = 'command-palette';
-  palette.innerHTML = `
-    <div class="command-palette__container">
-      <input type="text" class="command-palette__input" placeholder="명령어 검색..." />
-      <div class="command-palette__list" role="listbox"></div>
-    </div>
-  `;
-
-  document.body.appendChild(palette);
-
-  // 이벤트 리스너 설정
-  const input = palette.querySelector('.command-palette__input');
-
-  input.addEventListener('input', (e) => {
-    filterCommands(e.target.value);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    handleCommandPaletteKeydown(e);
-  });
-
-  // 오버레이 클릭시 닫기
-  palette.addEventListener('click', (e) => {
-    if (e.target === palette) {
-      hideCommandPalette();
-    }
-  });
-
-  // 명령어 목록 렌더링
-  renderCommandList();
-}
-
-function renderCommandList() {
-  const list = document.querySelector('.command-palette__list');
-  if (!list) return;
-
-  list.innerHTML = '';
-
-  commandPaletteState.filteredCommands.forEach((cmd, index) => {
-    const item = document.createElement('div');
-    item.className = 'command-palette__item';
-    if (index === commandPaletteState.selectedIndex) {
-      item.classList.add('command-palette__item--selected');
-    }
-
-    // 최근 사용 명령어 표시
-    const isRecent = recentCommands.includes(cmd.id);
-
-    item.innerHTML = `
-      <div class="command-palette__item-content">
-        ${isRecent ? '<span class="command-palette__recent-badge">최근</span>' : ''}
-        <span class="command-palette__item-name">${escapeHtml(cmd.name)}</span>
-      </div>
-      ${cmd.shortcut ? `<span class="command-palette__item-shortcut">${escapeHtml(cmd.shortcut)}</span>` : ''}
-    `;
-
-    item.addEventListener('click', () => {
-      executeCommand(cmd);
-    });
-
-    item.addEventListener('mouseenter', () => {
-      commandPaletteState.selectedIndex = index;
-      renderCommandList();
-    });
-
-    list.appendChild(item);
-  });
-
-  // 선택된 항목이 보이도록 스크롤
-  const selectedItem = list.querySelector('.command-palette__item--selected');
-  if (selectedItem) {
-    selectedItem.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-function filterCommands(query) {
-  if (!query.trim()) {
-    // 검색어가 없으면 최근 명령어를 먼저 표시
-    const recentIds = new Set(recentCommands);
-    const recentCmds = COMMANDS.filter(cmd => recentIds.has(cmd.id));
-    const otherCmds = COMMANDS.filter(cmd => !recentIds.has(cmd.id));
-    commandPaletteState.filteredCommands = [...recentCmds, ...otherCmds];
-  } else {
-    // Fuzzy match: 검색어의 각 문자가 순서대로 포함되어 있는지 확인
-    const lowerQuery = query.toLowerCase();
-    commandPaletteState.filteredCommands = COMMANDS.filter(cmd => {
-      const lowerName = cmd.name.toLowerCase();
-      let queryIndex = 0;
-
-      for (let i = 0; i < lowerName.length && queryIndex < lowerQuery.length; i++) {
-        if (lowerName[i] === lowerQuery[queryIndex]) {
-          queryIndex++;
-        }
-      }
-
-      return queryIndex === lowerQuery.length;
-    });
-  }
-
-  commandPaletteState.selectedIndex = 0;
-  renderCommandList();
-}
-
-function handleCommandPaletteKeydown(e) {
-  switch (e.key) {
-    case 'Escape':
-      e.preventDefault();
-      hideCommandPalette();
-      break;
-
-    case 'ArrowDown':
-      e.preventDefault();
-      commandPaletteState.selectedIndex =
-        (commandPaletteState.selectedIndex + 1) % commandPaletteState.filteredCommands.length;
-      renderCommandList();
-      break;
-
-    case 'ArrowUp':
-      e.preventDefault();
-      commandPaletteState.selectedIndex =
-        (commandPaletteState.selectedIndex - 1 + commandPaletteState.filteredCommands.length)
-        % commandPaletteState.filteredCommands.length;
-      renderCommandList();
-      break;
-
-    case 'Enter':
-      e.preventDefault();
-      {
-        const selectedCmd = commandPaletteState.filteredCommands[commandPaletteState.selectedIndex];
-        if (selectedCmd) {
-          executeCommand(selectedCmd);
-        }
-      }
-      break;
-  }
-}
-
-function executeCommand(cmd) {
-  try {
-    cmd.action();
-
-    // 최근 사용 명령어에 추가
-    const index = recentCommands.indexOf(cmd.id);
-    if (index > -1) {
-      recentCommands.splice(index, 1);
-    }
-    recentCommands.unshift(cmd.id);
-    if (recentCommands.length > MAX_RECENT_COMMANDS) {
-      recentCommands.pop();
-    }
-
-    hideCommandPalette();
-  } catch (error) {
-    debug('Command execution error:', error);
-    showToast(`명령 실행 실패: ${error.message}`, 'error');
-  }
-}
-
-function changeTheme(theme) {
-  // 테마 변경 함수
-  const root = document.documentElement;
-  root.className = `theme-${theme}`;
-
-  // 설정에 저장
-  if (typeof settingsTheme !== 'undefined' && settingsTheme) {
-    settingsTheme.value = theme;
-  }
-
-  showToast(`테마가 ${theme}로 변경되었습니다`, 'success');
-}
-
-function handleKeyboardShortcuts(e) {
-  // Ctrl+Shift+P - Command Palette
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyP') {
-    e.preventDefault();
-    showCommandPalette();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'f') {
-    e.preventDefault();
-    showTerminalSearch();
-    return;
-  }
-  if (e.ctrlKey && e.key === 't') {
-    e.preventDefault();
-    createSession();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'w') {
-    e.preventDefault();
-    if (state.activeSessionId) {
-      const session = state.sessions.get(state.activeSessionId);
-      // Phase 3: Don't close pinned tabs with Ctrl+W
-      if (session && !session.pinned) {
-        closeSession(state.activeSessionId);
-      }
-    }
-    return;
-  }
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyT') {
-    e.preventDefault();
-    // Phase 3: Restore last closed tab (Ctrl+Shift+T)
-    restoreLastClosedTab();
-    return;
-  }
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyF') {
-    e.preventDefault();
-    // Phase 3: Show tab search (Ctrl+Shift+F)
-    showTabSearch();
-    return;
-  }
-  // Ctrl+\ - Default split (right)
-  if (e.ctrlKey && !e.shiftKey && e.code === 'Backslash') {
-    e.preventDefault();
-    splitDefault();
-    return;
-  }
-  // Ctrl+Shift+S - Focus layout preset selector
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyS') {
-    e.preventDefault();
-    focusLayoutPresetSelector();
-    return;
-  }
-  // Ctrl+Shift+L - Open layout gallery
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyL') {
-    e.preventDefault();
-    const preset = document.getElementById('layoutPresetSelect')?.value || null;
-    openLayoutGalleryModal(preset);
-    return;
-  }
-  // Ctrl+Shift+D - Horizontal split
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
-    e.preventDefault();
-    splitHorizontal();
-    return;
-  }
-  // Ctrl+Shift+E - Vertical split
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyE') {
-    e.preventDefault();
-    splitVertical();
-    return;
-  }
-  // Ctrl+Shift+J - Merge active split pane
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyJ') {
-    e.preventDefault();
-    mergePane();
-    return;
-  }
-  // Ctrl+Shift+R - Toggle recording
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyR') {
-    e.preventDefault();
-    if (recordingManager.isRecording()) {
-      stopRecordingUI();
-    } else {
-      startRecordingUI();
-    }
-    return;
-  }
-  // Ctrl+Shift+M - Toggle maximize pane
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') {
-    e.preventDefault();
-    toggleMaximize();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
-    e.preventDefault();
-    switchToNextTab();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'Tab' && e.shiftKey) {
-    e.preventDefault();
-    switchToPreviousTab();
-    return;
-  }
-  if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
-    e.preventDefault();
-    switchToTabByIndex(parseInt(e.key) - 1);
-    return;
-  }
-  if (e.ctrlKey && e.key === ',') {
-    e.preventDefault();
-    showSettingsModal();
-    return;
-  }
-
-  // Phase 7.4: Additional keyboard shortcuts
-
-  // Ctrl+L - Clear terminal screen
-  if (e.ctrlKey && e.key === 'l') {
-    e.preventDefault();
-    clearTerminalScreen();
-    return;
-  }
-
-  // Ctrl+K - Clear scrollback buffer
-  if (e.ctrlKey && e.key === 'k') {
-    e.preventDefault();
-    clearTerminalScrollback();
-    return;
-  }
-
-  // Ctrl+R - Show history panel
-  if (e.ctrlKey && e.key === 'r') {
-    e.preventDefault();
-    showHistoryPanel(commandHistory, state, escapeHtml);
-    return;
-  }
-
-  // Ctrl+G - Toggle Git panel
-  if (e.ctrlKey && e.key === 'g') {
-    e.preventDefault();
-    toggleGitPanel();
-    return;
-  }
-
-  // F11 - Toggle fullscreen
-  if (e.key === 'F11') {
-    e.preventDefault();
-    toggleFullscreen();
-    return;
-  }
-
-  // Ctrl+Alt+Arrow - Focus pane by direction
-  if (e.ctrlKey && e.altKey) {
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        focusPaneByDirection('left');
-        return;
-      case 'ArrowRight':
-        e.preventDefault();
-        focusPaneByDirection('right');
-        return;
-      case 'ArrowUp':
-        e.preventDefault();
-        focusPaneByDirection('up');
-        return;
-      case 'ArrowDown':
-        e.preventDefault();
-        focusPaneByDirection('down');
-        return;
-    }
-  }
-}
-
-// ===== Terminal Clear Functions =====
-
-function clearTerminalScreen() {
-  const session = state.sessions.get(state.activeSessionId);
-  if (!session) return;
-
-  // Send clear screen escape sequence (like running 'clear' or 'cls')
-  session.terminal.write('\x1b[2J\x1b[H');
-  debug('Terminal screen cleared');
-}
-
-function clearTerminalScrollback() {
-  const session = state.sessions.get(state.activeSessionId);
-  if (!session) return;
-
-  // Clear the scrollback buffer
-  session.terminal.clear();
-  debug('Terminal scrollback cleared');
-}
-
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(err => {
-      debug('Fullscreen error:', err);
-      showToast('전체화면 전환에 실패했습니다', 'error');
-    });
-  } else {
-    document.exitFullscreen();
-  }
-}
-
-// Focus pane by direction (for split mode navigation)
 // ===== Claude Code Integration =====
 
 // Claude Code 상태
@@ -6104,191 +4325,48 @@ function onClaudeSessionClose(sessionId) {
   }
 }
 
-// ===== Terminal Clear Functions =====
-
-function focusPaneByDirection(direction) {
-  if (!state.splitMode || !state.splitRoot) return;
-
-  const leaves = getAllLeafNodes(state.splitRoot);
-  if (leaves.length <= 1) return;
-
-  const currentIndex = leaves.findIndex(n => n.sessionId === state.activeSessionId);
-  if (currentIndex === -1) return;
-
-  let nextIndex;
-  if (direction === 'right' || direction === 'down') {
-    nextIndex = (currentIndex + 1) % leaves.length;
-  } else {
-    nextIndex = (currentIndex - 1 + leaves.length) % leaves.length;
-  }
-
-  activateSession(leaves[nextIndex].sessionId, { preserveSplitLayout: true });
-}
-
-function switchToNextTab() {
-  const sessionIds = Array.from(state.sessions.keys());
-  if (sessionIds.length === 0) return;
-  const currentIndex = sessionIds.indexOf(state.activeSessionId);
-  activateSession(sessionIds[(currentIndex + 1) % sessionIds.length]);
-}
-
-function switchToPreviousTab() {
-  const sessionIds = Array.from(state.sessions.keys());
-  if (sessionIds.length === 0) return;
-  const currentIndex = sessionIds.indexOf(state.activeSessionId);
-  activateSession(sessionIds[currentIndex === 0 ? sessionIds.length - 1 : currentIndex - 1]);
-}
-
-function switchToTabByIndex(index) {
-  const sessionIds = Array.from(state.sessions.keys());
-  if (index >= 0 && index < sessionIds.length) {
-    activateSession(sessionIds[index]);
-  }
-}
-
 // ===== File Drag and Drop Functions =====
-
-function setupFileDragDrop() {
-  const container = document.getElementById('terminalContainer');
-
-  // Prevent default drag behaviors
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    container.addEventListener(eventName, preventDefaults, false);
-    document.body.addEventListener(eventName, preventDefaults, false);
-  });
-
-  // Highlight drop zone
-  ['dragenter', 'dragover'].forEach(eventName => {
-    container.addEventListener(eventName, highlightDropZone, false);
-  });
-
-  ['dragleave', 'drop'].forEach(eventName => {
-    container.addEventListener(eventName, unhighlightDropZone, false);
-  });
-
-  // Handle dropped files
-  container.addEventListener('drop', handleFileDrop, false);
-}
-
-function preventDefaults(e) {
-  e.preventDefault();
-  e.stopPropagation();
-}
-
-function highlightDropZone(e) {
-  // Only highlight if dragging files
-  if (e.dataTransfer.types.includes('Files')) {
-    e.dataTransfer.dropEffect = 'copy';
-    document.getElementById('terminalContainer').classList.add('terminal-container--drop-active');
-  }
-}
-
-function unhighlightDropZone() {
-  document.getElementById('terminalContainer').classList.remove('terminal-container--drop-active');
-}
-
-async function handleFileDrop(e) {
-  const session = state.sessions.get(state.activeSessionId);
-  if (!session || !session.ptySessionId) {
-    showToast('활성 터미널 세션이 없습니다', 'warning');
-    return;
-  }
-
-  const files = e.dataTransfer.files;
-  if (files.length === 0) return;
-
-  // Check if single directory was dropped
-  if (files.length === 1) {
-    const file = files[0];
-    try {
-      const metadata = await invoke('get_file_metadata', { path: file.path });
-      if (metadata.is_dir) {
-        // For directories, use cd command
-        let path = file.path;
-        if (path.includes(' ')) {
-          path = `"${path}"`;
-        }
-        const cdCommand = `cd ${path}`;
-
-        await invoke('write_pty', {
-          sessionId: session.ptySessionId,
-          data: cdCommand
-        });
-
-        showToast('폴더로 이동 명령 입력됨', 'success', 2000);
-        debug('CD command inserted:', cdCommand);
-        return;
-      }
-    } catch (error) {
-      debug('Failed to get file metadata:', error);
-      // Continue with normal file handling
-    }
-  }
-
-  // Build path string (quote paths with spaces)
-  const paths = [];
-  for (let i = 0; i < files.length; i++) {
-    let path = files[i].path;
-    // Quote path if it contains spaces
-    if (path.includes(' ')) {
-      path = `"${path}"`;
-    }
-    paths.push(path);
-  }
-
-  const pathString = paths.join(' ');
-
-  try {
-    await invoke('write_pty', {
-      sessionId: session.ptySessionId,
-      data: pathString
-    });
-
-    showToast(`${files.length}개 파일 경로 입력됨`, 'success', 2000);
-    debug('File paths inserted:', pathString);
-  } catch (error) {
-    debug('Failed to insert file paths:', error);
-    showToast('파일 경로 입력 실패', 'error');
-  }
-}
 
 // ===== Initialize DOM Elements =====
 function initializeDOMElements() {
-  tabsList = document.getElementById('tabsList');
-  terminalContainer = document.getElementById('terminalContainer');
-  newTabBtn = document.getElementById('newTabBtn');
-  projectList = document.getElementById('projectList');
-  addProjectBtn = document.getElementById('addProjectBtn');
-  addProjectModal = document.getElementById('addProjectModal');
-  closeAddProjectModal = document.getElementById('closeAddProjectModal');
-  cancelAddProject = document.getElementById('cancelAddProject');
-  confirmAddProject = document.getElementById('confirmAddProject');
-  projectNameInput = document.getElementById('projectName');
-  projectPathInput = document.getElementById('projectPath');
-  browsePathBtn = document.getElementById('browsePathBtn');
-  snippetList = document.getElementById('snippetList');
-  addSnippetBtn = document.getElementById('addSnippetBtn');
-  addSnippetModal = document.getElementById('addSnippetModal');
-  closeAddSnippetModal = document.getElementById('closeAddSnippetModal');
-  cancelAddSnippet = document.getElementById('cancelAddSnippet');
-  confirmAddSnippet = document.getElementById('confirmAddSnippet');
-  snippetNameInput = document.getElementById('snippetName');
-  snippetCommandInput = document.getElementById('snippetCommand');
-  settingsBtn = document.getElementById('settingsBtn');
-  settingsModal = document.getElementById('settingsModal');
-  closeSettingsModal = document.getElementById('closeSettingsModal');
-  cancelSettings = document.getElementById('cancelSettings');
-  saveSettingsBtn = document.getElementById('saveSettings');
-  settingsTheme = document.getElementById('settingsTheme');
-  settingsFontSize = document.getElementById('settingsFontSize');
-  fontSizeValue = document.getElementById('fontSizeValue');
-  settingsFontFamily = document.getElementById('settingsFontFamily');
-  settingsEnableLogging = document.getElementById('settingsEnableLogging');
-  settingsEnableNotifications = document.getElementById('settingsEnableNotifications');
-  settingsBlockMode = document.getElementById('settingsBlockMode');
-  clearLogsBtn = document.getElementById('clearLogsBtn');
-
-  debug('DOM elements initialized');
+  ({
+    tabsList,
+    terminalContainer,
+    newTabBtn,
+    projectList,
+    addProjectBtn,
+    addProjectModal,
+    closeAddProjectModal,
+    cancelAddProject,
+    confirmAddProject,
+    projectNameInput,
+    projectPathInput,
+    browsePathBtn,
+    snippetList,
+    addSnippetBtn,
+    addSnippetModal,
+    closeAddSnippetModal,
+    cancelAddSnippet,
+    confirmAddSnippet,
+    snippetNameInput,
+    snippetCommandInput,
+    settingsBtn,
+    settingsModal,
+    closeSettingsModal,
+    cancelSettings,
+    saveSettingsBtn,
+    settingsTheme,
+    settingsFontSize,
+    fontSizeValue,
+    settingsFontFamily,
+    settingsEnableLogging,
+    settingsEnableNotifications,
+    settingsBlockMode,
+    clearLogsBtn
+  } = initializeDomElementsRegistry({
+    elements,
+    debug
+  }));
 }
 
 // ===== Accessibility Functions =====
@@ -6693,13 +4771,7 @@ function setupEventListeners() {
     : [addProjectModal, addSnippetModal, settingsModal, envVarsModal, layoutGalleryModal];
 
   // Close modals when clicking outside
-  modalTargets.forEach(modal => {
-    if (modal) {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) modal.classList.remove('modal--visible');
-      });
-    }
-  });
+  setupModalOverlayClose(modalTargets);
 
   // Keyboard events
   document.addEventListener('keydown', (e) => {
@@ -6711,9 +4783,7 @@ function setupEventListeners() {
     }
 
     if (e.key === 'Escape') {
-      modalTargets.forEach(m => {
-        if (m) m.classList.remove('modal--visible');
-      });
+      closeVisibleModals(modalTargets);
       return;
     }
     if (
@@ -6883,7 +4953,10 @@ async function startSharing(sessionId) {
     // 공유 코드 표시
     const codeElement = document.getElementById('shareCode');
     if (codeElement) {
-      codeElement.innerHTML = `<span class="sharing-modal__code-text">${shareCode}</span>`;
+      const codeSpan = document.createElement('span');
+      codeSpan.className = 'sharing-modal__code-text';
+      codeSpan.textContent = shareCode;
+      codeElement.replaceChildren(codeSpan);
     }
 
     // 복사 버튼 활성화
@@ -6925,7 +4998,10 @@ async function startSharing(sessionId) {
 
     const codeElement = document.getElementById('shareCode');
     if (codeElement) {
-      codeElement.innerHTML = '<span class="sharing-modal__error">공유 시작 실패</span>';
+      const errorSpan = document.createElement('span');
+      errorSpan.className = 'sharing-modal__error';
+      errorSpan.textContent = '공유 시작 실패';
+      codeElement.replaceChildren(errorSpan);
     }
   }
 }
@@ -6971,7 +5047,7 @@ function updateTabSharingIndicator(sessionId, isSharing) {
     if (!sharingIcon) {
       sharingIcon = document.createElement('span');
       sharingIcon.className = 'tab__sharing-icon';
-      sharingIcon.innerHTML = '🔗';
+      sharingIcon.textContent = '🔗';
       sharingIcon.title = '공유 중';
 
       const titleElement = tab.querySelector('.tab__title');
@@ -6992,232 +5068,15 @@ function updateTabSharingIndicator(sessionId, isSharing) {
 
 // ===== Git Panel Functions =====
 
-// Git 패널 토글
-function toggleGitPanel() {
-  state.gitPanelVisible = !state.gitPanelVisible;
-  const gitPanel = document.getElementById('gitPanel');
-
-  if (gitPanel) {
-    gitPanel.style.display = state.gitPanelVisible ? 'block' : 'none';
-
-    if (state.gitPanelVisible) {
-      refreshGitStatus();
-    }
-  }
-}
-
-// Git 상태 새로고침
-async function refreshGitStatus() {
-  const gitPanel = document.getElementById('gitPanel');
-  if (!gitPanel) return;
-
-  // 현재 활성 세션의 프로젝트 경로 가져오기
-  let gitPath = state.currentGitPath;
-
-  if (!gitPath && state.activeSessionId) {
-    const session = state.sessions.get(state.activeSessionId);
-    if (session && session.projectPath) {
-      gitPath = session.projectPath;
-    }
-  }
-
-  if (!gitPath) {
-    gitPanel.innerHTML = `
-      <div class="git-panel__empty">
-        <p>프로젝트 폴더를 선택하세요</p>
-      </div>
-    `;
-    return;
-  }
-
-  state.currentGitPath = gitPath;
-
-  // 로딩 표시
-  gitPanel.innerHTML = `
-    <div class="git-panel__loading">
-      Git 상태 확인 중...
-    </div>
-  `;
-
-  try {
-    // Git 상태 가져오기
-    const gitStatus = await invoke('git_status', { path: gitPath });
-
-    if (!gitStatus.is_repo) {
-      gitPanel.innerHTML = `
-        <div class="git-panel__empty">
-          <p>Git 저장소가 아닙니다</p>
-        </div>
-      `;
-      return;
-    }
-
-    renderGitPanel(gitPanel, gitStatus, gitPath);
-  } catch (error) {
-    debug('Git 상태 확인 실패:', error);
-    gitPanel.innerHTML = `
-      <div class="git-panel__error">
-        Git 상태를 확인할 수 없습니다: ${escapeHtml(error.toString())}
-      </div>
-    `;
-  }
-}
-
-// Git 패널 렌더링
-function renderGitPanel(panel, status, gitPath) {
-  const files = status.files || [];
-  const hasChanges = files.length > 0;
-
-  panel.innerHTML = `
-    <div class="git-panel__branch">
-      <span class="git-panel__branch-icon">⎇</span>
-      <span class="git-panel__branch-name">${escapeHtml(status.branch || 'HEAD')}</span>
-    </div>
-
-    ${hasChanges ? `
-      <div class="git-panel__files">
-        ${files.map((file, index) => `
-          <div class="git-panel__file" data-index="${index}">
-            <input type="checkbox" class="git-panel__file-checkbox"
-                   data-file="${escapeHtml(file.path)}"
-                   ${file.staged ? 'checked' : ''} />
-            <span class="git-panel__file-status git-panel__file-status--${file.status}">${file.status}</span>
-            <span class="git-panel__file-name" title="${escapeHtml(file.path)}">${escapeHtml(file.path)}</span>
-          </div>
-        `).join('')}
-      </div>
-
-      <textarea class="git-panel__commit-input"
-                id="gitCommitMessage"
-                placeholder="커밋 메시지..."
-                rows="2"></textarea>
-
-      <div class="git-panel__actions">
-        <button class="git-panel__btn" id="gitStageAllBtn">Stage All</button>
-        <button class="git-panel__btn git-panel__btn--primary" id="gitCommitBtn">Commit</button>
-        <button class="git-panel__btn" id="gitPullBtn">Pull</button>
-        <button class="git-panel__btn" id="gitPushBtn">Push</button>
-      </div>
-    ` : `
-      <div class="git-panel__empty">
-        <p>변경된 파일이 없습니다</p>
-      </div>
-      <div class="git-panel__actions">
-        <button class="git-panel__btn" id="gitPullBtn">Pull</button>
-        <button class="git-panel__btn" id="gitPushBtn">Push</button>
-      </div>
-    `}
-
-    <div class="git-panel__actions" style="margin-top: 8px;">
-      <button class="git-panel__btn" id="gitRefreshBtn">새로고침</button>
-    </div>
-  `;
-
-  // 이벤트 리스너 추가
-  setupGitPanelListeners(panel, gitPath);
-}
-
-// Git 패널 이벤트 리스너 설정
-function setupGitPanelListeners(panel, gitPath) {
-  // 새로고침 버튼
-  const refreshBtn = panel.querySelector('#gitRefreshBtn');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => refreshGitStatus());
-  }
-
-  // Stage All 버튼
-  const stageAllBtn = panel.querySelector('#gitStageAllBtn');
-  if (stageAllBtn) {
-    stageAllBtn.addEventListener('click', async () => {
-      try {
-        const files = Array.from(panel.querySelectorAll('.git-panel__file-checkbox'))
-          .map(checkbox => checkbox.dataset.file)
-          .filter(Boolean);
-        if (files.length === 0) {
-          showToast('스테이징할 파일이 없습니다', 'info');
-          return;
-        }
-        await invoke('git_stage', { path: gitPath, files });
-        showToast('모든 파일이 스테이징되었습니다', 'success');
-        refreshGitStatus();
-      } catch (error) {
-        showToast('스테이징 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // Commit 버튼
-  const commitBtn = panel.querySelector('#gitCommitBtn');
-  if (commitBtn) {
-    commitBtn.addEventListener('click', async () => {
-      const messageInput = panel.querySelector('#gitCommitMessage');
-      const message = messageInput ? messageInput.value.trim() : '';
-
-      if (!message) {
-        showToast('커밋 메시지를 입력하세요', 'warning');
-        return;
-      }
-
-      try {
-        await invoke('git_commit', { path: gitPath, message });
-        showToast('커밋이 완료되었습니다', 'success');
-        if (messageInput) messageInput.value = '';
-        refreshGitStatus();
-      } catch (error) {
-        showToast('커밋 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // Pull 버튼
-  const pullBtn = panel.querySelector('#gitPullBtn');
-  if (pullBtn) {
-    pullBtn.addEventListener('click', async () => {
-      try {
-        showToast('Pull 중...', 'info');
-        await invoke('git_pull', { path: gitPath });
-        showToast('Pull 완료', 'success');
-        refreshGitStatus();
-      } catch (error) {
-        showToast('Pull 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // Push 버튼
-  const pushBtn = panel.querySelector('#gitPushBtn');
-  if (pushBtn) {
-    pushBtn.addEventListener('click', async () => {
-      try {
-        showToast('Push 중...', 'info');
-        await invoke('git_push', { path: gitPath });
-        showToast('Push 완료', 'success');
-      } catch (error) {
-        showToast('Push 실패: ' + error, 'error');
-      }
-    });
-  }
-
-  // 개별 파일 체크박스 (stage/unstage)
-  const checkboxes = panel.querySelectorAll('.git-panel__file-checkbox');
-  checkboxes.forEach(checkbox => {
-    checkbox.addEventListener('change', async (e) => {
-      const filePath = e.target.dataset.file;
-      const shouldStage = e.target.checked;
-
-      try {
-        if (shouldStage) {
-          await invoke('git_stage', { path: gitPath, files: [filePath] });
-        } else {
-          await invoke('git_unstage', { path: gitPath, files: [filePath] });
-        }
-      } catch (error) {
-        showToast(`파일 ${shouldStage ? '스테이징' : '언스테이징'} 실패: ` + error, 'error');
-        e.target.checked = !shouldStage; // 원래 상태로 복원
-      }
-    });
-  });
-}
+const { toggleGitPanel } = createGitPanelController({
+  state,
+  eventBus,
+  showToast,
+  debug,
+  showConfirmDialog,
+  escapeHtml,
+  escapeHtmlAttr
+});
 
 // History 패널 초기화 (app.js에서 createHistoryPanel 호출)
 function initializeHistoryPanel() {
