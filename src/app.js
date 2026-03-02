@@ -3145,12 +3145,12 @@ function showColorPickerMenu(e, sessionId, parentMenu) {
     if (color.value === null) {
       return `<div class="context-menu__item" data-color="null">
         <span class="context-menu__color-swatch context-menu__color-swatch--none"></span>
-        <span>${color.name}</span>
+        <span>${escapeHtml(color.name)}</span>
       </div>`;
     }
-    return `<div class="context-menu__item" data-color="${color.value}">
-      <span class="context-menu__color-swatch" style="background-color: ${color.value}"></span>
-      <span>${color.name}</span>
+    return `<div class="context-menu__item" data-color="${escapeDataAttr(color.value)}">
+      <span class="context-menu__color-swatch" style="background-color: ${escapeHtmlAttr(color.value)}"></span>
+      <span>${escapeHtml(color.name)}</span>
     </div>`;
   }).join('');
 
@@ -5304,7 +5304,7 @@ function createGroupElement(group) {
   // Group header
   const header = document.createElement('div');
   header.className = 'tab-group__header';
-  header.style.borderLeftColor = group.color;
+  header.style.borderLeftColor = getSafeTabColor(group.color) || '#0e639c';
   header.innerHTML = `
     <span class="tab-group__collapse">${group.collapsed ? '▶' : '▼'}</span>
     <span class="tab-group__name">${escapeHtml(group.name)}</span>
