@@ -72,6 +72,23 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### feat(security): Git 파일 경로 검증 강화
+
+**커밋**: `3ae1999`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/git.rs`
+  - `git_stage`, `git_unstage`, `git_discard`에 공통 파일 경로 검증 적용
+  - 절대 경로/`..` 기반 경로 순회/옵션 형태(`-` 시작) 입력 차단
+  - 레포지토리 루트 외부 경로 접근 차단 로직 추가
+  - 파일 경로 검증 단위 테스트 4종 추가
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
