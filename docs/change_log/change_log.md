@@ -629,6 +629,16 @@
 - `src/__tests__/terminal-manager.test.js`
   - 화면/스크롤백 정리, split 포커스 이동, fullscreen 토글 진입/해제 검증
 
+#### docs(plan): Phase 4-3-g 2차 및 테스트 지표 동기화
+
+**커밋**: `TBD`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - PR #40 반영으로 4-3-g 진행 상태를 2차 완료로 갱신
+  - Phase 5-3 테스트 확장 수치를 63개 기준으로 갱신
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
