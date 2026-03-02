@@ -39,12 +39,12 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
   - 2-3 PR #9 `security/git-filepath-validation`
   - 2-4 PR #10 `security/csp-hardening`
   - 2-5 PR #11 `security/git-css-allowlist`
+  - 2-8 PR #15 `security/tauri-capabilities`
   - 2-9 PR #12 `security/env-var-validation`
   - 2-10 PR #13 `security/claude-path-injection`
   - 2-6(세션 ID 검증)는 PR #4 통합분에 포함되어 코드상 반영됨
 - ⚠️ **잔여 Phase 2 항목**
   - 2-7 `security/innerhtml-audit`
-  - 2-8 `security/tauri-capabilities`
 - ⏳ **Phase 3~5 미착수**
 
 ---
