@@ -89,6 +89,22 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### feat(security): CSP script-src 하드닝
+
+**커밋**: `2db25f6`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/tauri.conf.json`
+  - CSP `script-src`에서 `'unsafe-inline'`, `'unsafe-eval'` 제거
+  - `script-src 'self' 'wasm-unsafe-eval'`로 축소 적용
+  - `style-src 'unsafe-inline'`은 xterm 스타일 호환성을 위해 유지
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
