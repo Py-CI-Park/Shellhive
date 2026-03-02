@@ -52,10 +52,12 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
 - 🔄 **Phase 4 진행 중**
   - 4-1 PR #22 `feat/module-design` 완료
   - 4-2 PR #23 `feat/state-eventbus` 완료
-  - 4-3-d `feat/extract-git-panel` 진행 중
+  - 4-3-d PR #25 `feat/extract-git-panel` 완료
+  - 4-3-h `feat/extract-error-explanations` 진행 중
 - 🔄 **Phase 5 진행 중**
   - 5-1 PR #23 Git 패널 UI 확장(브랜치/로그/discard) 반영
-  - 5-2/5-3 보강 작업(`ipc-registration.test.js`, `git-panel.test.js`) 진행 중
+  - 5-2 보강: Claude/AI IPC 등록 일치성 테스트(`ipc-registration.test.js`) 추가
+  - 5-3 보강: 실코드 기반 테스트 36개로 확장 (`state/git-panel/error-explanations`)
 
 ---
 
