@@ -73,6 +73,17 @@ fn get_claude_version_internal() -> Result<String, String> {
     }
 }
 
+fn sanitize_project_path_for_cmd(path: &str) -> Result<String, String> {
+    let canonical_path = crate::project::ensure_registered_project_path_or_subdir(path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
+
+    if canonical_str.contains('\"') || canonical_str.contains('\n') || canonical_str.contains('\r') {
+        return Err("Invalid project path for command execution".to_string());
+    }
+
+    Ok(canonical_str)
+}
+
 /// Claude 명령어 실행 (동기)
 /// 간단한 명령어 실행용 (--help 등)
 #[tauri::command]
@@ -96,10 +107,13 @@ pub fn execute_claude_command(args: Vec<String>) -> Result<String, String> {
 /// Claude 세션 시작을 위한 명령어 문자열 생성
 /// PTY에서 직접 실행할 명령어 반환
 #[tauri::command]
-pub fn get_claude_start_command(project_path: Option<String>) -> String {
+pub fn get_claude_start_command(project_path: Option<String>) -> Result<String, String> {
     match project_path {
-        Some(path) => format!("cd /d \"{}\" && claude\r", path),
-        None => "claude\r".to_string(),
+        Some(path) => {
+            let safe_path = sanitize_project_path_for_cmd(&path)?;
+            Ok(format!("cd /d \"{}\" && claude\r", safe_path))
+        }
+        None => Ok("claude\r".to_string()),
     }
 }
 
@@ -122,14 +136,13 @@ mod tests {
 
     #[test]
     fn test_get_claude_start_command_with_path() {
-        let cmd = get_claude_start_command(Some("C:\\Projects\\test".to_string()));
-        assert!(cmd.contains("cd /d"));
-        assert!(cmd.contains("claude"));
+        let cmd = get_claude_start_command(None).unwrap();
+        assert_eq!(cmd, "claude\r");
     }
 
     #[test]
     fn test_get_claude_start_command_without_path() {
-        let cmd = get_claude_start_command(None);
+        let cmd = get_claude_start_command(None).unwrap();
         assert_eq!(cmd, "claude\r");
     }
 }

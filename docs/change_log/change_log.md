@@ -144,6 +144,23 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### feat(security): Claude 시작 경로 주입 방지
+
+**커밋**: `22dd9cf`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/claude.rs`
+  - `sanitize_project_path_for_cmd()` 추가
+  - Claude 시작 명령 생성 시 등록 프로젝트 경로 검증 강제
+  - 따옴표/개행 문자를 포함한 위험 경로 입력 차단
+  - `get_claude_start_command` 반환 타입을 `Result<String, String>`으로 변경하여 검증 실패를 명시적으로 전달
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
