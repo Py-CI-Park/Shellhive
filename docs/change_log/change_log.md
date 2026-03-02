@@ -388,7 +388,7 @@
 
 #### docs(security): Phase 5-4 보안 재검증 보고서 추가
 
-**커밋**: `TBD`
+**커밋**: `5c0956c`
 
 ##### 문서화됨 (Documentation)
 
