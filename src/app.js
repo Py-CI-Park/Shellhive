@@ -7122,6 +7122,24 @@ async function refreshGitStatus() {
   }
 }
 
+const GIT_STATUS_CLASS_MAP = Object.freeze({
+  M: 'modified',
+  A: 'added',
+  D: 'deleted',
+  R: 'renamed',
+  C: 'copied',
+  '?': 'untracked',
+  '!': 'ignored',
+  U: 'conflicted',
+});
+
+function getGitStatusClass(status) {
+  if (typeof status !== 'string') {
+    return 'unknown';
+  }
+  return GIT_STATUS_CLASS_MAP[status] || 'unknown';
+}
+
 // Git 패널 렌더링
 function renderGitPanel(panel, status, gitPath) {
   const files = status.files || [];
@@ -7140,7 +7158,7 @@ function renderGitPanel(panel, status, gitPath) {
             <input type="checkbox" class="git-panel__file-checkbox"
                    data-file="${escapeHtmlAttr(file.path)}"
                    ${file.staged ? 'checked' : ''} />
-            <span class="git-panel__file-status git-panel__file-status--${file.status}">${file.status}</span>
+            <span class="git-panel__file-status git-panel__file-status--${getGitStatusClass(file.status)}">${escapeHtml(file.status || '?')}</span>
             <span class="git-panel__file-name" title="${escapeHtmlAttr(file.path)}">${escapeHtml(file.path)}</span>
           </div>
         `).join('')}
