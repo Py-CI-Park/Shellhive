@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { SplitNode, deserializeSplitTree, serializeSplitTree, updateSessionIdsInTree } from '../split-pane.js';
+import {
+  SplitNode,
+  deserializeSplitTree,
+  serializeSplitTree,
+  updateSessionIdsInTree,
+  findLeafNode,
+  removeLeafNode,
+  getAllLeafNodes,
+  getSplitBranchLabel
+} from '../split-pane.js';
 
 describe('split-pane module', () => {
   it('should split leaf node into two children', () => {
@@ -49,5 +58,34 @@ describe('split-pane module', () => {
     expect(serializeSplitTree(null)).toBeNull();
     expect(deserializeSplitTree(null)).toBeNull();
     expect(updateSessionIdsInTree(null, new Map())).toBeNull();
+  });
+
+  it('should find leaf node by session id', () => {
+    const root = new SplitNode('leaf', 's-1');
+    root.split('vertical', 's-2');
+
+    const found = findLeafNode(root, 's-2');
+    expect(found?.sessionId).toBe('s-2');
+    expect(findLeafNode(root, 'missing')).toBeNull();
+  });
+
+  it('should remove leaf node and collapse to sibling', () => {
+    const root = new SplitNode('leaf', 's-1');
+    root.split('horizontal', 's-2');
+
+    const removed = removeLeafNode(root, 's-1');
+    expect(removed).toBe(true);
+    expect(root.isLeaf()).toBe(true);
+    expect(root.sessionId).toBe('s-2');
+  });
+
+  it('should collect all leaf nodes and branch labels', () => {
+    const root = new SplitNode('leaf', 'a');
+    root.split('vertical', 'b');
+
+    const leaves = getAllLeafNodes(root);
+    expect(leaves).toHaveLength(2);
+    expect(getSplitBranchLabel('horizontal')).toBe('가로 분할');
+    expect(getSplitBranchLabel('vertical')).toBe('세로 분할');
   });
 });

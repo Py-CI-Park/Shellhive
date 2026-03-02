@@ -667,6 +667,32 @@
   - 기존 5개 → 9개로 확장
   - pin 토글, 탭 색상 적용/해제, 닫은 탭 복원, drag/drop 정렬/정리 경로 검증 추가
 
+#### refactor(phase4-3-f): split-pane 트리 헬퍼 분리 2차
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/split-pane.js`
+  - 트리 탐색/조작 헬퍼 `findLeafNode`, `removeLeafNode`, `getAllLeafNodes`, `getSplitBranchLabel` 추가
+- `src/app.js`
+  - 상기 헬퍼 인라인 함수 제거 후 split-pane 모듈 import 사용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (15 files, 70 tests)
+
+#### test(phase5-3): split-pane 테스트 확장
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/split-pane.test.js`
+  - 기존 4개 → 7개로 확장
+  - leaf 탐색, leaf 제거/트리 축소, leaf 수집/분기 라벨 검증 추가
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성

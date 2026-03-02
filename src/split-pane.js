@@ -77,3 +77,47 @@ export function updateSessionIdsInTree(node, idMap) {
 
   return updateNode(deserializedNode);
 }
+
+export function findLeafNode(node, sessionId) {
+  if (!node) return null;
+  if (node.isLeaf()) {
+    return node.sessionId === sessionId ? node : null;
+  }
+  return findLeafNode(node.children[0], sessionId) ||
+         findLeafNode(node.children[1], sessionId);
+}
+
+export function removeLeafNode(node, sessionId) {
+  if (!node) return false;
+
+  if (node.isLeaf()) {
+    return node.sessionId === sessionId;
+  }
+
+  for (let i = 0; i < 2; i++) {
+    if (node.children[i].isLeaf() && node.children[i].sessionId === sessionId) {
+      const otherChild = node.children[1 - i];
+      node.type = otherChild.type;
+      node.sessionId = otherChild.sessionId;
+      node.children = otherChild.children;
+      node.ratio = otherChild.ratio;
+      return true;
+    }
+  }
+
+  return removeLeafNode(node.children[0], sessionId) ||
+         removeLeafNode(node.children[1], sessionId);
+}
+
+export function getAllLeafNodes(node) {
+  if (!node) return [];
+  if (node.isLeaf()) return [node];
+  return [
+    ...getAllLeafNodes(node.children[0]),
+    ...getAllLeafNodes(node.children[1])
+  ];
+}
+
+export function getSplitBranchLabel(nodeType) {
+  return nodeType === 'horizontal' ? '가로 분할' : '세로 분할';
+}

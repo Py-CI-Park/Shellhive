@@ -16,7 +16,16 @@ import { createModalController } from './modals.js';
 import { createSettingsController } from './settings.js';
 import { createShortcutsController } from './shortcuts.js';
 import { createSessionManagerController } from './session-manager.js';
-import { SplitNode, serializeSplitTree, deserializeSplitTree, updateSessionIdsInTree } from './split-pane.js';
+import {
+  SplitNode,
+  serializeSplitTree,
+  deserializeSplitTree,
+  updateSessionIdsInTree,
+  findLeafNode,
+  removeLeafNode,
+  getAllLeafNodes,
+  getSplitBranchLabel
+} from './split-pane.js';
 import { createTabManagerController } from './tab-manager.js';
 import { initializeDomElementsRegistry } from './dom-elements.js';
 import { createTerminalManagerController } from './terminal-manager.js';
@@ -3560,15 +3569,6 @@ async function splitActivePane(direction) {
   }
 }
 
-function findLeafNode(node, sessionId) {
-  if (!node) return null;
-  if (node.isLeaf()) {
-    return node.sessionId === sessionId ? node : null;
-  }
-  return findLeafNode(node.children[0], sessionId) ||
-         findLeafNode(node.children[1], sessionId);
-}
-
 function scheduleSplitRender() {
   if (state.splitRenderRaf) return;
   state.splitRenderRaf = requestAnimationFrame(() => {
@@ -3752,30 +3752,6 @@ function closeSplitPane(sessionId) {
   return false;
 }
 
-function removeLeafNode(node, sessionId) {
-  if (!node) return false;
-
-  if (node.isLeaf()) {
-    return node.sessionId === sessionId;
-  }
-
-  // Check children
-  for (let i = 0; i < 2; i++) {
-    if (node.children[i].isLeaf() && node.children[i].sessionId === sessionId) {
-      // Replace this node with the other child
-      const otherChild = node.children[1 - i];
-      node.type = otherChild.type;
-      node.sessionId = otherChild.sessionId;
-      node.children = otherChild.children;
-      node.ratio = otherChild.ratio;
-      return true;
-    }
-  }
-
-  return removeLeafNode(node.children[0], sessionId) ||
-         removeLeafNode(node.children[1], sessionId);
-}
-
 function exitSplitMode() {
   state.maximizedSession = null;
   state.splitMode = false;
@@ -3930,10 +3906,6 @@ function ensureSplitPaneHeader(session) {
     subtitleEl.textContent = getSplitPaneSubtitle(session);
     subtitleEl.title = session.projectPath || '로컬 셸';
   }
-}
-
-function getSplitBranchLabel(nodeType) {
-  return nodeType === 'horizontal' ? '가로 분할' : '세로 분할';
 }
 
 function buildSplitMinimapNode(node, depth = 0) {
@@ -4132,16 +4104,6 @@ function moveSessionToSplitPane(draggedSessionId, targetSessionId, dropPosition)
   state.activeSessionId = draggedSessionId;
   renderSplitLayout();
   return true;
-}
-
-// Get all leaf nodes from split tree
-function getAllLeafNodes(node) {
-  if (!node) return [];
-  if (node.isLeaf()) return [node];
-  return [
-    ...getAllLeafNodes(node.children[0]),
-    ...getAllLeafNodes(node.children[1])
-  ];
 }
 
 // Apply a layout preset
