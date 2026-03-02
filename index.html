@@ -16,14 +16,14 @@
       <div class="sidebar__projects">
         <div class="sidebar__section-header">
           <span>Projects</span>
-          <button class="sidebar__add-btn" id="addProjectBtn" aria-label="?熬곣뫁夷??釉띾콦 ?怨뺣뼺?">+</button>
+          <button class="sidebar__add-btn" id="addProjectBtn" aria-label="프로젝트 추가">+</button>
         </div>
         <ul class="sidebar__list" id="projectList"></ul>
       </div>
       <div class="sidebar__snippets">
         <div class="sidebar__section-header">
           <span>Snippets</span>
-          <button class="sidebar__add-btn" id="addSnippetBtn" aria-label="???노퉵???怨뺣뼺?">+</button>
+          <button class="sidebar__add-btn" id="addSnippetBtn" aria-label="스니펫 추가">+</button>
         </div>
         <ul class="sidebar__list sidebar__list--snippets" id="snippetList"></ul>
       </div>
@@ -36,7 +36,7 @@
         </div>
       </div>
       <div class="sidebar__footer">
-        <button class="sidebar__settings-btn" id="settingsBtn" aria-label="???깆젧 ???⒱뵛">Settings</button>
+        <button class="sidebar__settings-btn" id="settingsBtn" aria-label="설정 열기">Settings</button>
       </div>
     </aside>
     <main class="main">
@@ -110,7 +110,7 @@
     <div class="modal__content">
       <div class="modal__header">
         <h2 class="modal__title" id="addProjectModalTitle">Add Project</h2>
-        <button class="modal__close" id="closeAddProjectModal" aria-label="???뗢뵛">&times;</button>
+        <button class="modal__close" id="closeAddProjectModal" aria-label="닫기">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -137,7 +137,7 @@
     <div class="modal__content">
       <div class="modal__header">
         <h2 class="modal__title" id="addSnippetModalTitle">Add Snippet</h2>
-        <button class="modal__close" id="closeAddSnippetModal" aria-label="???뗢뵛">&times;</button>
+        <button class="modal__close" id="closeAddSnippetModal" aria-label="닫기">&times;</button>
       </div>
       <div class="modal__body">
         <div class="form-group">
@@ -156,36 +156,12 @@
     </div>
   </div>
 
-  <!-- Command History Panel -->
-  <div class="history-panel" id="historyPanel" role="dialog" aria-labelledby="historyPanelTitle" aria-modal="true">
-    <div class="history-panel__container">
-      <div class="history-panel__header">
-        <h3 class="history-panel__title" id="historyPanelTitle">Command History</h3>
-        <input class="history-panel__search" id="historySearch" placeholder="Search commands..." autocomplete="off" />
-        <div class="history-panel__filters">
-          <button class="history-panel__filter history-panel__filter--active" data-filter="all">All</button>
-          <button class="history-panel__filter" data-filter="favorites">Favorites</button>
-          <button class="history-panel__filter" data-filter="frequent">Frequent</button>
-          <button class="history-panel__filter" data-filter="current">Current Project</button>
-        </div>
-        <button class="history-panel__close" id="closeHistoryPanel" aria-label="Close">&times;</button>
-      </div>
-      <div class="history-panel__list" id="historyList">
-        <!-- History items will be inserted here -->
-      </div>
-      <div class="history-panel__footer">
-        <span class="history-panel__count" id="historyCount">0 commands</span>
-        <button class="btn btn--small btn--secondary" id="clearHistoryBtn">Clear All</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Environment Variables Modal -->
   <div class="modal" id="envVarsModal" role="dialog" aria-labelledby="envVarsModalTitle" aria-modal="true">
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
         <h2 class="modal__title" id="envVarsModalTitle">Environment Variables</h2>
-        <button class="modal__close" id="closeEnvVarsModal" aria-label="???뗢뵛">&times;</button>
+        <button class="modal__close" id="closeEnvVarsModal" aria-label="닫기">&times;</button>
       </div>
       <div class="modal__body">
         <p class="env-vars-description">Set environment variables for this project. These will be applied when opening a new terminal in this project.</p>
@@ -206,7 +182,7 @@
     <div class="modal__content modal__content--wide">
       <div class="modal__header">
         <h2 class="modal__title" id="settingsModalTitle">Settings</h2>
-        <button class="modal__close" id="closeSettingsModal" aria-label="???뗢뵛">&times;</button>
+        <button class="modal__close" id="closeSettingsModal" aria-label="닫기">&times;</button>
       </div>
       <div class="modal__body">
         <div class="settings-section">

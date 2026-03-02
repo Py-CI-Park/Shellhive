@@ -18,6 +18,12 @@ pub struct Settings {
     pub enable_block_mode: bool,
     pub enable_ai_features: bool,
     pub locale: String, // "en", "ko"
+    pub pane_overlay_duration_ms: u16,
+    pub pane_overlay_label_color: String,
+    pub split_sync_input_enabled: bool,
+    pub split_sync_scope: String, // "all" | "same-project"
+    pub split_main_pane_ratio: u8,
+    pub split_tiled_max_columns: u8,
 }
 
 impl Default for Settings {
@@ -33,8 +39,36 @@ impl Default for Settings {
             enable_block_mode: false,
             enable_ai_features: false,
             locale: "ko".to_string(), // Default to Korean
+            pane_overlay_duration_ms: 1800,
+            pane_overlay_label_color: "#ffffff".to_string(),
+            split_sync_input_enabled: false,
+            split_sync_scope: "all".to_string(),
+            split_main_pane_ratio: 70,
+            split_tiled_max_columns: 3,
         }
     }
+}
+
+fn is_valid_hex_color(color: &str) -> bool {
+    if color.len() != 7 || !color.starts_with('#') {
+        return false;
+    }
+    color.chars().skip(1).all(|c| c.is_ascii_hexdigit())
+}
+
+fn validate_session_id(session_id: &str) -> Result<(), String> {
+    if session_id.is_empty() || session_id.len() > 128 {
+        return Err("Invalid session id length".to_string());
+    }
+
+    if !session_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("Invalid session id format".to_string());
+    }
+
+    Ok(())
 }
 
 /// Get settings file path (APPDATA/shellhive/settings.json)
@@ -110,6 +144,33 @@ pub async fn save_settings(settings: Settings) -> Result<(), String> {
         ));
     }
 
+    if settings.pane_overlay_duration_ms < 500 || settings.pane_overlay_duration_ms > 5000 {
+        return Err("Pane overlay duration must be between 500 and 5000 milliseconds".to_string());
+    }
+
+    if !is_valid_hex_color(&settings.pane_overlay_label_color) {
+        return Err(format!(
+            "Invalid pane overlay label color: {}. Expected #RRGGBB",
+            settings.pane_overlay_label_color
+        ));
+    }
+
+    let valid_split_sync_scopes = ["all", "same-project"];
+    if !valid_split_sync_scopes.contains(&settings.split_sync_scope.as_str()) {
+        return Err(format!(
+            "Invalid split sync scope: {}. Valid scopes: all, same-project",
+            settings.split_sync_scope
+        ));
+    }
+
+    if settings.split_main_pane_ratio < 50 || settings.split_main_pane_ratio > 85 {
+        return Err("Split main pane ratio must be between 50 and 85".to_string());
+    }
+
+    if settings.split_tiled_max_columns < 1 || settings.split_tiled_max_columns > 6 {
+        return Err("Split tiled max columns must be between 1 and 6".to_string());
+    }
+
     let file_path = get_settings_file_path()?;
 
     let content = serde_json::to_string_pretty(&settings)
@@ -122,6 +183,8 @@ pub async fn save_settings(settings: Settings) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn log_session_output(session_id: String, data: String) -> Result<(), String> {
+    validate_session_id(&session_id)?;
+
     // Check if logging is enabled
     let settings = get_settings().await?;
     if !settings.enable_logging {
@@ -145,6 +208,8 @@ pub async fn log_session_output(session_id: String, data: String) -> Result<(), 
 
 #[tauri::command]
 pub async fn get_session_log(session_id: String) -> Result<String, String> {
+    validate_session_id(&session_id)?;
+
     let logs_dir = get_logs_dir_path()?;
     let log_file = logs_dir.join(format!("{}.log", session_id));
 
@@ -208,6 +273,8 @@ pub async fn list_session_logs() -> Result<Vec<SessionLogInfo>, String> {
 
 #[tauri::command]
 pub async fn delete_session_log(session_id: String) -> Result<(), String> {
+    validate_session_id(&session_id)?;
+
     let logs_dir = get_logs_dir_path()?;
     let log_file = logs_dir.join(format!("{}.log", session_id));
 

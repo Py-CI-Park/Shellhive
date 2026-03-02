@@ -35,6 +35,31 @@ impl Default for ProjectCategory {
     }
 }
 
+fn normalize_category_color(color: Option<String>) -> Result<Option<String>, String> {
+    match color {
+        Some(raw_color) => {
+            let trimmed = raw_color.trim().to_string();
+            if trimmed.is_empty() {
+                return Ok(None);
+            }
+
+            let is_valid_hex = trimmed.len() == 7
+                && trimmed.starts_with('#')
+                && trimmed.chars().skip(1).all(|c| c.is_ascii_hexdigit());
+
+            if !is_valid_hex {
+                return Err(format!(
+                    "Invalid category color: {}. Expected #RRGGBB",
+                    raw_color
+                ));
+            }
+
+            Ok(Some(trimmed))
+        }
+        None => Ok(None),
+    }
+}
+
 /// 설정 파일 경로 가져오기 (APPDATA/shellhive/projects.json)
 fn get_projects_file_path() -> Result<PathBuf, String> {
     let data_dir = dirs::data_dir().ok_or_else(|| "Failed to get data directory".to_string())?;
@@ -78,6 +103,41 @@ fn save_projects(projects: &[Project]) -> Result<(), String> {
     fs::write(&file_path, content).map_err(|e| format!("Failed to write projects file: {}", e))?;
 
     Ok(())
+}
+
+pub(crate) fn canonicalize_project_path(path: &str) -> Result<PathBuf, String> {
+    let path_buf = PathBuf::from(path);
+    if !path_buf.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+    if !path_buf.is_dir() {
+        return Err(format!("Path is not a directory: {}", path));
+    }
+
+    fs::canonicalize(&path_buf)
+        .map_err(|e| format!("Failed to canonicalize path '{}': {}", path, e))
+}
+
+pub(crate) fn ensure_registered_project_path(path: &str) -> Result<PathBuf, String> {
+    let canonical_target = canonicalize_project_path(path)?;
+    let projects = load_projects()?;
+
+    let is_registered = projects.iter().any(|project| {
+        let project_path = PathBuf::from(&project.path);
+        if !project_path.exists() || !project_path.is_dir() {
+            return false;
+        }
+
+        fs::canonicalize(project_path)
+            .map(|canonical_project_path| canonical_project_path == canonical_target)
+            .unwrap_or(false)
+    });
+
+    if !is_registered {
+        return Err(format!("Project path is not registered: {}", path));
+    }
+
+    Ok(canonical_target)
 }
 
 #[tauri::command]
@@ -221,12 +281,13 @@ pub async fn list_categories() -> Result<Vec<ProjectCategory>, String> {
 #[tauri::command]
 pub async fn add_category(name: String, color: Option<String>) -> Result<ProjectCategory, String> {
     let mut categories = list_categories().await?;
+    let normalized_color = normalize_category_color(color)?;
 
     let order = categories.len() as i32;
     let category = ProjectCategory {
         id: uuid::Uuid::new_v4().to_string(),
         name,
-        color,
+        color: normalized_color,
         order,
     };
 
@@ -267,7 +328,7 @@ pub async fn update_category(
             cat.name = n;
         }
         if let Some(c) = color {
-            cat.color = Some(c);
+            cat.color = normalize_category_color(Some(c))?;
         }
     }
 
@@ -302,7 +363,8 @@ fn save_categories(categories: &[ProjectCategory]) -> Result<(), String> {
 /// Load environment variables from .shellhive.env file in project directory
 #[tauri::command]
 pub async fn load_project_env(project_path: String) -> Result<HashMap<String, String>, String> {
-    let env_file = PathBuf::from(&project_path).join(".shellhive.env");
+    let validated_project_path = ensure_registered_project_path(&project_path)?;
+    let env_file = validated_project_path.join(".shellhive.env");
     let mut env_vars = HashMap::new();
 
     if !env_file.exists() {
@@ -349,7 +411,8 @@ pub async fn save_project_env(
     project_path: String,
     env_vars: HashMap<String, String>,
 ) -> Result<(), String> {
-    let env_file = PathBuf::from(&project_path).join(".shellhive.env");
+    let validated_project_path = ensure_registered_project_path(&project_path)?;
+    let env_file = validated_project_path.join(".shellhive.env");
 
     let mut content = String::from("# Shellhive Project Environment Variables\n");
     content.push_str("# Format: KEY=value\n\n");
