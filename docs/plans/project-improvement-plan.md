@@ -58,6 +58,7 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
   - 5-1 PR #23 Git 패널 UI 확장(브랜치/로그/discard) 반영
   - 5-2 보강: Claude/AI IPC 등록 일치성 테스트(`ipc-registration.test.js`) 추가
   - 5-3 보강: 실코드 기반 테스트 36개로 확장 (`state/git-panel/error-explanations`)
+  - 5-4 `feat/security-revalidation` 보고서 작성 진행 중
 
 ---
 

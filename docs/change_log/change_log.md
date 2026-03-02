@@ -386,6 +386,16 @@
 - `src/__tests__/error-explanations.test.js`
   - 패턴 감지, 패널 렌더링, 추천 명령 실행(write_pty) 동작 검증
 
+#### docs(security): Phase 5-4 보안 재검증 보고서 추가
+
+**커밋**: `TBD`
+
+##### 문서화됨 (Documentation)
+
+- `docs/security/revalidation-report.md`
+  - CSP/capability/IPC 정합성/모듈 분리 후 보안 회귀 점검 결과 정리
+  - `npm run build`, `npm test -- --run` 기반 재검증 결과와 환경 제약(Rust `pkg-config` 부재) 명시
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
