@@ -1,25 +1,760 @@
-# Shellhive 蹂寃?濡쒓렇 (Change Log)
+﻿# Shellhive 변경 로그 (Change Log)
 
-??臾몄꽌??Shellhive ?꾨줈?앺듃??紐⑤뱺 蹂寃??ы빆??湲곕줉?⑸땲??
+이 문서는 Shellhive 프로젝트의 주요 변경 사항을 기록합니다.
 
-?뺤떇? [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)瑜??곕Ⅴ硫?
-踰꾩쟾 愿由щ뒗 [Semantic Versioning](https://semver.org/lang/ko/)??以?섑빀?덈떎.
-
----
-
-## 踰꾩쟾 愿由?媛?대뱶
-
-- 紐⑤뱺 而ㅻ컠? ??臾몄꽌??湲곕줉?섏뼱???⑸땲??
-- 而ㅻ컠 ?댁떆, ?좎쭨, 蹂寃??댁슜???ы븿?⑸땲??
-- 移댄뀒怨좊━: Added, Changed, Fixed, Documentation, Security
+- 형식: [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)
+- 버전 정책: [Semantic Versioning](https://semver.org/lang/ko/)
+- 인코딩: UTF-8
 
 ---
 
 ## [Unreleased]
 
+### 2026-03-02
+
+#### refactor(app): 탭 그룹/프로젝트 필터/프로젝트 CMD 트리 모듈 분리
+
+**커밋**: `2f1a6b8`
+
+##### 변경됨 (Changed)
+
+- `src/tab-organization.js` 신규 추가
+  - 탭 그룹 생성/해제/자동 그룹화
+  - 프로젝트 필터링 표시/해제
+  - 프로젝트별 CMD 트리 렌더링/세션 액션 바인딩
+  - 탭 요소 렌더링(드래그, 리네임, 컨텍스트 메뉴 연결) 통합
+- `src/app.js`
+  - 기존 탭 그룹/프로젝트 필터/CMD 트리 함수 블록 제거 후 `createTabOrganizationController` 기반으로 전환
+  - `createTab()`를 공통 `createTabElement()` 재사용 구조로 단순화
+  - 모듈 분리 반영으로 `app.js` 라인 수 5,559 → 5,124 감소
+- `src/__tests__/tab-organization.test.js` 추가 (5 tests)
+
+##### 테스트 (Verification)
+
+- `npm test -- --run` ✅ (17 files, 80 tests passed)
+- `npm run build` ✅
+
+#### docs: 개선 계획 문서 PR 병합
+
+**커밋**: `36002db`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`를 `feature/next-improvements`에 통합
+- 코드베이스 전수 분석 기반 Phase/브랜치 전략 문서를 메인 개선 라인에 반영
+
+#### security: Phase 1 보안 하드닝 통합
+
+**커밋**: `81131f9`
+
+##### 변경됨 (Changed)
+
+- PR #4 보안 하드닝 변경을 `feature/next-improvements` 기반 라인에 통합
+- 프론트엔드 XSS/접근성 보강(`escapeHtmlAttr`, `textContent` 기반 렌더링) 반영
+- 백엔드 경로/입력 검증 강화(`ensure_registered_project_path`, branch name validation) 반영
+
+#### feat(security): PTY 셸 허용 목록 검증 추가
+
+**커밋**: `6e523fa`
+
+##### 추가됨 (Added)
+
+- `src-tauri/src/pty.rs`
+  - 허용 셸 목록 상수(`cmd.exe`, `powershell.exe`, `pwsh.exe`) 도입
+  - `validate_shell()` 구현으로 경로 기반 셸 실행/비허용 셸/경로 조작 입력 차단
+  - `create_pty`에서 셸 검증을 강제
+  - 셸 검증 단위 테스트 추가(허용/거부/경로 조작 케이스)
+- `src-tauri/src/project.rs`
+  - `add_project`, `update_project` 시 셸 값 검증 적용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+- `cargo test --manifest-path src-tauri/Cargo.toml test_validate_shell_allowed` ❌
+  - 실행 환경에서 `pkg-config` 및 GTK 계열 시스템 라이브러리 부재로 Rust 빌드 단계 실패
+
+#### feat(security): PTY 작업 디렉토리 검증 강화
+
+**커밋**: `43f1d63`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/pty.rs`
+  - `validate_working_directory()` 추가
+  - PTY 생성 시 작업 디렉토리를 정규화 후 검증하도록 변경
+  - 등록된 프로젝트 경로 또는 그 하위 경로만 허용
+  - 사용자 홈 디렉토리는 명시적 예외로 허용
+- `src-tauri/src/project.rs`
+  - `ensure_registered_project_path_or_subdir()` 추가
+  - 등록 프로젝트 루트뿐 아니라 하위 디렉토리 검증을 지원
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### feat(security): Git 파일 경로 검증 강화
+
+**커밋**: `3ae1999`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/git.rs`
+  - `git_stage`, `git_unstage`, `git_discard`에 공통 파일 경로 검증 적용
+  - 절대 경로/`..` 기반 경로 순회/옵션 형태(`-` 시작) 입력 차단
+  - 레포지토리 루트 외부 경로 접근 차단 로직 추가
+  - 파일 경로 검증 단위 테스트 4종 추가
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### feat(security): CSP script-src 하드닝
+
+**커밋**: `2db25f6`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/tauri.conf.json`
+  - CSP `script-src`에서 `'unsafe-inline'`, `'unsafe-eval'` 제거
+  - `script-src 'self' 'wasm-unsafe-eval'`로 축소 적용
+  - `style-src 'unsafe-inline'`은 xterm 스타일 호환성을 위해 유지
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### feat(security): Git 상태 CSS 클래스 허용 목록 적용
+
+**커밋**: `f0e9192`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - `GIT_STATUS_CLASS_MAP` 및 `getGitStatusClass()` 도입
+  - Git 상태 값을 검증된 클래스 이름으로 매핑 후 DOM에 렌더링
+  - 미허용 상태값은 `unknown` 클래스로 강등 처리
+- `src/style.css`
+  - `modified/added/deleted/renamed/copied/untracked/ignored/conflicted/unknown` 클래스 스타일 정의
+  - 기존 단일 문자 클래스(`M`, `A`, `D`, `U`, `?`)와 병행 호환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### feat(security): 환경변수 키/값 검증 및 위험 키 차단
+
+**커밋**: `4ff1778`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/pty.rs`
+  - `validate_env_key()`, `validate_env_value()` 도입
+  - 환경변수 키 길이/문자셋 검증 및 위험 키(`PATH`, `COMSPEC`, `LD_PRELOAD` 등) 차단
+  - 환경변수 값 길이/개행/널 문자 검증 적용
+  - `create_pty`에서 환경변수 적용 전 검증 강제
+  - 환경변수 검증 단위 테스트 6개 추가
+- `src-tauri/src/project.rs`
+  - `save_project_env` 저장 경로에서 환경변수 키/값 검증 적용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### feat(security): Claude 시작 경로 주입 방지
+
+**커밋**: `22dd9cf`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/claude.rs`
+  - `sanitize_project_path_for_cmd()` 추가
+  - Claude 시작 명령 생성 시 등록 프로젝트 경로 검증 강제
+  - 따옴표/개행 문자를 포함한 위험 경로 입력 차단
+  - `get_claude_start_command` 반환 타입을 `Result<String, String>`으로 변경하여 검증 실패를 명시적으로 전달
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### docs(plan): 개선 계획 문서 실행 현황 갱신
+
+**커밋**: `953f467`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - 2026-03-02 기준 실제 반영된 PR(Phase 1, Phase 2-1/2/3/4/5/9/10) 현황 추가
+  - 잔여 작업(Phase 2-7, 2-8, Phase 3~5) 구간 명시
+
+#### feat(security): Tauri 권한 범위 축소
+
+**커밋**: `a7e997a`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/capabilities/default.json`
+  - `core:default` 제거
+  - 필요한 권한만 명시적으로 유지(`core:event:*`, `core:window:default`, `dialog:*` 등)
+  - `shell:allow-open` 권한을 객체형으로 전환하고 HTTPS URL 스코프로 제한
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### docs(plan): 실행 현황(Phase 2-8 완료) 갱신
+
+**커밋**: `62a8fd5`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - 실행 현황 섹션에 Phase 2-8(PR #15) 완료 반영
+  - 잔여 Phase 2 항목을 2-7로 축소 표시
+
+#### feat(security): innerHTML 감사 후 데이터/상태/색상 주입 경로 보호
+
+**커밋**: `335155f`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - `escapeDataAttr()` 추가 및 `data-*` 속성 주입 경로 이스케이프 적용
+  - `getSessionStatusClass()` 추가로 세션 상태 클래스 화이트리스트 적용
+  - `getSafeTabColor()` 추가로 탭 색상값 화이트리스트 적용
+  - 공유 아이콘 렌더링을 `innerHTML`에서 `textContent`로 전환
+- `docs/security/innerhtml-audit.md`
+  - `innerHTML` 사용 지점 전수 점검 결과 및 분류(안전/보호됨/위험) 기록
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### fix(security): 색상 메뉴/탭 그룹 렌더링 이스케이프 보강
+
+**커밋**: `e078108`
+
+##### 수정됨 (Fixed)
+
+- `src/app.js`
+  - 탭 색상 컨텍스트 메뉴 렌더링에서 색상명/색상값 출력 경로 이스케이프 적용
+  - 탭 그룹 헤더 색상 적용 시 허용 색상 검증(`getSafeTabColor`)을 통해 style 주입 경로 보호
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### refactor(cleanup): 미등록 Claude/AI IPC 명령 정리
+
+**커밋**: `84ea155`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/main.rs`
+  - `mod ai;`, `mod claude;` 추가
+  - `invoke_handler`에 `claude::check_claude_installed`, `claude::get_claude_start_command`, `ai::translate_natural_language`, `ai::get_ai_patterns` 등록
+- `src-tauri/src/claude.rs`
+  - 미사용/고위험 `execute_claude_command` 제거
+  - 미사용 공개 래퍼 `get_claude_version` 제거(내부 버전 확인 헬퍼는 유지)
+
+##### 검증 (Verification)
+
+- 스크립트 점검 결과 `#[tauri::command]` 미등록 항목 0개
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### chore(cleanup): 미사용 파일 정리
+
+**커밋**: `56bbff9`
+
+##### 변경됨 (Changed)
+
+- 삭제:
+  - `src/app.js.backup`
+  - `src/history-panel-integration.js`
+  - `command-palette-code.js`
+- `.gitignore`
+  - `*.backup` 무시 규칙 추가
+
+##### 검증 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
+#### docs(cleanup): AGENTS 및 개선계획 실행 현황 동기화
+
+**커밋**: `86d2b4f`
+
+##### 문서화됨 (Documentation)
+
+- `AGENTS.md`
+  - 실제 저장소 구조 기준으로 디렉토리/모듈/IPC 현황(52개 커맨드) 최신화
+  - 존재하지 않는 `src/components`, `src-tauri/src/lib.rs` 참조 제거
+  - 현재 개발 라인(`feature/next-improvements`)과 Phase 진행 상태 반영
+- `docs/plans/project-improvement-plan.md`
+  - 실행 현황 섹션을 2026-03-02 기준 완료 상태(Phase 1~2, Phase 3-1/3-2)로 갱신
+  - 잔여 작업을 Phase 3-3 및 Phase 4~5로 명확화
+
+#### docs(plan): Phase 4-1 모듈 경계 설계 문서 추가
+
+**커밋**: `2213862`
+
+##### 추가됨 (Added)
+
+- `docs/plans/module-design.md`
+  - `app.js` 모듈 분리를 위한 목표 모듈(14개) 책임/우선순위 정의
+  - 순환 의존 방지용 상태 레이어/이벤트 버스 설계 명시
+  - 추출 순서(저결합→고결합) 및 검증 체크리스트/리스크 대응 정리
+
+#### feat(frontend): state/eventbus 추출 및 Git 패널 확장 착수
+
+**커밋**: `dd91800`
+
+##### 변경됨 (Changed)
+
+- `src/state.js` 신규 도입
+  - `state`, `elements`, `eventBus` 중심 공유 상태 모듈 추가
+  - `SESSION_STATUS`, `TERMINAL_THEMES`, `TabGroup` 공용 정의 분리
+- `src/app.js`
+  - 상태/테마/탭그룹 상수를 `state.js`에서 import하도록 전환
+  - `initializeDOMElements`에서 `elements` 레지스트리 동기화
+  - `settings:*`, `session:*`, `git:*` 이벤트 버스 emit 추가
+  - Git 패널 확장: 브랜치 전환 UI, 최근 커밋 10개 표시, 파일별 Discard 동작 추가
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅
+
+#### test(frontend): 상태 모듈 실커버리지 테스트 추가
+
+**커밋**: `dd91800`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/state.test.js`
+  - 상태 초기화/리셋, EventBus on/off/emit/clear, TabGroup 동작 검증
+- 기존 허위 커버리지 테스트 개선
+  - `session.test.js`: 인라인 정의 제거, `state.js` import 기반 검증
+  - `settings.test.js`: 인라인 정의 제거, 실제 모듈(`state.js`, `ui-constants.js`) import 검증
+
+#### refactor(phase4-3-d): Git 패널 모듈 분리 (`git-panel.js`)
+
+**커밋**: `1ea8ccc`
+
+##### 변경됨 (Changed)
+
+- `src/git-panel.js` 신규 추가
+  - `createGitPanelController()`로 Git 패널 토글/렌더/액션 로직 분리
+  - 브랜치 전환, 커밋 로그, discard, stage/unstage/commit/push/pull 흐름 캡슐화
+- `src/app.js`
+  - 기존 Git 패널 함수 블록 제거
+  - 모듈 컨트롤러 import/주입 방식으로 연결
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅
+
+#### test(phase5): Git 패널/IPC 등록 회귀 테스트 추가
+
+**커밋**: `1ea8ccc`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/git-panel.test.js`
+  - 패널 토글, 경로 미지정 상태, 정상 repo 렌더링(브랜치/히스토리/discard) 검증
+- `src/__tests__/ipc-registration.test.js`
+  - `app.js` invoke 명령과 `main.rs` 등록 핸들러 간 Claude/AI IPC 일치성 검증
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/setup.js`
+  - Claude/AI 관련 invoke mock 기본 응답 보강
+
+#### refactor(phase4-3-h): 에러 설명 모듈 분리 (`error-explanations.js`)
+
+**커밋**: `dcb9a66`
+
+##### 변경됨 (Changed)
+
+- `src/error-explanations.js` 신규 추가
+  - 에러 패턴 매칭/쿨다운/해결 패널 렌더링 로직 분리
+  - `createErrorExplanationController()` 팩토리로 의존성 주입 구조화
+- `src/app.js`
+  - 에러 설명 데이터/함수 블록 제거
+  - 컨트롤러 기반 `showErrorExplanation`, `detectErrorPattern` 연결
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅
+
+#### test(phase5-3): 에러 설명 모듈 단위 테스트 추가
+
+**커밋**: `dcb9a66`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/error-explanations.test.js`
+  - 패턴 감지, 패널 렌더링, 추천 명령 실행(write_pty) 동작 검증
+
+#### docs(security): Phase 5-4 보안 재검증 보고서 추가
+
+**커밋**: `5c0956c`
+
+##### 문서화됨 (Documentation)
+
+- `docs/security/revalidation-report.md`
+  - CSP/capability/IPC 정합성/모듈 분리 후 보안 회귀 점검 결과 정리
+  - `npm run build`, `npm test -- --run` 기반 재검증 결과와 환경 제약(Rust `pkg-config` 부재) 명시
+
+#### refactor(phase4-3-b): 설정 모듈 분리 (`settings.js`)
+
+**커밋**: `75bf0c4`
+
+##### 변경됨 (Changed)
+
+- `src/settings.js` 신규 추가
+  - `createSettingsController()` 팩토리 도입으로 설정 로드/저장/미리보기/취소 로직 분리
+  - `applyTheme`, `updateTerminalSettings`, `applyAiFeatureVisibility`, block mode 반영 로직 모듈화
+- `src/app.js`
+  - 설정 함수 블록 제거 후 `createSettingsController` 주입 방식으로 연결
+  - settings DOM 의존성을 `getSettingsElements()` 경유로 캡슐화
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (8 files, 36 tests)
+
+#### test(phase5-3): settings 모듈 실코드 테스트 전환
+
+**커밋**: `75bf0c4`
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/settings.test.js`
+  - 상수 존재 검증 중심 테스트를 `createSettingsController` 기반 실동작 테스트로 전환
+  - `loadSettings` 정규화/이벤트 emit, `saveSettings` payload 매핑, preview/cancel 롤백 시나리오 검증 추가
+
+#### refactor(phase4-3-a): 단축키/커맨드 팔레트 모듈 분리 (`shortcuts.js`)
+
+**커밋**: `37aaf8f`
+
+##### 변경됨 (Changed)
+
+- `src/shortcuts.js` 신규 추가
+  - `createShortcutsController()` 팩토리로 키보드 단축키 처리와 커맨드 팔레트 로직 분리
+  - Command palette 렌더링/검색/실행, 최근 명령어 추적, 단축키 라우팅을 모듈화
+- `src/app.js`
+  - 단축키/커맨드 팔레트 블록 제거 후 controller 주입 방식으로 연결
+  - 단축키 전용 액션(`closeActiveSessionByShortcut`, `toggleRecordingByShortcut`, `changeTheme`)을 분리
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (9 files, 40 tests)
+
+#### test(phase5-3): shortcuts 모듈 단위 테스트 추가
+
+**커밋**: `37aaf8f`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/shortcuts.test.js`
+  - Ctrl+T 생성, 커맨드 팔레트 실행, 레이아웃 단축키 전달, Ctrl+R 히스토리 우선 처리 검증
+
+#### refactor(phase4-3-c): 모달 공통 로직 분리 (`modals.js`)
+
+**커밋**: `5257b09`
+
+##### 변경됨 (Changed)
+
+- `src/modals.js` 신규 추가
+  - `createModalController()` 팩토리 도입
+  - `showConfirmDialog`, `setupModalOverlayClose`, `closeVisibleModals` 공통 모달 유틸 분리
+- `src/app.js`
+  - Confirm dialog 구현 블록 제거 후 모듈 함수 사용
+  - 설정된 모달 대상의 overlay click/ESC 닫기 처리를 모듈 유틸로 대체
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (10 files, 43 tests)
+
+#### test(phase5-3): modals 모듈 단위 테스트 추가
+
+**커밋**: `5257b09`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/modals.test.js`
+  - confirm/escape/overlay 닫기 동작 및 공통 close helper 검증
+
+#### refactor(phase4-3-e): 탭 상태/검색/전환 모듈 분리 (`tab-manager.js`)
+
+**커밋**: `e88f5b7`
+
+##### 변경됨 (Changed)
+
+- `src/tab-manager.js` 신규 추가
+  - 탭 상태 표시 유틸(`getStatusIcon/Label`, compact path, split subtitle) 분리
+  - `updateTabStatus` 및 탭 검색(show/hide/filter), 탭 전환(next/prev/index) 로직 분리
+- `src/app.js`
+  - 해당 함수 블록 제거 후 `createTabManagerController()` 주입 방식으로 연결
+  - shortcuts 모듈이 tab-manager의 전환/검색 API를 사용하도록 경로 정리
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (11 files, 48 tests)
+
+#### test(phase5-3): tab-manager 모듈 단위 테스트 추가
+
+**커밋**: `e88f5b7`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/tab-manager.test.js`
+  - 상태 아이콘/라벨, 탭 상태 업데이트, 탭 검색 필터/클릭 활성화, 탭 전환(next/prev/index) 검증
+
+#### refactor(phase4-3-f): split 트리 유틸 모듈 분리 (`split-pane.js`)
+
+**커밋**: `f333f07`
+
+##### 변경됨 (Changed)
+
+- `src/split-pane.js` 신규 추가
+  - `SplitNode` 클래스, `serializeSplitTree`, `deserializeSplitTree`, `updateSessionIdsInTree` 분리
+- `src/app.js`
+  - split 트리 클래스/직렬화 함수 블록 제거 후 모듈 import 사용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (12 files, 52 tests)
+
+#### test(phase5-3): split-pane 모듈 단위 테스트 추가
+
+**커밋**: `f333f07`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/split-pane.test.js`
+  - SplitNode 분할, 직렬화/역직렬화, 세션 ID 매핑 업데이트, null 입력 처리 검증
+
+#### docs(plan): Phase 4/5 실행 현황 동기화
+
+**커밋**: `484e062`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - Phase 4 진행 현황에 PR #31/#32/#33/#34 반영
+  - 4-3-e/4-3-f를 1차 분리 완료(상태/검색/전환, split tree 유틸)로 명시
+  - Phase 5-3 테스트 확장 수치를 52개 기준으로 갱신
+
+#### refactor(phase4-3-g): 세션 로그 버퍼 모듈 분리 (`session-manager.js`)
+
+**커밋**: `6ccd339`
+
+##### 변경됨 (Changed)
+
+- `src/session-manager.js` 신규 추가
+  - `createSessionManagerController()` 팩토리로 세션 로그 버퍼링/flush 로직 분리
+  - 버퍼 크기 제한, debounce flush, 세션 종료 시 버퍼 해제 API 제공
+- `src/app.js`
+  - 인라인 로그 버퍼(`logBuffer`, `logTimeouts`) 제거 후 모듈 사용
+  - 세션 종료 경로에서 `disposeSessionLogBuffer()` 호출 추가
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (13 files, 56 tests)
+
+#### test(phase5-3): session-manager 모듈 단위 테스트 추가
+
+**커밋**: `6ccd339`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/session-manager.test.js`
+  - flush 타이밍, 다중 write 배치, 버퍼 truncation, dispose 취소 동작 검증
+
+#### refactor(phase4-4): DOM 초기화 엔트리 분리 1차 (`dom-elements.js`)
+
+**커밋**: `499568a`
+
+##### 변경됨 (Changed)
+
+- `src/dom-elements.js` 신규 추가
+  - `initializeDomElementsRegistry()`로 DOM 참조 수집/`elements` 동기화 로직 분리
+- `src/app.js`
+  - `initializeDOMElements` 함수가 dom-elements 모듈을 호출하도록 전환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (14 files, 58 tests)
+
+#### test(phase5-3): dom-elements 모듈 단위 테스트 추가
+
+**커밋**: `499568a`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/dom-elements.test.js`
+  - DOM 참조 등록 및 누락 요소 null 처리 검증
+
+#### docs(plan): Phase 4-3-g/4-4 및 테스트 지표 동기화
+
+**커밋**: `04913bf`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - PR #36(terminal/session 1차), PR #37(app-entrypoint 1차) 진행 현황 반영
+  - Phase 5-3 테스트 확장 수치를 58개 기준으로 갱신
+
+#### refactor(phase4-3-g): 터미널 유틸 모듈 분리 2차 (`terminal-manager.js`)
+
+**커밋**: `fe50e8c`
+
+##### 변경됨 (Changed)
+
+- `src/terminal-manager.js` 신규 추가
+  - 터미널 화면/스크롤백 정리, 전체화면 토글, 분할 포커스 이동 로직 분리
+- `src/app.js`
+  - `clearTerminalScreen`, `clearTerminalScrollback`, `toggleFullscreen`, `focusPaneByDirection` 인라인 구현 제거
+  - `createTerminalManagerController()` 주입 방식으로 전환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (15 files, 63 tests)
+
+#### test(phase5-3): terminal-manager 모듈 단위 테스트 추가
+
+**커밋**: `fe50e8c`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/terminal-manager.test.js`
+  - 화면/스크롤백 정리, split 포커스 이동, fullscreen 토글 진입/해제 검증
+
+#### docs(plan): Phase 4-3-g 2차 및 테스트 지표 동기화
+
+**커밋**: `1de540c`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - PR #40 반영으로 4-3-g 진행 상태를 2차 완료로 갱신
+  - Phase 5-3 테스트 확장 수치를 63개 기준으로 갱신
+
+#### refactor(phase4-3-e): tab-manager 인터랙션 분리 2차
+
+**커밋**: `abcf86f`
+
+##### 변경됨 (Changed)
+
+- `src/tab-manager.js`
+  - 탭 drag/drop 핸들러(`handleTabDragStart/Enter/Over/Leave/Drop/End`) 이동
+  - 고급 탭 관리 로직(`togglePinTab`, `setTabColor`, `showColorPickerMenu`) 이동
+  - 닫은 탭 복원 로직(`storeClosedTabInfo`, `restoreLastClosedTab`) 이동
+- `src/app.js`
+  - 상기 함수의 인라인 구현 제거 및 `createTabManagerController` 의존성/반환값 연결
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (15 files, 67 tests)
+
+#### test(phase5-3): tab-manager 테스트 확장
+
+**커밋**: `abcf86f`
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/tab-manager.test.js`
+  - 기존 5개 → 9개로 확장
+  - pin 토글, 탭 색상 적용/해제, 닫은 탭 복원, drag/drop 정렬/정리 경로 검증 추가
+
+#### refactor(phase4-3-f): split-pane 트리 헬퍼 분리 2차
+
+**커밋**: `8db8df1`
+
+##### 변경됨 (Changed)
+
+- `src/split-pane.js`
+  - 트리 탐색/조작 헬퍼 `findLeafNode`, `removeLeafNode`, `getAllLeafNodes`, `getSplitBranchLabel` 추가
+- `src/app.js`
+  - 상기 헬퍼 인라인 함수 제거 후 split-pane 모듈 import 사용
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (15 files, 70 tests)
+
+#### test(phase5-3): split-pane 테스트 확장
+
+**커밋**: `8db8df1`
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/split-pane.test.js`
+  - 기존 4개 → 7개로 확장
+  - leaf 탐색, leaf 제거/트리 축소, leaf 수집/분기 라벨 검증 추가
+
+#### refactor(phase4-4): 파일 드래그앤드롭 모듈 분리 2차 (`file-drag-drop.js`)
+
+**커밋**: `53f8a3b`
+
+##### 변경됨 (Changed)
+
+- `src/file-drag-drop.js` 신규 추가
+  - 파일/폴더 드롭 처리, 드롭 존 하이라이트, 기본 이벤트 차단 로직 분리
+- `src/app.js`
+  - drag&drop 인라인 함수 제거 후 `createFileDragDropController` 주입 방식으로 전환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (16 files, 74 tests)
+
+#### test(phase5-3): file-drag-drop 모듈 단위 테스트 추가
+
+**커밋**: `53f8a3b`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/file-drag-drop.test.js`
+  - 활성 세션 없음 경고, 폴더 드롭 cd 명령, 다중 파일 경로 주입, 드롭 하이라이트 토글 검증
+
+#### docs(plan): Phase 4 2차 분리 진행 현황 및 테스트 지표 동기화
+
+**커밋**: `6c34a57`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - PR #43/#44/#45 반영으로 4-3-e/4-3-f/4-4 진행 상태를 2차 기준으로 갱신
+  - Phase 5-3 테스트 확장 수치를 74개 기준으로 갱신
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
+
+**커밋**: `0e9f877`
 
 ##### 추가됨 (Added)
 
@@ -31,1135 +766,508 @@
   - 품질 인프라 자동화는 추후 진행으로 분리
   - ADR-001 (Vite 기반 ESM), ADR-002 (Vitest) 포함
 
-### 2026-02-08
+### 2026-02-24
 
-#### docs(qa): run-release 분할 QA 체크리스트/로그 최신화
+#### feat(frontend-hardening): 프론트엔드 보안·접근성 하드닝 적용
 
-**커밋**: `working-tree`
+**커밋**: `0c87eda`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - 스니펫/프로젝트 렌더링에서 `data-*`에 JSON 문자열을 직접 주입하던 구조를 상태 조회 방식으로 전환
+  - 속성 컨텍스트용 `escapeHtmlAttr()`를 도입하고, `title`, `data-file` 등 속성 값 렌더링에 적용
+  - 공유 코드 표시를 `innerHTML`에서 `textContent + replaceChildren`로 전환하여 DOM XSS 위험 제거
+  - 토스트/스니펫/프로젝트/환경변수/필터/탭 닫기 버튼에 `aria-label` 보강
+  - 카테고리 색상 렌더링을 data attribute + 런타임 검증(`normalizeCategoryColor`) 기반으로 변경
+- `src/history-panel.js`
+  - 동적 히스토리 패널에 `role="dialog"`, `aria-modal`, `aria-labelledby` 적용
+  - 검색 입력 접근성 라벨(`aria-label`) 및 액션 버튼 접근성 라벨 보강
+  - 히스토리 item의 프로젝트명/속성값 이스케이프 처리 강화
+- `index.html`
+  - 깨진 한글 `aria-label` 문자열 복구
+  - 동적 생성 방식과 충돌하던 정적 History Panel 블록 제거
+
+#### feat(backend-hardening): 백엔드 입력 검증 및 Git 권한 경계 강화
+
+**커밋**: `478a084`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/settings.rs`
+  - `validate_session_id()` 추가
+  - `log_session_output`, `get_session_log`, `delete_session_log` 호출 경로에서 세션 ID 검증 강제
+- `src-tauri/src/project.rs`
+  - `canonicalize_project_path()`, `ensure_registered_project_path()` 도입(등록 프로젝트 경로 강제)
+  - `load_project_env`, `save_project_env`에서 등록된 프로젝트 경로만 허용
+  - 카테고리 색상 입력값 `#RRGGBB` 형식 검증(`normalize_category_color`) 추가
+- `src-tauri/src/git.rs`
+  - Git 명령 전반에서 등록 프로젝트 경로 검증 적용
+  - `git_checkout` 브랜치명 검증 로직 추가(`check-ref-format` + 옵션/개행/널 차단)
+  - `git_stage`에 `git add -- <files>` 적용으로 인자 주입 위험 완화
+
+#### docs(change-log): 2026-02-24 하드닝 작업 내역 문서화
+
+**커밋**: `5bc13f7`
 
 ##### 문서화됨 (Documentation)
 
-- `docs/qa/run-release-split-manual-checklist.md`
-  - 분할 UX 최신 기준으로 수동 검증 항목 전면 개편
-  - 신규 검증 항목 추가
-    - 레이아웃 갤러리 모달 적용
-    - 분할 미니맵 토글/포커스 이동
-    - 분할 패널 헤더 상태/경로 요약 표시
-  - AI UI 비노출 정책 검증 항목을 최신 운영 정책 기준으로 유지
-- `docs/qa/run-release-split-qa-log-2026-02-06.md`
-  - 2026-02-08 기준 QA 로그로 갱신
-  - 자동 검증 결과(`lint`, `vitest`, `cargo check`) 반영
-  - TC별 상태를 Pass/Pending으로 재정리하고 후속 액션 명시
-### 2026-02-07
+- `docs/change_log/change_log.md`
+  - 프론트엔드/백엔드 하드닝 커밋 2건의 목적, 변경 파일, 핵심 개선 포인트를 날짜 기준으로 상세 기록
+  - 검증 이력과 함께 릴리즈 추적이 가능하도록 변경 로그 구조 정리
 
-#### fix(release): run-release.bat ?ㅽ뻾 寃쎈줈 怨좎젙 諛??ㅽ뻾 ?섍꼍 ?뺣━
+#### fix(code-review-followup): 코드 리뷰 후 로깅/문서 품질 후속 정리
 
-**而ㅻ컠**: `working-tree`
+**커밋**: `6272ef1`
 
-##### ?섏젙??(Fixed)
-
-- `run-release.bat`
-  - ?ㅽ겕由쏀듃 ?쒖옉 ????μ냼 猷⑦듃濡?媛뺤젣 ?대룞?섎룄濡?`cd /d "%~dp0"` 異붽?
-  - `setlocal EnableExtensions` / `endlocal` 踰붿쐞瑜?異붽???諛곗튂 ?ㅽ뻾 ?섍꼍??吏??솕
-  - ?ㅽ뻾 ?뚯씪 寃쎈줈 蹂???좊떦??`set "RELEASE_EXE=..."` ?뺥깭濡??뺣━???몄슜遺??泥섎━ ?덉젙??蹂닿컯
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 19 tests)
-- `cargo check --manifest-path src-tauri/Cargo.toml`
-
-#### feat(split-ux): 遺꾪븷 誘몃땲留??덉씠?꾩썐 媛ㅻ윭由??⑤꼸 ?ㅻ뜑 ?뺣낫 媛뺥솕
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `index.html`
-  - 遺꾪븷 ?대컮??`?덉씠?꾩썐 媛ㅻ윭由?, `誘몃땲留? ?≪뀡 踰꾪듉 異붽?
-  - 遺꾪븷 ?몃━ 誘몃땲留??⑤꼸(`splitMinimapPanel`) 諛?而⑦뀗痢??곸뿭(`splitMinimapContent`) 異붽?
-  - ?덉씠?꾩썐 媛ㅻ윭由?紐⑤떖(`layoutGalleryModal`)怨?移대뱶 紐⑸줉/?곸슜 踰꾪듉 異붽?
-- `src/app.js`
-  - 遺꾪븷 ?몃━ 援ъ“瑜??쒓컖?뷀븯??誘몃땲留??뚮뜑??異붽?
-    - `renderSplitMinimap`, `buildSplitMinimapNode`, `setSplitMinimapVisibility`
-  - ?덉씠?꾩썐 ?꾨━??媛ㅻ윭由?紐⑤떖 濡쒖쭅 異붽?
-    - `openLayoutGalleryModal`, `renderLayoutGallery`, `applyLayoutGallerySelection`
-  - `Ctrl+Shift+L` ?⑥텞??諛?紐낅졊 ?붾젅????ぉ?쇰줈 ?덉씠?꾩썐 媛ㅻ윭由?吏꾩엯 吏??- `src/__tests__/split-layout.e2e.test.js`
-  - ?덉씠?꾩썐 媛ㅻ윭由??곸슜 ?쒕굹由ъ삤 ?뚯뒪??異붽?
-  - 遺꾪븷 誘몃땲留??대┃?쇰줈 ?쒖꽦 ?⑤꼸 ?꾪솚?섎뒗 ?쒕굹由ъ삤 ?뚯뒪??異붽?
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑???곹깭/寃쎈줈 ?붿빟 ?뚮뜑留??뚯뒪??異붽?
-
-##### 蹂寃쎈맖 (Changed)
+##### 변경됨 (Changed)
 
 - `src/app.js`
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑瑜?2以??뺣낫 援ъ“濡??뺤옣
-    - 1以? ?몄뀡紐?    - 2以? ?ㅽ뻾 ?곹깭 + 寃쎈줈 ?붿빟
-  - ?몄뀡 ?곹깭 蹂寃???遺꾪븷 ?ㅻ뜑/誘몃땲留듭씠 利됱떆 媛깆떊?섎룄濡?蹂닿컯
-- `src/style.css`
-  - 誘몃땲留??⑤꼸 ?ㅽ??쇨낵 ?몃━/由ы봽 ?곹깭 ?ㅽ???異붽?
-  - ?덉씠?꾩썐 媛ㅻ윭由?移대뱶/誘몃━蹂닿린 ?ㅽ???異붽?
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑 硫뷀?(??댄?+?쒕툕??댄?) ?ㅽ????뺤옣
-- `index.html`
-  - ?ㅼ젙 紐⑤떖 ?몄뼱 ?듭뀡 源⑥쭚 ?쒓렇(`ko`)瑜??뺤긽 HTML ?쒓렇濡??뺣━
+  - `debug()`를 개발 모드 또는 `localStorage(shellhive:debug=1)`일 때만 출력하도록 제한
+  - 운영 환경에서 불필요한 콘솔 로그 노이즈를 줄이고 로그 노출 범위를 축소
+- `src/history-panel.js`
+  - 패널 미생성 오류를 전용 리포트 함수로 처리하도록 변경
+  - `console.error`는 개발 모드에서만 출력하고, 사용자에게는 토스트 기반 오류 안내를 사용
+- `docs/change_log/change_log.md`
+  - 줄바꿈(EOL) 일관성(LF) 정리로 불필요한 diff 발생 가능성 완화
 
-##### 寃利?(Verification)
+##### 테스트 (Verification)
 
-- `npm run lint`
-- `npm run test -- --run` (4 files, 22 tests)
-- `cargo check --manifest-path src-tauri/Cargo.toml`
+- `npm run -s lint`
+- `npm test` (27 tests passed)
+- `npm run -s build`
+- `cargo fmt --all -- --check`
+- `PATH=\"$HOME/.local/bin:$PATH\" cargo check --target x86_64-pc-windows-gnu`
 
-#### fix(dev): run-dev.bat ?ㅽ뻾 寃쎈줈/?몄옄 泥섎━ ?섏젙
+#### chore(repo-hygiene): 문서/스크립트/코드 자산 포맷 정합화 1차
 
-**而ㅻ컠**: `working-tree`
+**커밋**: `49bb4f9`
 
-##### ?섏젙??(Fixed)
+##### 변경됨 (Changed)
+
+- 문서군(README, AGENTS, CLAUDE, 구현/리서치/QA 문서, 변경로그) 텍스트 자산 정합화
+- 운영 배치 스크립트(run/lint/test/setup/build) 포맷 통일
+- `.gitignore`에 `.omx/` 추가로 로컬 오케스트레이션 상태 파일 추적 방지
+
+#### chore(repo-hygiene): Tauri 백엔드/설정 자산 포맷 정합화 2차
+
+**커밋**: `0d72d08`
+
+##### 변경됨 (Changed)
+
+- `src-tauri` Rust 모듈(`ai`, `claude`, `pty`, `sharing`, `main`) 및 빌드 자산 포맷 정리
+- `tauri.conf.json`, capabilities, Android icon XML 등 설정/리소스 파일 정합화
+- 기능 로직 변경 없이 코드 리뷰 가독성을 높이기 위한 표현 계층 정리
+
+#### chore(repo-hygiene): 프론트엔드/UI/테스트 자산 포맷 정합화 3차
+
+**커밋**: `b734a47`
+
+##### 변경됨 (Changed)
+
+- 프론트엔드 스크립트/스타일 자산(`src/style.css`, `src/i18n/index.js` 등) 포맷 통일
+- E2E 회귀 테스트 파일 및 빌드 설정(`vite.config.js`, `package*.json`) 정합화
+- 기능 변경 없이 이후 기능 PR에서 의미 있는 로직 변경이 분리되도록 정리
+
+### 2026-02-12
+
+#### fix(ops-scripts): 개발/릴리즈 실행 스크립트 충돌 처리 및 번들 식별자 경고 정비
+
+**커밋**: `e4bb078`
+
+##### 추가됨 (Added)
+
+- `scripts/ensure-shellhive-dev-port.ps1`
+  - `run-dev.bat` 실행 전 개발 포트(기본 1420) 점유 프로세스를 점검하는 가드 스크립트 추가
+  - 동일 저장소에서 남아 있던 stale Vite 프로세스는 자동 종료
+  - 타 프로젝트/타 프로세스 점유 시 PID 및 커맨드라인을 출력하고 안전하게 실패 처리
+
+##### 변경됨 (Changed)
 
 - `run-dev.bat`
-  - ?ㅽ겕由쏀듃 ?쒖옉 ????μ냼 猷⑦듃濡?媛뺤젣 ?대룞(`cd /d "%~dp0"`)
-  - Tauri 媛쒕컻 ?ㅽ뻾 ?몄옄瑜?npm ?쒖? ?뺥깭濡??섏젙
-    - 湲곗〈: `npm run tauri dev`
-    - 蹂寃? `npm run tauri -- dev`
-  - `setlocal`/`endlocal` 踰붿쐞 ?뺣━
+  - 포트 가드 스크립트 호출 단계를 추가해 포트 충돌 시 원인을 즉시 안내하도록 개선
+- `run-release.bat`
+  - 리다이렉션 환경에서 불필요한 오류 문자열을 만들던 `timeout` 호출 제거
+- `src-tauri/tauri.conf.json`
+  - 번들 식별자를 `com.shellhive.desktop`로 변경하여 `.app` suffix 경고 제거
 
-#### feat(usability): 遺꾪븷 ?좎? ?좏깮 紐⑤뜽 + ?덉씠?꾩썐 ?좏깮 UX 媛쒖꽑
+##### 테스트 (Verification)
 
-**而ㅻ컠**: `working-tree`
+- `npm run lint`
+- `npm run test -- --run` (4 files, 27 tests)
+- `npm run test:rust` (4 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+- `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+- `npm run build`
+- `build-release.bat`
+- `run-release.bat`
+- `run-dev.bat` (포트 충돌/정상 기동 시나리오 점검)
 
-##### 蹂寃쎈맖 (Changed)
+### 2026-02-09
 
-- 遺꾪븷 ?⑤꼸 ?대┃/?⑤꼸 ?대룞 ??遺꾪븷 ?덉씠?꾩썐???좎??섎룄濡??몄뀡 ?쒖꽦??寃쎈줈 媛쒖꽑
-  - 遺꾪븷 而⑦뀓?ㅽ듃?먯꽌 `activateSession(..., { preserveSplitLayout: true })` ?ъ슜
-- 湲곕낯 遺꾪븷??"?ㅻⅨ履?遺꾪븷"濡??쒖???  - ?⑥텞??`Ctrl+\\`
-  - ?대컮 `湲곕낯` 踰꾪듉
-  - 而⑦뀓?ㅽ듃 硫붾돱/而ㅻ㎤???붾젅??吏꾩엯 異붽?
-- ?덉씠?꾩썐 ?꾨━???좏깮 UX 媛쒖꽑
-  - ?대컮 `?덉씠?꾩썐 ?좏깮(select) + ?곸슜` 異붽?
-  - ?⑥텞??`Ctrl+Shift+S`濡??좏깮湲??ъ빱??
-##### 臾몄꽌?붾맖 (Documentation)
+#### docs(research): tmux 소스 기반 split/pane UX 벤치마크 보고서 추가
 
-- `docs/research/RESEARCH_SPLIT_TAB_USABILITY_2026-02-07.md` 異붽?
-  - 臾몄젣 ?먯씤 遺꾩꽍
-  - 媛쒖꽑 ?먯튃/諛섏쁺 ?댁슜/?꾩냽 異붿쿇 ?뺣━
+**커밋**: `fb13f79`
 
-#### feat(split-default): VSCode ?ㅽ???湲곕낯 遺꾪븷(?ㅻⅨ履? ?먮쫫 異붽?
+##### 문서화됨 (Documentation)
 
-**而ㅻ컠**: `working-tree`
+- `docs/research/RESEARCH_TMUX_SOURCE_BENCHMARK_FOR_SHELLHIVE_2026-02-09.md` 추가
+- tmux 핵심 설계(overlay, break/join/move, synchronize, policy options)를 Shellhive 적용 관점으로 정리
 
-##### 異붽???(Added)
+#### feat(split-overlay): display-panes 스타일 패널 라벨 오버레이 및 설정 옵션 도입
+
+**커밋**: `83ed90c`
+
+##### 추가됨 (Added)
 
 - `index.html`
-  - 遺꾪븷 ?대컮??湲곕낯 遺꾪븷 踰꾪듉 `splitDefaultBtn` 異붽?
-  - 遺꾪븷 踰꾪듉 ?쇰꺼/?댄똻??諛⑺뼢 ?섎? 以묒떖?쇰줈 ?뺣━
-    - `?꾨옒濡?遺꾪븷`, `?ㅻⅨ履?遺꾪븷`, `湲곕낯 遺꾪븷: ?ㅻⅨ履?
+  - Split 툴바 `Labels` 버튼 추가 (`showPaneOverlayBtn`)
+  - 설정 모달에 Split Overlay 섹션 추가
+    - 표시 시간(`settingsPaneOverlayDuration`)
+    - 라벨 색상(`settingsPaneOverlayColor`)
 - `src/app.js`
-  - `splitDefault()` 異붽? (湲곕낯 遺꾪븷? ?ㅻⅨ履?遺꾪븷濡??숈옉)
-  - ?⑥텞??`Ctrl+\\` 異붽?
-  - 而⑦뀓?ㅽ듃 硫붾돱??`湲곕낯 遺꾪븷 (?ㅻⅨ履?` 異붽?
-  - 而ㅻ㎤???붾젅?몄뿉 `湲곕낯 遺꾪븷 (?ㅻⅨ履?` 紐낅졊 異붽?
-  - ?대컮 踰꾪듉 ?대깽???곌껐 異붽?
-- `src/__tests__/split-layout.e2e.test.js`
-  - `Ctrl+\\` ?⑥텞?ㅻ줈 遺꾪븷?섎뒗 ?뚭? ?뚯뒪??異붽?
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 17 tests)
-- `cargo check`
-
-#### feat(split-ux): VSCode ?ㅽ???遺꾪븷/?⑹튂湲??먮쫫 諛??⑤꼸 援щ텇 媛뺥솕
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `index.html`
-  - 遺꾪븷 ?대컮??`?쒖꽦 李??⑹튂湲? 踰꾪듉(`mergePaneBtn`) 異붽?
-- `src/app.js`
-  - 遺꾪븷 ?⑤꼸 ?⑹튂湲?濡쒖쭅 `mergePane()` 異붽?
-    - ?대컮 踰꾪듉, 而⑦뀓?ㅽ듃 硫붾돱, ?⑥텞??`Ctrl+Shift+J`)?먯꽌 怨듯넻 ?ъ슜
-    - 遺꾪븷 ?몃━?먯꽌 ?좏깮 ?⑤꼸 ?쒓굅 ???⑥? ?⑤꼸濡??ъ빱???대룞
-  - 遺꾪븷 ?⑤꼸 以묒븰 ?쒕∼ ?숈옉 媛쒖꽑
-    - 湲곗〈 ?쒖꽦?붾쭔 ?섑뻾?섎뜕 ?먮쫫??"?⑤꼸 ?⑹튂湲? ?곗꽑 ?숈옉?쇰줈 蹂寃?  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑 UI ?숈쟻 ?앹꽦
-    - ?곹깭 ?꾩씠肄?+ ?몄뀡紐?+ ?⑹튂湲?踰꾪듉 ?쒓났
-  - 而⑦뀓?ㅽ듃 硫붾돱??`李??⑹튂湲? ??ぉ 異붽?
-  - 而ㅻ㎤???붾젅?몄뿉 `?쒖꽦 李??⑹튂湲? 紐낅졊 異붽?
+  - 패널 라벨 오버레이 표시/숨김/자동종료 로직 추가
+    - `showPaneOverlaySelection`, `hidePaneOverlaySelection`, `handlePaneOverlayInputKey`
+  - `Ctrl+Shift+O` 단축키로 오버레이 토글
+  - 컨텍스트 메뉴 `패널 라벨 표시` 추가
+  - 분할 렌더 시 오버레이 라벨 DOM 렌더링 (`ensurePaneOverlayLabel`)
+  - Command Palette 명령 추가 (`display-pane-overlay`)
 - `src/style.css`
-  - 遺꾪븷 ?⑤꼸 ?ㅻ뜑 ?ㅽ???`.split-pane-header*`) 異붽?
-  - ?쒖꽦 ?⑤꼸 ?앸퀎?깃낵 硫붿씤 ?묒뾽 ?곸뿭 援щ텇媛?媛뺥솕
-- `src/__tests__/split-layout.e2e.test.js`
-  - 遺꾪븷 ?ㅻ뜑 ?쒖떆 寃利?異붽?
-  - ?대컮 `?⑹튂湲? 踰꾪듉 ?숈옉 寃利?異붽?
+  - 오버레이 라벨 스타일 추가 (`.split-pane-overlay*`)
+  - 설정 모달 color input 스타일 보강
 
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 16 tests)
-- `cargo check`
-
-#### test(split-tab): 遺꾪븷/???꾨줈?앺듃 ?몃━ ?뚭? ?뚯뒪???뺤옣
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `src/__tests__/split-layout.e2e.test.js`
-  - ??쓣 遺꾪븷 ?⑤꼸???쒕∼ 諛곗튂?섎뒗 ?쒕굹由ъ삤 寃利?異붽?
-  - `beforeunload` ??`save_session_state` payload??`tab_layouts`媛 ?ы븿?섎뒗吏 寃利?異붽?
-- `src/__tests__/phase5-regression.e2e.test.js`
-  - ?꾨줈?앺듃 ?섏쐞 CMD ?몃━ ?뚮뜑留??쒖꽦 ?곹깭 媛깆떊 寃利?異붽?
-
-##### ?섏젙??(Fixed)
-
-- `src/app.js`
-  - ?몄뀡 ?곹깭 ??????꾩옱 ?쒖꽦 遺꾪븷 ?덉씠?꾩썐(`splitRoot`)??`tab_layouts`???ы븿?섎룄濡?蹂닿컯
-  - 遺꾪븷 ?곹깭瑜????吏곸쟾 ?ㅻ깄?룹쑝濡?諛섏쁺???ъ떎??蹂듭썝 ?좊ː???μ긽
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run` (4 files, 15 tests)
-- `cargo check`
-
-#### perf(split): 遺꾪븷 由ъ궗?댁쫰 ?뚮뜑 諛곗묶 諛??붾쾭洹??몄씠利??뺣━
-
-**而ㅻ컠**: `working-tree`
-
-##### 蹂寃쎈맖 (Changed)
-
-- `src/app.js`
-  - 遺꾪븷 由ъ궗?댁쫰 ??`mousemove`留덈떎 利됱떆 ?꾩껜 ?덉씠?꾩썐 ?뚮뜑留곹븯??寃쎈줈瑜?`requestAnimationFrame` 諛곗묶?쇰줈 蹂寃?    - `scheduleSplitRender()` 異붽?
-    - ?곹깭??`splitRenderRaf` ?몃뱾 ???    - `mouseup`?먯꽌 留덉?留??뚮뜑瑜?蹂댁옣?섏뿬 鍮꾩쑉 諛섏쁺 ?꾨씫 諛⑹?
-  - 遺꾪븷 愿??怨쇰룄??`console.log` 異쒕젰 ?쒓굅
-    - `initSplitMode`, `splitHorizontal`, `splitActivePane`, `renderSplitLayout`, `setupSplitToolbar`
-  - ?붾쾭洹?異쒕젰? 怨듭슜 `debug()` 寃쎈줈留??ъ슜?섎룄濡??뺣━
-
-##### ?④낵
-
-- 遺꾪븷 諛??쒕옒洹?以??뚮뜑 ?몄텧 ??＜ ?꾪솕
-- 肄섏넄 ?몄씠利?媛먯냼濡??ㅼ젣 寃쎄퀬/?ㅻ쪟 ?앸퀎??媛쒖꽑
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### feat(project-cmd-tree): ?꾨줈?앺듃 ?섏쐞 CMD ?몃━ 酉?諛??몄뀡 ?쒖뼱 異붽?
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `src/app.js`
-  - ?꾨줈?앺듃 紐⑸줉 ??ぉ???섏쐞 CMD ?몃━ 而⑦뀒?대꼫 異붽?
-  - ?꾨줈?앺듃 ?섏쐞 ?몄뀡 ?뚮뜑??`renderProjectCmdTrees()` 援ы쁽
-    - ?꾨줈?앺듃蹂??쒖꽦 ?몄뀡 紐⑸줉 ?쒖떆
-    - ?꾩옱 ?쒖꽦 ?몄뀡 媛뺤“
-    - ?몃━ ??ぉ ?대┃ ???몄뀡 ?쒖꽦??    - ?몃━ ??ぉ ???リ린 踰꾪듉?쇰줈 ?몄뀡 醫낅즺
-  - ?꾨줈?앺듃 ??ぉ ?대┃ ?몃뱾??蹂닿컯
-    - ?몃━/?꾪꽣/?섍꼍蹂????젣 踰꾪듉 ?대┃ ???좉퇋 ?몄뀡 ?앹꽦 ?ㅻ룞??諛⑹?
-  - ?몄뀡 ?쇱씠?꾩궗?댄겢 ?곕룞
-    - `linkSessionToProject`, `unlinkSessionFromProject`, `activateSession`?먯꽌 ?몃━ 利됱떆 媛깆떊
-- `src/style.css`
-  - ?꾨줈?앺듃 ?섏쐞 CMD ?몃━ UI ?ㅽ???異붽?
-    - `.sidebar__cmd-tree*`
-    - `.sidebar__cmd-item*`
-    - `.sidebar__cmd-status*`
-    - `.sidebar__cmd-close`
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### feat(split-dnd): ??쓣 遺꾪븷 ?⑤꼸濡?吏곸젒 諛곗튂?섎뒗 ?쒕∼ ?숈옉 援ы쁽
-
-**而ㅻ컠**: `working-tree`
-
-##### 異붽???(Added)
-
-- `src/app.js`
-  - ???쒕옒洹??쒖옉 ??`sessionId`瑜?`dataTransfer`??湲곕줉
-  - 遺꾪븷 ?⑤꼸(leaf)?먯꽌 ???쒕∼??泥섎━?섎뒗 ?몃뱾??異붽?
-    - ?쒕∼ ?꾩튂 媛먯?: `left`, `right`, `top`, `bottom`, `center`
-    - 媛?μ옄由??쒕∼ ??????⑤꼸??湲곗??쇰줈 遺꾪븷 ?몃━ ?ш뎄??    - 以묒븰 ?쒕∼ ???대떦 ?몄뀡 ?쒖꽦??泥섎━
-  - 遺꾪븷 ?⑤꼸 ?쒕∼ ?꾩슜 ?좏떥 ?⑥닔 異붽?
-    - `getPaneDropPosition`
-    - `setPaneDropIndicator`
-    - `clearPaneDropIndicators`
-    - `moveSessionToSplitPane`
-- `src/style.css`
-  - 遺꾪븷 ?⑤꼸 ?쒕∼ 媛?대뱶 ?쒓컖???ㅽ???異붽?
-    - `.terminal-wrapper--drop-target`
-    - `.terminal-wrapper--drop-left/right/top/bottom/center`
-
-##### 寃利?(Verification)
-
-- `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
-
-#### fix(session-state): 遺꾪븷 ?덉씠?꾩썐 ???怨꾩빟(tab_layouts) 蹂듦뎄
-
-**而ㅻ컠**: `working-tree`
-
-##### ?섏젙??(Fixed)
+##### 변경됨 (Changed)
 
 - `src-tauri/src/settings.rs`
-  - `SessionState`??`tab_layouts` ?꾨뱶 異붽? (`HashMap<String, TabLayoutState>`)
-  - 遺꾪븷 ?몃━ 吏곷젹??援ъ“泥?異붽?
-    - `SplitNodeState` (`type`, `ratio`, `sessionId`, `children`)
-    - `TabLayoutState` (`splitMode`, `splitRoot`)
-  - `SessionState`??`#[serde(default)]` ?곸슜?쇰줈 援щ쾭???곹깭 ?뚯씪 濡쒕뱶 ?명솚??媛뺥솕
-- `src/app.js`
-  - ?몄뀡 蹂듭썝 ??`tab_groups`/`sessions`瑜?諛곗뿴 ?щ? 寃利???泥섎━
-  - `tab_layouts` 蹂듭썝 ??camelCase/snake_case ?ㅻ? 紐⑤몢 ?덉슜
-    - `splitRoot` ?먮뒗 `split_root`
-    - `splitMode` ?먮뒗 `split_mode`
-  - 寃곌낵?곸쑝濡???퀎 遺꾪븷 ?덉씠?꾩썐????????ъ떎?됱뿉???좎떎?섏? ?딅룄濡?蹂듭썝 寃쎈줈 ?덉젙??
-##### 寃利?(Verification)
+  - 설정 스키마 확장
+    - `pane_overlay_duration_ms`
+    - `pane_overlay_label_color`
+  - 입력값 검증 추가(표시 시간 범위, `#RRGGBB` 색상 형식)
+- `src/__tests__/setup.js`, `src/__tests__/phase5-regression.e2e.test.js`
+  - 신규 설정 필드 mock 반영
+
+##### 테스트 (Verification)
 
 - `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
+- `npm run test -- --run` (4 files, 23 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
 
-#### docs(research): GUI 遺꾪븷/??媛쒖꽑 ?곌뎄 臾몄꽌 ?ㅽ럺 ?숆린??
-**而ㅻ컠**: `working-tree`
+#### feat(split-pane-workflow): break/join/move-pane 워크플로우 및 조작 경로 확장
 
-##### 臾몄꽌?붾맖 (Documentation)
+**커밋**: `356a65e`
 
-- `docs/research/RESEARCH_GUI_SPLIT_TAB_ENHANCEMENT_2026-02-07.md`
-  - ?쒗뭹 ?ㅻ챸??AI 以묒떖 ?쒗쁽???꾩옱 ?댁쁺 ?뺤콉(鍮껦I 肄붿뼱 以묒떖)怨??쇱튂?섎룄濡??뺣━
-  - ?ъ슜???쒕굹由ъ삤 1??AI ?꾧뎄 鍮꾧탳?먯꽌 ?쇰컲 CLI 蹂묐젹 ?묒뾽 ?쒕굹由ъ삤濡?援먯껜
-  - ?⑥텞???쒕? ?꾩옱 肄붾뱶 ?숈옉怨??뺣젹
-    - ?섏쭅 遺꾪븷: `Ctrl+Shift+\\` -> `Ctrl+Shift+E`
-    - ?⑤꼸 ?대룞: `Alt+?붿궡?? -> `Ctrl+Alt+?붿궡??
-  - 寃곕줎 ?뱀뀡??媛移??ㅻ챸??AI ?뱁솕 臾멸뎄?먯꽌 ?쇰컲 CLI ?뚰겕?뚮줈???뱁솕濡??섏젙
-
-#### fix(ui): AI/Claude GUI ?쒓굅 諛???理쒕? ?쒗븳 ?댁젣
-
-**而ㅻ컠**: `working-tree`
-
-##### ?섏젙??(Fixed)
+##### 추가됨 (Added)
 
 - `index.html`
-  - ?ъ씠?쒕컮 Claude Code ?뱀뀡 ?쒓굅(`.sidebar__claude`, `#claudeBtn`, `#claudeStatus`)
-  - ?섎떒 AI ?낅젰諛??쒓굅(`#aiInputBar`, `#aiModeToggle`, `#aiInput`, `#aiSendBtn`, `#aiHelpBtn`)
-  - AI 誘몃━蹂닿린/?꾩?留?紐⑤떖 ?쒓굅(`#aiPreviewModal`, `#aiHelpModal` 諛??섏쐞 踰꾪듉)
+  - Split 툴바에 pane 전환/이동 워크플로우 컨트롤 추가
+    - `Break` 버튼 (`breakPaneBtn`)
+    - 소스 탭 선택 셀렉터 (`splitTransferSourceSelect`)
+    - `Join` 버튼 (`joinPaneBtn`)
+    - `Move` 버튼 (`movePaneBtn`)
 - `src/app.js`
-  - ?몄뀡 理쒕?移??곸닔(`MAX_SESSIONS`) 諛??앹꽦/遺꾪븷 ???쒗븳 寃???쒓굅
-  - `Ctrl+Shift+C` Claude ?쒖옉 ?⑥텞???쒓굅
-  - Claude 踰꾪듉 ?대┃ ?대깽??諛붿씤???쒓굅
-  - ?ъ슜???몄텧 臾멸뎄 `AI ?먮윭 ?ㅻ챸` -> `?먮윭 ?ㅻ챸`?쇰줈 蹂寃?- `src/__tests__/phase5-regression.e2e.test.js`
-  - AI UI ?뚭? 寃利?湲곗???"鍮꾨끂異?display:none)"?먯꽌 "?붿냼 ?쒓굅(null)"濡?媛깆떊
+  - 활성 패널 분리 기능 추가 (`breakActivePaneToTab`)
+  - 선택 소스 탭 결합/이동 기능 추가 (`joinSessionToActiveSplit`, `joinPaneFromSelection`, `movePaneFromSelection`)
+  - 분할 컨텍스트 메뉴 확장
+    - `활성 패널 분리 (Break)`
+    - `현재 분할에 결합 (Join)`
+    - `현재 분할로 이동 (Move)`
+  - Command Palette 명령 확장
+    - `break-pane`, `join-pane`, `move-pane`
+  - 단축키 추가
+    - `Ctrl+Shift+B` (Break)
+    - `Ctrl+Shift+I` (Join)
+    - `Ctrl+Shift+U` (Move)
 
-##### 寃利?(Verification)
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - 툴바 상태 업데이트 로직에 소스 탭 옵션 동적 갱신 반영
+  - 분할 레이아웃 스냅샷 동기화 유틸 추가 (`saveCurrentSplitLayoutForSessions`)
+  - 이동 시 기존 저장 레이아웃에서 소스 세션 정리 로직 추가 (`removeSessionFromStoredSplitLayouts`)
+
+##### 테스트 (Verification)
 
 - `npm run lint`
-- `npm run test -- --run`
-- `cargo check`
+- `npm run test -- --run` (4 files, 25 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
 
-#### test(regression): 5?④퀎 ?뺥빀???뚭? ?뚯뒪??異붽?
+#### feat(split-sync): 분할 동시 입력(synchronize-panes) 및 범위 옵션 추가
 
-**而ㅻ컠**: `working-tree`
+**커밋**: `7a98aad`
 
-##### 異붽???(Added)
+##### 추가됨 (Added)
 
-- `src/__tests__/phase5-regression.e2e.test.js` 異붽?
-  - AI UI 湲곕낯 鍮꾨끂異?Claude ?뱀뀡/AI ?낅젰諛? 寃利?  - Git ?⑤꼸????而ㅻ㎤??寃쎈줈(`git_status`, `git_stage`) 寃利?  - 釉붾줉 紐⑤뱶 ?ㅼ젙 ?곸슜 ??wrapper/overlay 諛섏쁺 寃利?- `src/__tests__/setup.js`???ㅼ젙 mock???꾩옱 ?ㅽ궎留덉뿉 留욊쾶 ?뺤옣
+- `index.html`
+  - Split 툴바에 `Sync` 버튼 추가 (`syncPanesBtn`)
+  - 설정 모달에 Split Sync Input 섹션 추가
+    - 동시 입력 활성화 (`settingsSplitSyncInput`)
+    - 대상 범위 선택 (`settingsSplitSyncScope`: 전체/동일 프로젝트)
+- `src/app.js`
+  - 동시 입력 핵심 로직 추가
+    - `toggleSplitSyncInput`
+    - `getSplitSyncTargetSessionIds`
+    - `broadcastInputToSplitPanes`
+  - 입력 파이프라인에서 분할 대상 브로드캐스트 수행
+  - 단축키 `Ctrl+Shift+Y` 추가
+  - Command Palette `toggle-sync-panes` 명령 추가
+  - 컨텍스트 메뉴에 동시 입력 켜기/끄기 추가
+  - 분할 헤더에 `SYNC / SYNC-P` 상태 배지 표시
 
-#### docs(alignment): 5?④퀎 臾몄꽌/QA ?뺥빀???꾨즺
+##### 변경됨 (Changed)
 
-**而ㅻ컠**: `working-tree`
+- `src-tauri/src/settings.rs`
+  - 설정 스키마 확장
+    - `split_sync_input_enabled`
+    - `split_sync_scope`
+  - `split_sync_scope` 유효값 검증(`all`, `same-project`) 추가
+- `src/style.css`
+  - 분할 헤더 동시 입력 배지 스타일 추가 (`.split-pane-header__sync*`)
+- `src/__tests__/setup.js`, `src/__tests__/phase5-regression.e2e.test.js`
+  - 신규 설정 필드 mock 반영
 
-##### 臾몄꽌?붾맖 (Documentation)
+##### 테스트 (Verification)
 
-- `IMPLEMENTATION_COMPLETE.md`
-  - ?꾪뻾 由대━利?湲곗??쇰줈 ?대젰 臾몄꽌(Archived) ?곹깭濡??뺤젙
-  - "?꾩옱 ?댁쁺 湲곕뒫"怨?"怨쇨굅 援ы쁽 湲곕줉"??紐낇솗??遺꾨━
-- `docs/research/feature-improvement-roadmap-2024.md`
-  - 2026-02-07 ?댁쁺 二쇱꽍 異붽? (AI 湲곕뒫 蹂대쪟)
-  - ?곗꽑?쒖쐞 議곗젙(鍮껦I 肄붿뼱 ?덉젙???곗꽑) 諛섏쁺
-  - 寃곕줎 ?뱀뀡???꾪뻾 ?댁쁺 ?뺤콉??留욊쾶 ?낅뜲?댄듃
-- `docs/qa/run-release-split-manual-checklist.md`
-  - TC-07 "AI 湲곕뒫 鍮꾨끂異??뺤씤" 異붽?
-- `docs/qa/run-release-split-qa-log-2026-02-06.md`
-  - TC-07 ??ぉ 諛?由ъ뒪??踰붿쐞(TC-02~TC-07) ?낅뜲?댄듃
-- `docs/review/merge-review-547a7b2-vs-3f49650.md`
-  - ?④퀎蹂?媛쒕컻 吏꾪뻾 ?꾪솴??2李?湲곗??쇰줈 媛깆떊
-  - 5?④퀎 ?꾨즺 諛??붿뿬(?섎룞 QA) ??ぉ 紐낆떆
+- `npm run lint`
+- `npm run test -- --run` (4 files, 26 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
 
----
+#### feat(split-layout-policy): 정책형 분할 레이아웃 옵션(main 비율/타일 열 제한) 적용
 
-#### fix(git-panel): ?꾨줎??諛깆뿏??Git 而ㅻ㎤?쒕챸 ?뺥빀???섏젙
+**커밋**: `dc54d05`
 
-**而ㅻ컠**: `working-tree`
+##### 추가됨 (Added)
 
-##### ?섏젙??(Fixed)
+- `index.html`
+  - 레이아웃 프리셋 셀렉터에 `Main + Sidebar` 옵션 추가
+  - 설정 모달에 Split Layout Policy 섹션 추가
+    - 메인 패널 비율(`settingsSplitMainPaneRatio`)
+    - 타일 최대 열(`settingsSplitTiledMaxColumns`)
+- `src/__tests__/split-layout.e2e.test.js`
+  - 정책 옵션 저장 후 프리셋 결과를 검증하는 E2E 테스트 추가
 
-- Git ?⑤꼸 `invoke` ?몄텧紐낆쓣 諛깆뿏??Tauri 而ㅻ㎤?쒖뿉 留욊쾶 ?뺣젹
-  - `get_git_status` -> `git_status`
-  - `git_stage_all` -> `git_stage` (?뚯씪 諛곗뿴 ?꾨떖)
-  - `git_stage_file` -> `git_stage` (?④굔 諛곗뿴)
-  - `git_unstage_file` -> `git_unstage` (?④굔 諛곗뿴)
-- Stage All ?숈옉?먯꽌 ?⑤꼸 泥댄겕諛뺤뒪 湲곗? ?뚯씪 紐⑸줉???섏쭛?섏뿬 ?꾨떖?섎룄濡?媛쒖꽑
+##### 변경됨 (Changed)
 
-#### feat(settings): ?ㅼ젙 ?ㅽ궎留??뺤옣 諛?釉붾줉 紐⑤뱶 ???蹂듭썝 ?곌껐
+- `src-tauri/src/settings.rs`
+  - 설정 스키마 확장
+    - `split_main_pane_ratio`
+    - `split_tiled_max_columns`
+  - 입력값 검증 추가(비율 `50..85`, 최대 열 `1..6`)
+- `src/app.js`
+  - 설정 정규화/저장/모달 바인딩에 신규 정책 필드 반영
+  - 프리셋 적용 시 정책값 우선 적용
+    - `main-sidebar` 첫 분할 비율 반영
+    - `grid`/`three-columns` 계열 최대 열 제한 반영
+  - 분할 생성 유틸 확장
+    - `splitActivePane(direction, { ratio })`
+    - `createLinearLayout(..., firstSplitRatio)`
+    - `createGridLayout(..., totalCells)`
+- `src/__tests__/setup.js`, `src/__tests__/phase5-regression.e2e.test.js`
+  - 신규 설정 필드 mock 반영
 
-**而ㅻ컠**: `working-tree`
+##### 테스트 (Verification)
 
-##### 蹂寃쎈맖 (Changed)
+- `npm run lint`
+- `npm run test -- --run` (4 files, 27 tests)
+- `cargo check --manifest-path src-tauri/Cargo.toml`
 
-- 諛깆뿏??`Settings` 紐⑤뜽 ?뺤옣 (`src-tauri/src/settings.rs`)
-  - `enable_notifications`
-  - `enable_snippet_suggestions`
-  - `snippet_suggestion_threshold`
-  - `enable_block_mode`
-  - `enable_ai_features`
-- 援щ쾭???ㅼ젙 ?뚯씪 ?명솚???꾪빐 `#[serde(default)]` ?곸슜
-- ?꾧퀎媛?`snippet_suggestion_threshold`) ?좏슚 踰붿쐞 寃利?2~10) 異붽?
-- ?꾨줎???ㅼ젙 濡쒕뱶/???寃쎈줈瑜??⑥씪 ?ㅽ궎留?湲곗??쇰줈 ?뺣━
-- ?ㅼ젙 紐⑤떖??釉붾줉 紐⑤뱶 泥댄겕諛뺤뒪瑜??ㅼ젣 ?곹깭? ?묐갑???곌껐
-- ?몄뀡蹂?釉붾줉 而⑦뀒?대꼫 ?곌껐 諛?釉붾줉 紐⑤뱶 on/off 利됱떆 諛섏쁺 濡쒖쭅 異붽?
+### 2026-02-08
 
-#### changed(ai-scope): ?꾩옱 由대━利덉뿉??AI 湲곕뒫 寃쎈줈 鍮꾪솢?깊솕
+#### fix/build/release: 배포 안정화 및 split UX 개선
 
-**而ㅻ컠**: `working-tree`
+##### 수정됨 (Fixed)
 
-##### 蹂寃쎈맖 (Changed)
+- `c7907a8` release 빌드 실패 원인인 `index.html` 제어문자 제거
+- `f98d52d` `run-release.bat` 경로/실행 안정화
+- `886152c` 분할 헤더 오버랩 제거 및 split 툴바 리뉴얼
 
-- ?꾨줎?몄뿉??AI 湲곕뒫 ?뚮옒洹몃? 湲곕낯 鍮꾪솢???곹깭濡?媛뺤젣
-- Claude ?뱀뀡/AI ?낅젰諛?AI 紐⑤떖 鍮꾨끂異?泥섎━
-- AI 愿???대깽??由ъ뒪???⑥텞?ㅻ뒗 ?쒖꽦 議곌굔?먯꽌留??깅줉
-- 諛깆뿏??`invoke_handler`?먯꽌 `claude::*`, `ai::*` 而ㅻ㎤???깅줉 ?쒓굅 (`src-tauri/src/main.rs`)
+##### 변경됨 (Changed)
 
-#### docs(review): ?④퀎蹂?媛쒕컻 吏꾪뻾 ?꾪솴(1李? 諛섏쁺
+- `e9b35ad` 미니맵/레이아웃 갤러리/패널 헤더 강화
 
-**而ㅻ컠**: `working-tree`
+##### 문서화됨 (Documentation)
 
-##### 臾몄꽌?붾맖 (Documentation)
+- `d38c758` run-release 분할 QA 체크리스트/로그 최신화
 
-- `docs/review/merge-review-547a7b2-vs-3f49650.md`???④퀎蹂?媛쒕컻 吏꾪뻾 ?꾪솴(?꾨즺/?붿뿬 ?④퀎) 諛?1李??ш?利?寃곌낵 異붽?
+### 2026-02-07
 
----
+#### split/탭 개선, AI GUI 제거, QA 보강
 
-#### docs(review): 二쇱슂 ?댁뒋 ?닿껐??諛?AI ?쒖쇅 ?ㅽ뻾怨꾪쉷 ?곸꽭??
-**而ㅻ컠**: `working-tree`
+##### 추가됨 (Added)
 
-##### 臾몄꽌?붾맖 (Documentation)
+- `ce14e6a` 프로젝트 하위 CMD 트리 뷰 도입
+- `880289d` 탭을 분할 패널로 드롭 배치 기능
+- `1af5c46` VSCode 스타일 합치기 중심 분할 UX 도입
+- `d2fdb92` 기본 분할(Ctrl+\\) 도입
 
-- `docs/review/merge-review-547a7b2-vs-3f49650.md` 怨좊룄??  - 4??二쇱슂 ?댁뒋)??"臾몄젣 ?붿빟 ???닿껐 ?꾨왂 ???곸꽭 ?섏젙 ??ぉ ??寃利?怨꾪쉷 ???꾨즺 湲곗?" 援ъ“濡??ъ옉??  - Git ?⑤꼸 ?ㅻ룞???닿껐???꾪븳 ?꾨줎??諛깆뿏??而ㅻ㎤???뺥빀??留ㅽ븨??異붽?
-  - ?ㅼ젙 ?ㅽ궎留?遺덉씪移??닿껐???꾪븳 `Settings` ?뺤옣 ?꾨뱶, 留덉씠洹몃젅?댁뀡, 寃利??쒕굹由ъ삤 異붽?
-  - 臾몄꽌-肄붾뱶 ?뺥빀???뚮났???꾪븳 ?곹깭 ?쒖???`?꾨즺/遺遺?援ы쁽/?꾨줈?좏???誘멸뎄??) 湲곗? ?뺤쓽
-  - 5?μ뿉 AI 湲곕뒫 ?쒖쇅瑜??ㅼ젣 諛섏쁺?섍린 ?꾪븳 ?④퀎蹂??ㅽ뻾怨꾪쉷(Phase A~D), WBS, 由ъ뒪????? Release Gate瑜??곸꽭 異붽?
+##### 변경됨 (Changed)
 
----
+- `297d785` 분할 리사이즈 렌더 배칭 최적화
+- `7693f5a` 분할 유지 동작/개발 스크립트/레이아웃 선택 UX 개선
+- `086a633` `tab_layouts` 저장·복원 계약 복구
 
-### 2026-02-06
+##### 수정됨 (Fixed)
 
-#### docs(review): 547a7b2 癒몄? 寃곌낵 vs 3f49650 濡쒕뱶留?援ы쁽 ?뺥빀??寃??蹂닿퀬??異붽?
+- `f473fc6` AI GUI 제거 및 탭 최대 제한 해제
+- `fadc8e3` Git 패널 정합성 복구 및 AI 비활성 릴리즈 경로 반영
 
-**而ㅻ컠**: `working-tree`
+##### 테스트/문서 (Test/Documentation)
 
-##### 臾몄꽌?붾맖 (Documentation)
-
-- `docs/review/merge-review-547a7b2-vs-3f49650.md` 異붽?
-  - 湲곗? 臾몄꽌(`3f49650`) ?鍮?癒몄? 寃곌낵(`547a7b2`) 湲곕뒫 留ㅽ듃由?뒪 ?묒꽦
-  - ??ぉ蹂??먯젙: ?꾨즺/遺遺?援ы쁽/誘멸뎄???ㅻ룞??  - ?듭떖 由ъ뒪???뺣━
-    - Git ?⑤꼸 ?꾨줎??諛깆뿏??而ㅻ㎤?쒕챸 遺덉씪移?    - ?ㅼ젙 ?ㅽ궎留?遺덉씪移??꾨줎??????ㅼ? 諛깆뿏??援ъ“泥??꾨뱶 李⑥씠)
-  - ?붿껌?ы빆 諛섏쁺: AI 湲곕뒫 ?쒖쇅 ?꾩젣???곗꽑?쒖쐞 ?ы렪 諛??꾩닚??湲곕뒫 ?쒖븞
-  - ?ㅽ뻾 寃利?寃곌낵(`eslint`, `vitest`, `cargo check`) ?ы븿
-
----
-
-#### refactor(lint): app.js ?뺣━ 諛?ESLint 洹쒖튃 ?ы솢?깊솕
-
-**而ㅻ컠**: `working-tree`
-
-##### 蹂寃쎈맖 (Changed)
-
-- `src/app.js` 誘몄궗??肄붾뱶 ?뺣━
-  - 以묐났 AI 蹂???⑥닔 釉붾줉 ?쒓굅
-  - 誘몄궗??移댄뀒怨좊━/?ъ씠?쒕컮 ?좏떥 ?⑥닔 ?쒓굅
-  - 誘몄궗??蹂??肄쒕갚 ?몄옄 ?뺣━
-- `BlockManager` ?앸챸二쇨린 ?곌껐
-  - ?몄뀡 ?앹꽦 ???깅줉, 醫낅즺 ???댁젣
-  - ?낅젰 ?대깽??泥섎━ 寃쎈줈 ?곌껐
-- UI ?곸닔 遺꾨━
-  - `src/ui-constants.js` ?좎꽕
-  - `LAYOUT_PRESETS`, `TAB_COLORS`瑜?紐⑤뱢濡??대룞
-- ESLint 洹쒖튃 蹂듦뎄
-  - `.eslintrc.json`?먯꽌 `no-unused-vars`, `indent`瑜?`error`濡??ы솢?깊솕
-  - `_` ?묐몢 ?몄옄/蹂??臾댁떆 ?⑦꽩 異붽?
-- ?뚯뒪??肄붾뱶 ?뺣━
-  - `src/__tests__/setup.js` ?ㅼ뿬?곌린 ?뺣━
-  - `src/__tests__/session.test.js` 誘몄궗???몄옄 ?쒓굅
-
-#### docs(qa): run-release 遺꾪븷 ?섎룞 ?먭? 臾몄꽌/濡쒓렇 異붽?
-
-**而ㅻ컠**: `working-tree`
-
-##### 臾몄꽌?붾맖 (Documentation)
-
-- `docs/qa/run-release-split-manual-checklist.md` 異붽?
-  - 媛濡??몃줈 遺꾪븷 以묒떖???섎룞 ?쒕굹由ъ삤(TC-01~TC-06) ?뺤쓽
-  - ?ъ쟾 以鍮? ?⑷꺽 湲곗?, 寃고븿 湲곕줉 ?쒗뵆由??ы븿
-- `docs/qa/run-release-split-qa-log-2026-02-06.md` 異붽?
-  - `run-release.bat` 湲곕룞 ?먭? 寃곌낵 湲곕줉
-  - ?섎룞 寃利?吏꾪뻾 ?곹깭 諛??꾩냽 ?≪뀡 湲곕줉
+- `13abbf7` split/탭/프로젝트 트리 회귀 테스트 확장
+- `80cdbd0` AI 제외 기준 회귀 검증 및 문서 정합화
+- `ac49f70` 머지 이슈 해결안/AI 제외 계획 상세화
+- `b93a330` split/탭 연구 문서 스펙 동기화
+- `8f10559` GUI split/tab 대대적 개선 연구 문서 작성
 
 ### 2026-02-06
 
-#### fix(split): 由대━利?紐⑤뱶 遺꾪븷 ?덉씠?꾩썐 誘명몴???먯씤 ?섏젙
+#### merge 검토 및 릴리즈 split 복구
 
-**而ㅻ컠**: `working-tree`
+##### 수정됨 (Fixed)
 
-##### ?섏젙??(Fixed)
+- `6cdcccd` 릴리즈 분할 미표시 원인 해결 및 품질 게이트 복구
+- `56ca2ba` `app.js` lint 정리 및 품질 규칙 복구
 
-- `splitActivePane()`?먯꽌 遺꾪븷???몄뀡 ?앹꽦 ???먮룞 ???꾪솚??鍮꾪솢?깊솕?섏뿬 `splitMode/splitRoot`媛 珥덇린?붾릺??臾몄젣 ?닿껐 (`src/app.js`)
-- 遺꾪븷 吏곹썑 ?쒖꽦 ?몄뀡????pane?쇰줈 吏?뺥븯怨??덉씠?꾩썐 ?뚮뜑瑜?蹂댁옣 (`src/app.js`)
-- Split Toolbar ?꾨━????遺덉씪移??섏젙
-  - `two-column` -> `two-columns`
-  - `two-row` -> `two-rows`
-  - `grid` -> `grid-2x2`
-  - `three-column` -> `three-columns`
+##### 문서화됨 (Documentation)
 
-#### test(split): 遺꾪븷 ?덉씠?꾩썐 ?듯빀 ?뚯뒪??異붽?
+- `d707f1e` `547a7b2` 머지 구현 정합성 검토 보고서 작성
 
-**而ㅻ컠**: `working-tree`
+##### 기타 (Etc)
 
-##### 異붽???(Added)
+- `547a7b2` PR #2 머지
 
-- jsdom ?섍꼍?먯꽌 `index.html + app.js`瑜?濡쒕뱶????遺꾪븷 踰꾪듉 ?대┃ ??split DOM???앹꽦?섎뒗 ?듯빀 ?뚯뒪??異붽? (`src/__tests__/split-layout.e2e.test.js`)
-- Tauri API/xterm 紐⑤뱢 mocking ?뺤옣 (`src/__tests__/setup.js`)
+### 2026-02-04
 
-#### chore(quality): lint/clippy 李⑤떒 ?댁뒋 ?뺣━
+#### GUI split 도입 및 안정화
 
-**而ㅻ컠**: `working-tree`
+##### 추가됨 (Added)
 
-##### 蹂寃쎈맖 (Changed)
+- `8ae2b28` GUI 기반 탭 분할 툴바 추가
 
-- `settingsBackup` ?꾨씫 ?좎뼵, history panel `showToast` ?ㅼ퐫???ㅻ쪟 ?닿껐 (`src/app.js`, `src/history-panel.js`)
-- `no-control-regex`/遺덊븘??escape 愿??lint ?먮윭 ?뺣━ (`src/app.js`)
-- Rust clippy `-D warnings` ???  - `ShellType` 湲곕낯 援ы쁽 derive ?꾪솚 (`src-tauri/src/ai.rs`)
-  - 濡쒓렇 ?뺤옣??寃???뺣젹 ?대줈? 媛쒖꽑 (`src-tauri/src/settings.rs`)
-  - 誘몄궗??`PtySession` 援ъ“泥??쒓굅 (`src-tauri/src/pty.rs`)
-- ESLint ?ㅼ뿬?곌린 洹쒖튃 異⑸룎 ?꾪솕瑜??꾪빐 `indent` 猷?鍮꾪솢?깊솕 (`.eslintrc.json`)
+##### 수정됨 (Fixed)
 
----
+- `94be2a6` 분할 버튼 무응답 수정
+- `36ab98d` 분할 레이아웃 CSS 높이/너비 문제 수정
 
 ### 2026-02-03
 
-#### feat(ai): AI ?먯뿰??紐낅졊??蹂??湲곕뒫 ?꾨즺 (Phase 2.1)
+#### split-pane 대폭 개선 및 로드맵 구현
 
-##### 異붽???(Added)
+##### 추가됨 (Added)
 
-- **AI ?곹깭 愿由?* (`src/app.js`)
-  - `state.aiModeEnabled` - AI 紐⑤뱶 ?쒖꽦???곹깭
-  - `state.aiPreviewVisible` - AI 誘몃━蹂닿린 ?앹뾽 ?쒖떆 ?곹깭
-  - `state.aiOriginalInput` - AI 蹂?????먮낯 ?낅젰
-  - `state.aiTranslatedCommand` - AI 蹂?섎맂 紐낅졊??
+- `8f01981` split-pane 기능 대폭 개선
+- `ed0dddf` 기능 개선 로드맵 Phase 1~4 구현 완료
 
-- **AI 紐⑤뱶 ?⑥닔** (`src/app.js`)
-  - `toggleAiMode()` - AI 紐⑤뱶 耳쒓린/?꾧린
-  - `translateNaturalLanguage(input)` - ?먯뿰?대? ??紐낅졊?대줈 蹂??
-  - `showAiPreview(original, result)` - 蹂??誘몃━蹂닿린 ?쒖떆
-  - `hideAiPreview()` - 誘몃━蹂닿린 ?④린湲?
-  - `acceptAiTranslation()` - 蹂?섎맂 紐낅졊???ㅽ뻾
-  - `rejectAiTranslation()` - 蹂??痍⑥냼
+##### 수정됨 (Fixed)
 
-- **AI 援?젣??吏??* (`src/i18n/index.js`)
-  - `ai.modeEnable` / `ai.modeDisable` - AI 紐⑤뱶 ?좉? ?댄똻
-  - `ai.modeEnabled` / `ai.modeDisabled` - AI 紐⑤뱶 ?곹깭 硫붿떆吏
-  - `ai.commandAccepted` / `ai.commandFailed` - 紐낅졊???ㅽ뻾 寃곌낵
-  - ?쒓?/?곸뼱 ?꾩쟾 踰덉뿭 吏??
+- `b2886b4` split 세션 ID 매핑/레이아웃 복원 수정
+- `fb8d82b` 보안/안정성 코드리뷰 이슈(CRITICAL/HIGH) 수정
+- `b5de92a` 키보드 단축키 Caps Lock 독립성 수정
 
-- **Rust 諛깆뿏???듯빀** (`src-tauri/src/ai.rs`)
-  - 湲곗〈 `translate_natural_language` 紐낅졊???쒖슜
-  - 30+ ?⑦꽩 洹쒖튃 吏??(?쒓?/?곸뼱)
-  - PowerShell, CMD, Bash, Zsh ????낅퀎 蹂??
-  - ?좊ː??confidence) 諛??泥??쒖븞(alternatives) ?쒓났
+##### 문서화됨 (Documentation)
 
-- **吏???⑦꽩 ?덉떆**
-  - ?뚯씪 李얘린: "js ?뚯씪 李얠븘以? ??`Get-ChildItem -Recurse -Filter "*.js"`
-  - ?대뜑 ?앹꽦: "test ?대뜑 留뚮뱾?댁쨾" ??`New-Item -ItemType Directory -Name "test"`
-  - Git 紐낅졊: "git ?곹깭 蹂댁뿬以? ??`git status`
-  - ???뚯씪 寃?? "???뚯씪 10媛?李얠븘以? ???뺣젹????⑸웾 ?뚯씪 紐⑸줉
-  - ?ы듃 ?뺤씤: "?ы듃 8080 ?뺤씤" ??`Get-NetTCPConnection -LocalPort 8080`
-
-##### 媛쒖꽑??(Changed)
-
-- **DOM ?붿냼 珥덇린??* (`src/app.js`)
-  - AI 愿??DOM ?붿냼 蹂??異붽?
-  - `aiModeToggleBtn`, `aiPreviewPopup`, `aiPreviewOriginal`, `aiPreviewTranslated`
-  - `aiPreviewAccept`, `aiPreviewReject`
-
-##### 臾몄꽌??(Documentation)
-
-- **援ы쁽 臾몄꽌 異붽?** (`docs/phase_2_1_ai_implementation.md`)
-  - ?꾩껜 援ы쁽 ?댁슜 ?곸꽭 ?뺣━
-  - 吏???⑦꽩 ?덉떆
-  - 鍮뚮뱶 寃利?寃곌낵
-  - ?ъ슜 諛⑸쾿 媛?대뱶
-
-##### 寃利앸맖 (Verified)
-
-- ??Frontend 鍮뚮뱶 ?깃났 (`npm run build`)
-- ??Rust 鍮뚮뱶 ?깃났 (`cargo build --release`)
-- ??踰덈뱾 ?ш린: 417.07 KB (gzip: 108.95 KB)
-- ??Ctrl+Space ?ㅻ낫???⑥텞???숈옉
-- ???쒓?/?곸뼱 ?먯뿰??泥섎━
-- ??????낅퀎 紐낅졊??蹂??
-
----
-
-### 2026-02-03
-
-#### feat(search): ?곕???怨좉툒 寃??湲곕뒫 援ы쁽
-
-##### 異붽???(Added)
-
-- **寃???듭뀡 踰꾪듉** (`src/app.js`)
-  - ??뚮Ц??援щ텇 (Case Sensitive) - Alt+C ?⑥텞??
-  - ?꾩껜 ?⑥뼱 ?쇱튂 (Whole Word) - Alt+W ?⑥텞??
-  - ?뺢퇋???ъ슜 (Regex) - Alt+R ?⑥텞??
-  - ?꾩껜 ?몄뀡 寃??(All Sessions) - Alt+A ?⑥텞??
-  - ?쒖꽦???곹깭 ?쒓컖???쒖떆
-
-- **?꾩껜 ?몄뀡 寃??湲곕뒫** (`src/app.js`)
-  - 紐⑤뱺 ?대┛ ?곕????몄뀡?먯꽌 ?숈떆 寃??
-  - ?몄뀡蹂?洹몃９?붾맂 寃곌낵 ?쒖떆
-  - 以?踰덊샇? 誘몃━蹂닿린 ?띿뒪???쒓났
-  - 寃곌낵 ?대┃ ???대떦 ?몄뀡?쇰줈 ?대룞 諛??섏씠?쇱씠??
-  - ?몄뀡??理쒕? 10媛?寃곌낵, 珥덇낵 ??"more" ?쒖떆
-
-- **?뺢퇋??寃??吏??* (`src/app.js`)
-  - xterm SearchAddon??regex ?듭뀡 ?쒖슜
-  - ?뺢퇋???ㅻ쪟 ??Toast ?뚮┝ ?쒖떆
-  - ??뚮Ц??援щ텇 ?듭뀡怨??곕룞
-
-- **F3/Shift+F3 ?⑥텞??* (`src/app.js`)
-  - F3: ?ㅼ쓬 寃??寃곌낵濡??대룞
-  - Shift+F3: ?댁쟾 寃??寃곌낵濡??대룞
-  - 湲곗〈 Enter/Shift+Enter? 蹂묓뻾 吏??
-
-- **寃??寃곌낵 ?⑤꼸 UI** (`src/app.js`, `src/style.css`)
-  - ?곗륫 ?곷떒 floating ?⑤꼸
-  - ?몄뀡蹂?洹몃９???쒖떆
-  - ?ㅽ겕濡?媛?ν븳 寃곌낵 紐⑸줉 (理쒕? 500px ?믪씠)
-  - 寃곌낵 媛쒖닔 ?쒖떆
-
-##### 蹂寃쎈맖 (Changed)
-
-- **寃?됰컮 UI ?뺤옣** (`src/app.js`, `src/style.css`)
-  - ?듭뀡 踰꾪듉 洹몃９ 異붽? (4媛??좉? 踰꾪듉)
-  - 踰꾪듉 ?쒖꽦???곹깭 ?ㅽ???異붽?
-  - 寃??寃곌낵 移댁슫???뺤떇 媛쒖꽑 (?? "3/15")
-
-- **寃???듭뀡 ???* (`src/app.js`)
-  - `state.searchOptions` 媛앹껜濡??듭뀡 ?곹깭 愿由?
-  - ?듭뀡 蹂寃????ㅼ떆媛??ш???
-
-##### 湲곗닠 援ы쁽
-
-- **寃???듭뀡 泥섎━** (`src/app.js`)
-  - `performTerminalSearch()`: ?⑥씪 ?몄뀡 寃?????듭뀡 ?곸슜
-  - `performAllSessionsSearch()`: ?꾩껜 ?몄뀡 寃??援ы쁽
-  - `escapeRegex()`: ?뺢퇋???뱀닔臾몄옄 ?댁뒪耳?댄봽
-  - `showAllSessionsResults()`: 寃곌낵 ?⑤꼸 ?뚮뜑留?
-  - `hideAllSessionsResults()`: 寃곌낵 ?⑤꼸 ?リ린
-
-- **CSS ?ㅽ???* (`src/style.css`)
-  - `.terminal-search__options`: ?듭뀡 踰꾪듉 而⑦뀒?대꼫
-  - `.terminal-search__option`: 媛쒕퀎 ?듭뀡 踰꾪듉
-  - `.terminal-search__option--active`: ?쒖꽦???곹깭 ?ㅽ???
-  - `.search-results-panel`: 寃곌낵 ?⑤꼸 ?덉씠?꾩썐
-  - `.search-results-panel__group`: ?몄뀡蹂?洹몃９
-  - `.search-results-panel__item`: 媛쒕퀎 寃??寃곌낵
-
-##### ?ъ슜??寃쏀뿕
-
-- **吏곴??곸씤 ?듭뀡 ?좉?**: ?대┃?쇰줈 ?듭뀡 on/off
-- **?ㅻ낫???⑥텞??*: Alt+C/W/R/A濡?鍮좊Ⅸ ?듭뀡 ?꾪솚
-- **?ㅼ떆媛?寃곌낵 ?낅뜲?댄듃**: ?듭뀡 蹂寃???利됱떆 ?ш???
-- **?쒓컖???쇰뱶諛?*: ?쒖꽦?붾맂 ?듭뀡? accent ?됱긽?쇰줈 ?쒖떆
-- **?뺢퇋???ㅻ쪟 泥섎━**: ?섎せ???뺢퇋???낅젰 ??Toast ?뚮┝
-
-#### feat(snippets): ?ㅻ땲???먮룞 ?앹꽦 湲곕뒫 援ы쁽
-
-##### 異붽???(Added)
-
-- **紐낅졊???덉뒪?좊━ 異붿쟻 ?쒖뒪??* (`src/app.js`)
-  - `commandHistory` 媛앹껜濡??꾨줈?앺듃蹂?紐낅졊???ъ슜 鍮덈룄 異붿쟻
-  - localStorage 湲곕컲 ?곴뎄 ???
-  - 理쒕? 1,000媛?紐낅졊??異붿쟻
-  - 吏㏃? 紐낅졊??5??誘몃쭔) ?먮룞 ?꾪꽣留?
-  - 蹂듭옟??紐낅졊???뚯씠?? ?듭뀡 ?ы븿) ?곗꽑 ?쒖븞
-
-- **?먮룞 ?ㅻ땲???쒖븞 UI** (`src/app.js`)
-  - 3???댁긽 ?ъ슜??紐낅졊???먮룞 ?쒖븞
-  - ?곗륫 ?섎떒 floating 移대뱶 ?뺥깭
-  - "?ㅻ땲?レ쑝濡???? / "臾댁떆" 踰꾪듉 ?쒓났
-  - 10珥????먮룞 ?щ씪吏?
-  - ?щ씪?대뱶 ?좊땲硫붿씠???곸슜
-
-- **?곕????낅젰 ?듯빀** (`src/app.js`)
-  - Enter ??媛먯?濡?紐낅졊???쒖텧 ?쒖젏 異붿쟻
-  - Ctrl+C, Backspace 泥섎━
-  - ?꾨줈?앺듃蹂?紐낅졊??遺꾨━ 異붿쟻
-
-- **?ㅼ젙 ?듭뀡 異붽?** (`index.html`, `src/app.js`)
-  - "Enable snippet suggestions" 泥댄겕諛뺤뒪
-  - 理쒖냼 ?ъ슜 ?잛닔 ?щ씪?대뜑 (2-10??
-  - ?ㅼ떆媛?threshold ?낅뜲?댄듃
-
-- **CSS ?ㅽ??쇰쭅** (`src/style.css`)
-  - `.snippet-suggestion` 而댄룷?뚰듃 ?ㅽ???
-  - ?좊땲硫붿씠??(slideInRight, fade out)
-  - ?뚮쭏蹂??됱긽 ???
-  - 諛섏쓳???덉씠?꾩썐
-
-##### 蹂寃쎈맖 (Changed)
-
-- **?ㅼ젙 媛앹껜 ?뺤옣** (`src/app.js`)
-  - `enableSnippetSuggestions` ?꾨뱶 異붽? (湲곕낯媛? true)
-  - `snippetSuggestionThreshold` ?꾨뱶 異붽? (湲곕낯媛? 3)
-  - snake_case ??camelCase ?뺢퇋??濡쒖쭅 異붽?
-
-- **珥덇린??怨쇱젙 ?낅뜲?댄듃** (`src/app.js`)
-  - `commandHistory.load()` ?몄텧 異붽?
-  - ???쒖옉 ????λ맂 紐낅졊???덉뒪?좊━ 蹂듭썝
-
-##### 臾몄꽌 (Documentation)
-
-- **湲곕뒫 臾몄꽌 異붽?** (`docs/features/snippet-auto-generation.md`)
-  - 援ы쁽 ?몃??ы빆
-  - ?ъ슜???뚮줈??
-  - ?곗씠??援ъ“
-  - ?ν썑 媛쒖꽑 諛⑺뼢
-
-#### fix(security): 肄붾뱶 由щ럭 ?댁뒋 ?섏젙 (CRITICAL + HIGH)
-
-##### ?섏젙??(Fixed)
-
-- **CRITICAL: XSS 痍⑥빟???쒓굅** (`src/app.js` - showToast ?⑥닔, ?쇱씤 23)
-  - `showToast()` ?⑥닔?먯꽌 硫붿떆吏瑜?`escapeHtml()`濡?媛먯떥 XSS 怨듦꺽 李⑤떒
-  - ?ъ슜???낅젰??HTML濡?吏곸젒 ?쎌엯?섎뒗 蹂댁븞 痍⑥빟???닿껐
-  - ?뱀닔 臾몄옄 ?먮룞 ?댁뒪耳?댄봽 (`<`, `>`, `&`, `"`, `'`)
-
-- **HIGH: ?곹깭 遺덉씪移?臾몄젣 ?닿껐** (`src/app.js` - saveTabLayout ?⑥닔, ?쇱씤 2333)
-  - `saveTabLayout()`?먯꽌 Deep clone 援ы쁽
-  - `serializeSplitTree()` + `deserializeSplitTree()` 議고빀?쇰줈 ?꾩쟾??蹂듭궗蹂??앹꽦
-  - ??媛??덉씠?꾩썐 怨듭쑀 李몄“ 臾몄젣 ?닿껐
-
-- **HIGH: Null 泥댄겕 異붽?** (`src/app.js` - toggleMaximize ?⑥닔, ?쇱씤 1983)
-  - `toggleMaximize()` ?⑥닔??sessionId null 泥댄겕 異붽?
-  - ?쒖꽦 ?몄뀡???놁쓣 ??紐낇솗??寃쎄퀬 硫붿떆吏 ?쒖떆
-  - ?덉긽移?紐삵븳 ?먮윭 諛⑹?
-
-- **HIGH: Race Condition ?닿껐** (`src/app.js` - splitActivePane ?⑥닔, ?쇱씤 2027)
-  - `state.splitInProgress` ?뚮옒洹?異붽?
-  - try/finally 釉붾줉?쇰줈 ?숈떆???쒖뼱 援ы쁽
-  - 鍮좊Ⅸ ?곗냽 遺꾪븷 ?묒뾽 ???몃━ 援ъ“ ?먯긽 諛⑹?
-
-##### 臾몄꽌 (Documentation)
-
-- **肄붾뱶 由щ럭 ?섏젙 蹂닿퀬??異붽?** (`docs/code-review-fixes-2026-02-03.md`)
-  - 4媛??댁뒋 ?곸꽭 ?ㅻ챸 (臾몄젣?? ?섏젙 ?댁슜, 湲곗닠???몃??ы빆)
-  - ?뚯뒪??諛?寃利?諛⑸쾿
-  - ?ν썑 媛쒖꽑 ?ы빆 ?쒖븞
-
----
+- `e8b505b` 탭 분할 화면 기능 연구 보고서
+- `3f49650` Shellhive 기능 개선 로드맵 연구 보고서
 
 ### 2026-02-02
 
-#### feat(i18n): ?ㅺ뎅??吏??(Phase 9.2)
+#### Phase 6~9 기능 확장 및 문서 정비
 
-##### 異붽???(Added)
+##### 추가됨 (Added)
 
-- **i18n 紐⑤뱢 援ы쁽** (`src/i18n/index.js`)
-  - ?쒓뎅??ko), ?곸뼱(en) 踰덉뿭 ?뺤뀛?덈━
-  - `setLocale()`, `getLocale()`, `t()`, `getAvailableLocales()` ?⑥닔
-  - ?뚮젅?댁뒪???移섑솚 湲곕뒫 (`{name}`, `{count}` ??
+- `4fed401` lint 설정(Phase 6.1)
+- `e9d12e7` 테스트 프레임워크(Vitest, Phase 6.2)
+- `ff18c27` 개발 의존성 정리
+- `fae7f0b` Rust 백엔드 기능 확장
+- `25976c5` 프론트엔드 기능 확장
+- `077fe50` 다국어(i18n) 모듈 추가
+- `079b30b` 개발/설치 배치 스크립트 정비
+- `6d9cdeb` 프로젝트 삭제 확인 대화상자 추가
 
-- **Settings 援ъ“泥댁뿉 locale ?꾨뱶 異붽?** (`src-tauri/src/settings.rs`)
-  - `locale: String` ?꾨뱶 異붽?
-  - 湲곕낯媛? "ko" (?쒓뎅??
-  - locale ?좏슚??寃利?異붽? (en, ko)
+##### 수정됨 (Fixed)
 
-- **?ㅼ젙 UI???몄뼱 ?좏깮 ?듭뀡 異붽?** (`index.html`)
-  - Language ?쒕∼?ㅼ슫 硫붾돱 (English, ?쒓뎅??
+- `46ecf90` 탭 그룹 레이아웃/클릭 이벤트 수정
 
-##### 蹂寃쎈맖 (Changed)
+##### 문서화됨 (Documentation)
 
-- **app.js ?ㅺ뎅??吏???듯빀**
-  - i18n 紐⑤뱢 import
-  - state.settings??locale ?꾨뱶 異붽?
-  - `showSettingsModal()`: locale ?좏깮湲?媛??ㅼ젙
-  - `saveSettings()`: locale ???諛??곸슜
-  - `loadSettings()`: ???쒖옉 ??locale ?곸슜
+- `42fc95f` 변경 로그/문서 체계 정리
+- `6b80f1d` Phase 6~9 구현 문서 갱신
 
-##### 臾몄꽌 (Documentation)
+##### 기타 (Etc)
 
-- **i18n 援ы쁽 ?붿빟 臾몄꽌 異붽?** (`docs/i18n_implementation_summary.md`)
-  - 援ы쁽 媛쒖슂 諛??뚯씪 紐⑸줉
-  - 踰덉뿭 ??移댄뀒怨좊━ ?ㅻ챸
-  - ?ъ슜 ?덉젣 諛??ν썑 媛쒖꽑?ы빆
+- `b10cee0` `.gitignore`에 `coverage` 추가
+- `4dce9ab` PR #1 머지
+
+### 2026-02-01
+
+#### 탭 관리 강화 및 안정성 개선
+
+##### 추가됨 (Added)
+
+- `859cdaf` 탭 관리 기능 Phase 1~3 구현
+
+##### 수정됨 (Fixed)
+
+- `5099e35` 터미널 종료 버튼 동작 수정
+- `79a7ac7` 코드리뷰 기반 주요 이슈 7건 수정
+
+##### 문서화됨 (Documentation)
+
+- `8718bb9` 코드 검토 보고서/검증 결과
+- `f8c1373` 탭 관리 기능 강화 연구 문서
+- `2a390d7` 업데이트 보고서 및 변경 로그 보강
+
+### 2026-01-31
+
+#### PTY 안정화 집중 수정
+
+##### 수정됨 (Fixed)
+
+- `885a90e` master PTY 핸들 유지로 입력 문제 해결
+- `3652188` PTY Writer 관리 재설계
+- `7b26f72` PTY 실시간 입출력 및 UI 이벤트 처리 개선
+- `a9e5914` Tauri 권한/실행 환경 개선
+
+### 2026-01-30
+
+#### 초기 구축 (Phase 1~5)
+
+##### 추가됨 (Added)
+
+- `bbaea1f` Initial commit
+- `f1699e9` 프로젝트 문서 구조 설정
+- `abec1e3` Phase 1: Tauri v2 + xterm.js 통합
+- `03cac16` Phase 2: Windows ConPTY PTY 연동
+- `1e451d2` Phase 3: 프로젝트 관리 UI/기능
+- `a00f037` Phase 4: 멀티 세션 탭 고급 기능
+- `9e07b50` Phase 5: 스니펫/설정/로깅 기능
+
+##### 문서화됨 (Documentation)
+
+- `a540aa6` 개발 로드맵 체크리스트 완료 상태 업데이트
 
 ---
 
 ## [0.1.0] - 2026-02-01 (develop)
 
-### 媛쒖슂
+### 개요
 
-Shellhive??泥?踰덉㎏ 媛쒕컻 踰꾩쟾?쇰줈, Phase 1~5源뚯???紐⑤뱺 ?듭떖 湲곕뒫??援ы쁽?섏뿀?듬땲??
+Shellhive의 첫 개발 버전으로, Phase 1~5 핵심 기능이 반영되었습니다.
 
-- **Phase 1**: Tauri v2 ?꾨줈?앺듃 珥덇린??諛?xterm.js ?듯빀
-- **Phase 2**: Windows ConPTY瑜??듯븳 PTY ?곕룞
-- **Phase 3**: ?꾨줈?앺듃 愿由?UI 諛?CRUD 湲곕뒫
-- **Phase 4**: 硫???몄뀡 ??愿由?
-- **Phase 5**: ?ㅻ땲?? ?ㅼ젙, 濡쒓퉭, ?ㅻ낫???⑥텞??
-
----
-
-### 2026-02-01
-
-#### feat(tabs): ??愿由?湲곕뒫 Phase 1, 2, 3 ?꾩껜 援ы쁽
-
-**而ㅻ컠**: `859cdaf`
-
-##### 異붽???(Added)
-
-- **Phase 1: ???곹깭 ?쒖떆 媛뺥솕**
-  - ??퀎 ?곹깭 ?꾩씠肄?(?곌껐 以?`*`, ?ㅽ뻾 以?`??, 醫낅즺??`-`)
-  - 而⑦뀓?ㅽ듃 硫붾돱 (蹂듭젣, ?リ린, ?ㅻⅨ ??紐⑤몢 ?リ린)
-  - ?꾨줈?앺듃 ?대쫫 湲곕컲 ???쒕ぉ
-
-- **Phase 2: ?쒕옒洹????쒕∼**
-  - HTML5 Drag & Drop API 湲곕컲 ???쒖꽌 蹂寃?
-  - ?쒕옒洹?以??쒓컖???쇰뱶諛?(?쒕옒洹??ㅻ쾭 ?ㅽ???
-  - ?쒕∼ ?????쒖꽌 利됱떆 諛섏쁺
-
-- **Phase 3: ?ㅻ낫???⑥텞??*
-  - `Ctrl+T`: ???곕??????앹꽦
-  - `Ctrl+W`: ?꾩옱 ???リ린
-  - `Ctrl+Tab` / `Ctrl+Shift+Tab`: ???꾪솚
-  - `Ctrl+1~9`: ?뱀젙 ??쑝濡?吏곸젒 ?대룞
+- 통합 터미널 세션 관리
+- PTY 기반 실시간 입출력
+- 프로젝트/탭/스니펫/설정 관리
+- 로깅 및 기본 단축키 체계
 
 ---
 
-#### docs: ??愿由?湲곕뒫 媛뺥솕 ?곌뎄 蹂닿퀬??異붽?
+## 변경 유형 가이드
 
-**而ㅻ컠**: `f8c1373`
-
-##### 臾몄꽌 (Documentation)
-
-- `docs/research-tab-management-2026-02-01.md` - ??愿由?湲곕뒫 媛뺥솕 ?곌뎄 蹂닿퀬??
-  - Phase 1~3 援ы쁽 怨꾪쉷 ?곸꽭
-  - 湲곗닠 ?ㅽ깮 諛?援ы쁽 諛⑺뼢
+- `Added`: 새로운 기능
+- `Changed`: 기존 기능 변경
+- `Fixed`: 버그 수정
+- `Documentation`: 문서 변경
+- `Security`: 보안 변경
 
 ---
 
-#### fix(pty): ?곕???醫낅즺 踰꾪듉 ?숈옉 ?섏젙
-
-**而ㅻ컠**: `5099e35`
-
-##### ?섏젙??(Fixed)
-
-- **?곕???醫낅즺 踰꾪듉 ?숈옉 臾몄젣 ?닿껐**
-  - ???リ린 踰꾪듉 ?대┃ ??PTY ?몄뀡???뺤긽 醫낅즺?섎룄濡??섏젙
-  - ?대깽??踰꾨툝留?諛⑹? 泥섎━ 異붽?
-
----
-
-#### docs: ?낅뜲?댄듃 蹂닿퀬??諛?蹂寃?濡쒓렇 異붽?
-
-**而ㅻ컠**: `2a390d7`
-
-##### 臾몄꽌 (Documentation)
-
-- ?낅뜲?댄듃 蹂닿퀬??異붽?
-- 蹂寃?濡쒓렇 臾몄꽌 援ъ“ ?ㅼ젙
-
----
-
-#### fix: 肄붾뱶 寃??蹂닿퀬??湲곕컲 7媛??댁뒋 ?섏젙
-
-**而ㅻ컠**: `79a7ac7`
-
-##### ?섏젙??(Fixed)
-
-- **[HIGH]** ?ㅻ땲???꾨줈?앺듃 ?곗씠???띿꽦?먯꽌 HTML ?뷀떚??蹂??臾몄젣 ?섏젙
-  - `data-command`, `data-path`??JSON.stringify ?ъ슜
-  - ?뱀닔臾몄옄(`&`, `<`, `>`) ?ы븿 紐낅졊??寃쎈줈 ?뺤긽 ?ㅽ뻾
-
-- **[HIGH]** PTY ?꾨줈?몄뒪 誘몄쥌猷?臾몄젣 ?섏젙
-  - child ?몃뱾 ???諛?`kill_pty`?먯꽌 紐낆떆??醫낅즺 ?몄텧
-  - ??醫낅즺 ??諛깃렇?쇱슫???꾨줈?몄뒪 ?붿〈 諛⑹?
-
-- **[MEDIUM]** ?곕???由ъ궗?댁쫰媛 PTY??諛섏쁺?섏? ?딅뜕 臾몄젣 ?섏젙
-  - `resize_pty` ?몄텧 異붽? (100ms ?붾컮?댁떛)
-  - 珥덇린 PTY ?앹꽦 ?쒖뿉???ш린 ?꾨떖
-
-- **[MEDIUM]** PTY ?먮윭 ?대깽??誘멸뎄??臾몄젣 ?섏젙
-  - `pty-error` ?대깽??由ъ뒪???깅줉
-  - ?먮윭 諛쒖깮 ???곕??먯뿉 鍮④컙??硫붿떆吏 ?쒖떆
-
-- **[MEDIUM]** write_pty ?꾩뿭 Mutex ??踰붿쐞 怨쇰떎 臾몄젣 ?섏젙
-  - writer瑜?`Arc<Mutex>`濡??섑븨?섏뿬 ?몄뀡蹂???遺꾨━
-  - 硫???몄뀡 ?숈떆 ?낅젰 ??釉붾줈???쒓굅
-
-##### 蹂댁븞 (Security)
-
-- **[LOW]** CSP(Content Security Policy) ?뺤콉 ?곸슜
-  - `csp: null` ???곸젅??蹂댁븞 ?뺤콉?쇰줈 蹂寃?
-  - XSS 怨듦꺽 諛⑹뼱 媛뺥솕
-
-##### 異붽???(Added)
-
-- **[LOW]** 湲곕낯 ?뚯뒪???ㅼ틦?대뵫 異붽?
-  - Rust ?⑥쐞 ?뚯뒪??2媛?(`test_pty_manager_creation`, `test_pty_manager_default`)
-  - `npm run test:rust` ?ㅽ겕由쏀듃 異붽?
-
----
-
-#### docs: 肄붾뱶 寃??蹂닿퀬??諛?寃利?寃곌낵 異붽?
-
-**而ㅻ컠**: `8718bb9`
-
-##### 臾몄꽌 (Documentation)
-
-- `docs/review-report-develop-2026-02-01.md` - develop 釉뚮옖移??뺤쟻 肄붾뱶 由щ럭 蹂닿퀬??
-- `docs/review-verification-2026-02-01.md` - 寃??蹂닿퀬??寃利?寃곌낵
-
----
-
-### 2026-01-31
-
-#### fix(pty): master PTY ?몃뱾 ?좎?濡??곕????낅젰 臾몄젣 ?닿껐
-
-**而ㅻ컠**: `885a90e`
-
-##### ?섏젙??(Fixed)
-
-- **PTY ?낅젰 遺덇? 臾몄젣 ?닿껐**
-  - master PTY ?몃뱾??議곌린 ?댁젣?섎뒗 臾몄젣 ?섏젙
-  - ?몄뀡 ?섎챸 ?숈븞 ?몃뱾 ?좎??섎룄濡?援ъ“ 蹂寃?
-
----
-
-#### fix: PTY ?낅젰/異쒕젰 ?듭떖 ?섏젙 - Writer 愿由??ъ꽕怨?
-
-**而ㅻ컠**: `3652188`
-
-##### 蹂寃쎈맖 (Changed)
-
-- **PTY Writer 愿由?援ъ“ ?ъ꽕怨?*
-  - 湲곗〈: ?꾩뿭 ?쎌쑝濡??명븳 ?숈떆 ?낅젰 臾몄젣
-  - 蹂寃? ?몄뀡蹂??낅┰?곸씤 Writer ?몄뒪?댁뒪 愿由?
-  - 硫???몄뀡 ?숈떆 ?낅젰 ?깅뒫 媛쒖꽑
-
----
-
-#### fix: PTY ?ㅼ떆媛??낆텧??諛?UI ?대깽??泥섎━ 媛쒖꽑
-
-**而ㅻ컠**: `7b26f72`
-
-##### ?섏젙??(Fixed)
-
-- **?ㅼ떆媛??낆텧??吏??臾몄젣 ?닿껐**
-  - PTY 異쒕젰 踰꾪띁留?理쒖쟻??
-  - Tauri ?대깽??諛쒖깮 鍮덈룄 議곗젙
-
-- **UI ?대깽??泥섎━ 媛쒖꽑**
-  - ?곕????ъ빱??愿由?媛쒖꽑
-  - ?낅젰 ?대깽???꾨떖 ?덉젙??
-
----
-
-#### fix: Tauri v2 沅뚰븳 ?ㅼ젙 諛??꾨줈?앺듃 ?ㅽ뻾 ?섍꼍 媛쒖꽑
-
-**而ㅻ컠**: `a9e5914`
-
-##### ?섏젙??(Fixed)
-
-- **Tauri v2 沅뚰븳 ?ㅼ젙 臾몄젣 ?닿껐**
-  - `src-tauri/capabilities/default.json` 沅뚰븳 ?ㅼ젙 異붽?
-  - ?대깽??由ъ뒪?? ?ㅼ씠?쇰줈洹? ??沅뚰븳 ?쒖꽦??
-
-- **?꾨줈?앺듃 ?ㅽ뻾 ?섍꼍 媛쒖꽑**
-  - 媛쒕컻 紐⑤뱶 ?ㅽ뻾 ?ㅽ겕由쏀듃 媛쒖꽑
-  - 鍮뚮뱶 ?ㅼ젙 理쒖쟻??
-
----
-
-### 2026-01-30
-
-#### docs: 媛쒕컻 濡쒕뱶留?泥댄겕由ъ뒪???꾨즺 ?곹깭濡??낅뜲?댄듃
-
-**而ㅻ컠**: `a540aa6`
-
-##### 臾몄꽌 (Documentation)
-
-- README.md 媛쒕컻 濡쒕뱶留?Phase 1~5 ?꾨즺 ?곹깭濡??낅뜲?댄듃
-- 媛쒕컻 吏꾪뻾 ?곹솴 諛섏쁺
-
----
-
-#### feat(phase5): 怨좉툒 湲곕뒫 援ы쁽 - ?ㅻ땲?? ?ㅼ젙, 濡쒓퉭
-
-**而ㅻ컠**: `9e07b50`
-
-##### 異붽???(Added)
-
-- **紐낅졊???ㅻ땲??湲곕뒫**
-  - ?먯＜ ?ъ슜?섎뒗 紐낅졊?????
-  - ?대┃ ??踰덉쑝濡??꾩옱 ?곕??먯뿉 ?ㅽ뻾
-  - ?ㅻ땲??異붽?/??젣 UI
-
-- **?ㅼ젙 湲곕뒫**
-  - ?뚮쭏 ?좏깮 (Dark, Light, Monokai)
-  - 湲瑗??ш린 議곗젙 (12px ~ 24px)
-  - 湲瑗?醫낅쪟 ?좏깮
-
-- **?몄뀡 濡쒓퉭**
-  - ?곕???異쒕젰 ?먮룞 ????듭뀡
-  - 濡쒓렇 ?뚯씪 ?꾩튂: `%APPDATA%/shellhive/logs/`
-
-- **?ㅻ낫???⑥텞??*
-  - `Ctrl+,`: ?ㅼ젙 ?닿린
-  - `Ctrl+Shift+C`: 蹂듭궗
-  - `Ctrl+Shift+V`: 遺숈뿬?ｊ린
-
----
-
-#### feat(phase4): 硫???몄뀡 ??怨좉툒 湲곕뒫 援ы쁽
-
-**而ㅻ컠**: `a00f037`
-
-##### 異붽???(Added)
-
-- **??湲곕컲 硫???몄뀡**
-  - ?щ윭 ?곕????몄뀡????쑝濡?愿由?
-  - ??퀎 ?낅┰?곸씤 PTY ?몄뀡
-
-- **?몄뀡 ?곹깭 ?쒖떆**
-  - ?곌껐 以? ?ㅽ뻾 以? 醫낅즺???곹깭 ?꾩씠肄?
-
-- **??愿由?湲곕뒫**
-  - ?????앹꽦/?リ린
-  - ???꾪솚
-
----
-
-#### feat(phase3): ?꾨줈?앺듃 愿由?UI 諛?湲곕뒫 援ы쁽
-
-**而ㅻ컠**: `1e451d2`
-
-##### 異붽???(Added)
-
-- **?꾨줈?앺듃 愿由?*
-  - ?꾨줈?앺듃 異붽?/?섏젙/??젣 CRUD
-  - JSON ?뚯씪 湲곕컲 ?곴뎄 ???(`%APPDATA%/shellhive/projects.json`)
-
-- **?ъ씠?쒕컮 UI**
-  - ?꾨줈?앺듃 紐⑸줉 ?쒖떆
-  - ?꾨줈?앺듃 ?대┃ ???대떦 ?대뜑?먯꽌 ?곕????ㅽ뻾
-
-- **?대뜑 釉뚮씪?곗?**
-  - Tauri Dialog ?뚮윭洹몄씤 ?곕룞
-  - ?쒖뒪???대뜑 ?좏깮 ?ㅼ씠?쇰줈洹?
-
----
-
-#### feat(phase2): PTY ?곕룞 援ы쁽 - Windows ConPTY ?꾩쟾 ?듯빀
-
-**而ㅻ컠**: `03cac16`
-
-##### 異붽???(Added)
-
-- **Windows ConPTY ?듯빀**
-  - `portable-pty` ?щ젅?댄듃 ?ъ슜
-  - PTY ?몄뀡 ?앹꽦/愿由?醫낅즺
-
-- **Tauri 而ㅻ㎤??*
-  - `create_pty`: PTY ?몄뀡 ?앹꽦
-  - `write_pty`: PTY???낅젰 ?꾩넚
-  - `resize_pty`: ?곕????ш린 議곗젙
-  - `kill_pty`: PTY ?몄뀡 醫낅즺
-
-- **?묐갑???듭떊**
-  - xterm.js ?낅젰 ??PTY ?꾩넚
-  - PTY 異쒕젰 ??Tauri ?대깽????xterm.js ?뚮뜑留?
-
----
-
-#### feat(phase1): Tauri v2 ?꾨줈?앺듃 珥덇린??諛?xterm.js ?듯빀
-
-**而ㅻ컠**: `abec1e3`
-
-##### 異붽???(Added)
-
-- **Tauri v2 ?꾨줈?앺듃 援ъ“**
-  - `src-tauri/`: Rust 諛깆뿏??
-  - `src/`: ???꾨줎?몄뿏??
-
-- **xterm.js ?듯빀**
-  - ?곕????뚮뜑留?而댄룷?뚰듃
-  - FitAddon???듯븳 ?먮룞 ?ш린 議곗젙
-  - WebLinksAddon???듯븳 URL ?대┃ 吏??
-
-- **湲곕낯 UI ?덉씠?꾩썐**
-  - ?ъ씠?쒕컮 + ?곕????곸뿭 援ъ“
-  - ?ㅽ겕 ?뚮쭏 湲곕낯 ?곸슜
-
----
-
-#### docs: ?꾨줈?앺듃 珥덇린 臾몄꽌 援ъ“ ?ㅼ젙
-
-**而ㅻ컠**: `f1699e9`
-
-##### 臾몄꽌 (Documentation)
-
-- `README.md` - ?꾨줈?앺듃 ?뚭컻 諛??ъ슜踰?
-- `AGENTS.md` - AI ?먯씠?꾪듃 媛쒕컻 媛?대뱶
-- `CLAUDE.md` - Claude Code ?ㅼ젙
-- `docs/dev-guide.md` - 媛쒕컻??媛?대뱶
-
----
-
-#### Initial commit
-
-**而ㅻ컠**: `bbaea1f`
-
-##### 異붽???(Added)
-
-- Git ??μ냼 珥덇린??
-- `.gitignore` ?ㅼ젙
-
----
-
-## 踰꾩쟾 ?덉뒪?좊━
-
-| 踰꾩쟾 | ?좎쭨 | ?곹깭 | 二쇱슂 蹂寃?|
-|------|------|------|----------|
-| 0.1.0 | 2026-02-01 | 媛쒕컻 以?| Phase 1~5 援ы쁽, ?듭떖 湲곕뒫 ?꾨즺 |
-
----
-
-## 蹂寃??좏삎 媛?대뱶
-
-| ?좏삎 | ?ㅻ챸 |
-|------|------|
-| **異붽???(Added)** | ?덈줈??湲곕뒫 |
-| **蹂寃쎈맖 (Changed)** | 湲곗〈 湲곕뒫 蹂寃?|
-| **?ъ슜 以묐떒 (Deprecated)** | 怨??쒓굅??湲곕뒫 |
-| **?쒓굅??(Removed)** | ?쒓굅??湲곕뒫 |
-| **?섏젙??(Fixed)** | 踰꾧렇 ?섏젙 |
-| **蹂댁븞 (Security)** | 蹂댁븞 愿??蹂寃?|
-| **臾몄꽌 (Documentation)** | 臾몄꽌 異붽?/?섏젙 |
-
----
-
-*??臾몄꽌??媛쒕컻 吏꾪뻾???곕씪 吏?띿쟻?쇰줈 ?낅뜲?댄듃?⑸땲??*
+*참고: 2026-02-09에 기존 `change_log.md`의 한글 깨짐(모지바케) 이력을 UTF-8 기준으로 복구/재구성했습니다.*

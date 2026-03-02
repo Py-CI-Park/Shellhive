@@ -29,6 +29,44 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
 4. **Git 명령 5개 미사용**: `git_branches`, `git_log`, `git_checkout`, `git_discard`, `get_snippet` — 백엔드 등록됐으나 프론트엔드 UI 없음
 5. **CSP 취약**: `tauri.conf.json`에 `'unsafe-inline'` + `'unsafe-eval'` → XSS 방어 무력화
 
+### 실행 현황 (2026-03-02)
+
+- ✅ **Phase 1 완료**
+  - PR #6 `security/merge-pr4-hardening` → `feature/next-improvements` 병합
+- ✅ **Phase 2 완료**
+  - 2-1 PR #7 `security/pty-shell-allowlist`
+  - 2-2 PR #8 `security/pty-workdir-validation`
+  - 2-3 PR #9 `security/git-filepath-validation`
+  - 2-4 PR #10 `security/csp-hardening`
+  - 2-5 PR #11 `security/git-css-allowlist`
+  - 2-6 `session-id-validation`은 PR #4 통합분에 포함
+  - 2-7 PR #17 `security/innerhtml-audit`
+  - 2-8 PR #15 `security/tauri-capabilities`
+  - 2-9 PR #12 `security/env-var-validation`
+  - 2-10 PR #13 `security/claude-path-injection`
+  - 후속 보강 PR #18 `fix(security color rendering)`
+- ✅ **Phase 3 완료**
+  - 3-1 PR #19 `cleanup/dead-ipc-commands`
+  - 3-2 PR #20 `cleanup/unused-files`
+  - 3-3 PR #21 `cleanup/docs-sync`
+- 🔄 **Phase 4 진행 중**
+  - 4-1 PR #22 `feat/module-design` 완료
+  - 4-2 PR #23 `feat/state-eventbus` 완료
+  - 4-3-a PR #31 `feat/extract-shortcuts` 완료
+  - 4-3-b PR #30 `feat/extract-settings` 완료
+  - 4-3-c PR #32 `feat/extract-modals` 완료
+  - 4-3-d PR #25 `feat/extract-git-panel` 완료
+  - 4-3-e PR #33 `feat/extract-tab-manager` + PR #43 `feat/extract-tab-manager-interactions` + `tab-organization.js` 추출(3차) 진행
+  - 4-3-f PR #34 `feat/extract-split-pane` + PR #44 `feat/extract-split-pane-helpers` 2차 완료
+  - 4-3-g PR #36 `feat/extract-terminal-session` + PR #40 `feat/extract-terminal-utils` 2차 완료
+  - 4-3-h PR #26 `feat/extract-error-explanations` 완료
+  - 4-4 PR #37 `feat/app-entrypoint-slim` + PR #45 `feat/extract-file-drag-drop` + `tab-organization.js` 분리 반영 (app.js 5,124줄)
+- 🔄 **Phase 5 진행 중**
+  - 5-1 PR #23 Git 패널 UI 확장(브랜치/로그/discard) 반영
+  - 5-2 보강: Claude/AI IPC 등록 일치성 테스트(`ipc-registration.test.js`) 추가
+  - 5-3 보강: 실코드 기반 테스트 80개로 확장 (`state/git-panel/error/settings/shortcuts/modals/tab-manager/tab-organization/split-pane/session/terminal/dom/drag-drop`)
+  - 5-4 PR #28 `feat/security-revalidation` 완료
+
 ---
 
 ## 2. 브랜치 전략
