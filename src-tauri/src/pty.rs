@@ -8,6 +8,15 @@ use std::thread;
 use tauri::{AppHandle, Emitter};
 
 const ALLOWED_SHELLS: &[&str] = &["cmd.exe", "powershell.exe", "pwsh.exe"];
+const BLOCKED_ENV_KEYS: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "COMSPEC",
+    "SHELL",
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+];
 
 pub(crate) fn validate_shell(shell: &str) -> Result<String, String> {
     let trimmed = shell.trim();
@@ -62,6 +71,38 @@ fn validate_working_directory(working_dir: &str) -> Result<std::path::PathBuf, S
     }
 
     crate::project::ensure_registered_project_path_or_subdir(working_dir)
+}
+
+pub(crate) fn validate_env_key(key: &str) -> Result<String, String> {
+    let trimmed = key.trim();
+
+    if trimmed.is_empty() || trimmed.len() > 256 {
+        return Err("Env key must be 1-256 characters".to_string());
+    }
+
+    if !trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(format!("Invalid env key: {}", key));
+    }
+
+    let upper = trimmed.to_ascii_uppercase();
+    if BLOCKED_ENV_KEYS.contains(&upper.as_str()) {
+        return Err(format!("Blocked env key: {}", key));
+    }
+
+    Ok(trimmed.to_string())
+}
+
+pub(crate) fn validate_env_value(value: &str) -> Result<String, String> {
+    if value.len() > 4096 {
+        return Err("Env value too long (max 4096)".to_string());
+    }
+    if value.contains('\0') || value.contains('\n') || value.contains('\r') {
+        return Err("Env value contains invalid characters".to_string());
+    }
+    Ok(value.to_string())
 }
 
 // Store both the master PTY handle and the writer
@@ -134,7 +175,9 @@ pub async fn create_pty(
     if let Some(vars) = env_vars {
         println!("[PTY] Setting {} environment variables", vars.len());
         for (key, value) in vars {
-            cmd.env(key, value);
+            let valid_key = validate_env_key(&key)?;
+            let valid_value = validate_env_value(&value)?;
+            cmd.env(valid_key, valid_value);
         }
     }
 
@@ -387,6 +430,39 @@ mod tests {
         let home_dir = dirs::home_dir().expect("home directory should exist");
         let home_str = home_dir.to_str().expect("home path should be valid UTF-8");
         assert!(validate_working_directory(home_str).is_ok());
+    }
+
+    #[test]
+    fn test_valid_env_key() {
+        assert!(validate_env_key("API_TOKEN").is_ok());
+        assert!(validate_env_key("MY_VAR_123").is_ok());
+    }
+
+    #[test]
+    fn test_env_key_with_equals_rejected() {
+        assert!(validate_env_key("BAD=KEY").is_err());
+    }
+
+    #[test]
+    fn test_env_key_path_blocked() {
+        assert!(validate_env_key("PATH").is_err());
+        assert!(validate_env_key("comspec").is_err());
+    }
+
+    #[test]
+    fn test_env_value_newline_rejected() {
+        assert!(validate_env_value("line1\nline2").is_err());
+    }
+
+    #[test]
+    fn test_env_value_too_long_rejected() {
+        let long_value = "a".repeat(4097);
+        assert!(validate_env_value(&long_value).is_err());
+    }
+
+    #[test]
+    fn test_env_value_null_byte_rejected() {
+        assert!(validate_env_value("abc\0def").is_err());
     }
 
     #[test]

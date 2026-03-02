@@ -457,17 +457,20 @@ pub async fn save_project_env(
 
     for key in keys {
         if let Some(value) = env_vars.get(key) {
+            let validated_key = crate::pty::validate_env_key(key)?;
+            let validated_value = crate::pty::validate_env_value(value)?;
+
             // Quote values that contain spaces or special characters
-            let formatted_value = if value.contains(' ')
-                || value.contains('=')
-                || value.contains('#')
-                || value.contains('"')
+            let formatted_value = if validated_value.contains(' ')
+                || validated_value.contains('=')
+                || validated_value.contains('#')
+                || validated_value.contains('"')
             {
-                format!("\"{}\"", value.replace('\"', "\\\""))
+                format!("\"{}\"", validated_value.replace('\"', "\\\""))
             } else {
-                value.clone()
+                validated_value
             };
-            content.push_str(&format!("{}={}\n", key, formatted_value));
+            content.push_str(&format!("{}={}\n", validated_key, formatted_value));
         }
     }
 
