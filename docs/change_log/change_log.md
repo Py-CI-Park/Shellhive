@@ -17,6 +17,20 @@
 
 ## [Unreleased]
 
+### 2026-03-01
+
+#### docs: 프로젝트 개선 계획 v3 작성
+
+##### 추가됨 (Added)
+
+- **`docs/plans/project-improvement-plan.md`**: 프로젝트 개선 계획 v3
+  - 코드베이스 전수 분석 기반 상세 계획 (보안 취약점, 데드 코드, 테스트 커버리지 등)
+  - 5단계 Phase 구성: 보안 하드닝 통합 → 보안 취약점 해소(10개) → 코드 정리 → 모듈화 → 기능 완성
+  - 브랜치 전략: 개별 작업 브랜치 → PR → `feature/next-improvements` → PR → `main`
+  - 각 항목별 대상 파일, 줄 번호, 구현 코드, 테스트 케이스 명시
+  - 품질 인프라 자동화는 추후 진행으로 분리
+  - ADR-001 (Vite 기반 ESM), ADR-002 (Vitest) 포함
+
 ### 2026-02-08
 
 #### docs(qa): run-release 분할 QA 체크리스트/로그 최신화
