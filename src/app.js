@@ -18,6 +18,7 @@ import { createShortcutsController } from './shortcuts.js';
 import { createSessionManagerController } from './session-manager.js';
 import { SplitNode, serializeSplitTree, deserializeSplitTree, updateSessionIdsInTree } from './split-pane.js';
 import { createTabManagerController } from './tab-manager.js';
+import { initializeDomElementsRegistry } from './dom-elements.js';
 import {
   state,
   elements,
@@ -5113,41 +5114,7 @@ async function handleFileDrop(e) {
 
 // ===== Initialize DOM Elements =====
 function initializeDOMElements() {
-  tabsList = document.getElementById('tabsList');
-  terminalContainer = document.getElementById('terminalContainer');
-  newTabBtn = document.getElementById('newTabBtn');
-  projectList = document.getElementById('projectList');
-  addProjectBtn = document.getElementById('addProjectBtn');
-  addProjectModal = document.getElementById('addProjectModal');
-  closeAddProjectModal = document.getElementById('closeAddProjectModal');
-  cancelAddProject = document.getElementById('cancelAddProject');
-  confirmAddProject = document.getElementById('confirmAddProject');
-  projectNameInput = document.getElementById('projectName');
-  projectPathInput = document.getElementById('projectPath');
-  browsePathBtn = document.getElementById('browsePathBtn');
-  snippetList = document.getElementById('snippetList');
-  addSnippetBtn = document.getElementById('addSnippetBtn');
-  addSnippetModal = document.getElementById('addSnippetModal');
-  closeAddSnippetModal = document.getElementById('closeAddSnippetModal');
-  cancelAddSnippet = document.getElementById('cancelAddSnippet');
-  confirmAddSnippet = document.getElementById('confirmAddSnippet');
-  snippetNameInput = document.getElementById('snippetName');
-  snippetCommandInput = document.getElementById('snippetCommand');
-  settingsBtn = document.getElementById('settingsBtn');
-  settingsModal = document.getElementById('settingsModal');
-  closeSettingsModal = document.getElementById('closeSettingsModal');
-  cancelSettings = document.getElementById('cancelSettings');
-  saveSettingsBtn = document.getElementById('saveSettings');
-  settingsTheme = document.getElementById('settingsTheme');
-  settingsFontSize = document.getElementById('settingsFontSize');
-  fontSizeValue = document.getElementById('fontSizeValue');
-  settingsFontFamily = document.getElementById('settingsFontFamily');
-  settingsEnableLogging = document.getElementById('settingsEnableLogging');
-  settingsEnableNotifications = document.getElementById('settingsEnableNotifications');
-  settingsBlockMode = document.getElementById('settingsBlockMode');
-  clearLogsBtn = document.getElementById('clearLogsBtn');
-
-  Object.assign(elements, {
+  ({
     tabsList,
     terminalContainer,
     newTabBtn,
@@ -5181,9 +5148,10 @@ function initializeDOMElements() {
     settingsEnableNotifications,
     settingsBlockMode,
     clearLogsBtn
-  });
-
-  debug('DOM elements initialized');
+  } = initializeDomElementsRegistry({
+    elements,
+    debug
+  }));
 }
 
 // ===== Accessibility Functions =====
