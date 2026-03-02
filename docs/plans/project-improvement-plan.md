@@ -49,7 +49,9 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
   - 3-1 PR #19 `cleanup/dead-ipc-commands`
   - 3-2 PR #20 `cleanup/unused-files`
   - 3-3 `cleanup/docs-sync` 진행 중 (AGENTS/문서 동기화)
-- ⏳ **Phase 4~5 미착수**
+- 🔄 **Phase 4 착수**
+  - 4-1 `feat/module-design` 진행 중 (모듈 경계 설계 문서 작성)
+- ⏳ **Phase 5 미착수**
 
 ---
 
