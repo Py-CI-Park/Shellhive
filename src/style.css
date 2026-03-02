@@ -3981,28 +3981,45 @@ html, body {
   border-radius: 3px;
 }
 
-.git-panel__file-status--M {
+.git-panel__file-status--M,
+.git-panel__file-status--modified {
   background: #e5c07b;
   color: #1e1e1e;
 }
 
-.git-panel__file-status--A {
+.git-panel__file-status--A,
+.git-panel__file-status--added {
   background: #0dbc79;
   color: white;
 }
 
-.git-panel__file-status--D {
+.git-panel__file-status--D,
+.git-panel__file-status--deleted {
   background: #f14c4c;
   color: white;
 }
 
-.git-panel__file-status--U {
+.git-panel__file-status--U,
+.git-panel__file-status--conflicted {
   background: #bc3fbc;
   color: white;
 }
 
-.git-panel__file-status--\? {
+.git-panel__file-status--\?,
+.git-panel__file-status--untracked,
+.git-panel__file-status--unknown {
   background: var(--text-secondary);
+  color: white;
+}
+
+.git-panel__file-status--renamed,
+.git-panel__file-status--copied {
+  background: #4aa5f0;
+  color: white;
+}
+
+.git-panel__file-status--ignored {
+  background: #7f8c8d;
   color: white;
 }
 
