@@ -13,6 +13,7 @@ import { LAYOUT_PRESETS, TAB_COLORS } from './ui-constants.js';
 import { createGitPanelController } from './git-panel.js';
 import { createErrorExplanationController } from './error-explanations.js';
 import { createSettingsController } from './settings.js';
+import { createShortcutsController } from './shortcuts.js';
 import {
   state,
   elements,
@@ -1025,6 +1026,69 @@ const {
   commandHistory,
   TERMINAL_THEMES,
   getElements: getSettingsElements
+});
+
+function closeActiveSessionByShortcut() {
+  if (!state.activeSessionId) return;
+
+  const session = state.sessions.get(state.activeSessionId);
+  if (session && !session.pinned) {
+    closeSession(state.activeSessionId);
+  }
+}
+
+function toggleRecordingByShortcut() {
+  if (recordingManager.isRecording()) {
+    stopRecordingUI();
+  } else {
+    startRecordingUI();
+  }
+}
+
+function changeTheme(theme) {
+  const root = document.documentElement;
+  root.className = `theme-${theme}`;
+
+  if (typeof settingsTheme !== 'undefined' && settingsTheme) {
+    settingsTheme.value = theme;
+  }
+
+  showToast(`테마가 ${theme}로 변경되었습니다`, 'success');
+}
+
+const { handleKeyboardShortcuts } = createShortcutsController({
+  escapeHtml,
+  showToast,
+  debug,
+  actions: {
+    createSession: () => createSession(),
+    closeActiveSession: closeActiveSessionByShortcut,
+    restoreLastClosedTab: () => restoreLastClosedTab(),
+    splitDefault: () => splitDefault(),
+    splitHorizontal: () => splitHorizontal(),
+    splitVertical: () => splitVertical(),
+    focusLayoutPresetSelector: () => focusLayoutPresetSelector(),
+    openLayoutGalleryModal: (preset) => openLayoutGalleryModal(preset),
+    getLayoutPresetValue: () => document.getElementById('layoutPresetSelect')?.value || null,
+    mergePane: () => mergePane(),
+    toggleMaximize: () => toggleMaximize(),
+    showTerminalSearch: () => showTerminalSearch(),
+    showTabSearch: () => showTabSearch(),
+    showSettingsModal: () => showSettingsModal(),
+    showAddProjectModal: () => showAddProjectModal(),
+    showAddSnippetModal: () => showAddSnippetModal(),
+    toggleRecording: toggleRecordingByShortcut,
+    clearTerminalScreen: () => clearTerminalScreen(),
+    clearTerminalScrollback: () => clearTerminalScrollback(),
+    toggleFullscreen: () => toggleFullscreen(),
+    showHistoryPanel: () => showHistoryPanel(commandHistory, state, escapeHtml),
+    toggleGitPanel: () => toggleGitPanel(),
+    switchToNextTab: () => switchToNextTab(),
+    switchToPreviousTab: () => switchToPreviousTab(),
+    switchToTabByIndex: (index) => switchToTabByIndex(index),
+    focusPaneByDirection: (direction) => focusPaneByDirection(direction),
+    changeTheme: (theme) => changeTheme(theme)
+  }
 });
 
 // ===== Session State Persistence =====
@@ -5030,437 +5094,6 @@ function renderProjectCmdTrees() {
       }
     };
   });
-}
-
-// ===== Command Palette =====
-
-// 커맨드 정의 (모든 앱 기능)
-const COMMANDS = [
-  { id: 'new-tab', name: '새 탭', shortcut: 'Ctrl+T', action: () => createSession() },
-  { id: 'close-tab', name: '탭 닫기', shortcut: 'Ctrl+W', action: () => state.activeSessionId && closeSession(state.activeSessionId) },
-  { id: 'restore-tab', name: '닫은 탭 복원', shortcut: 'Ctrl+Shift+T', action: () => restoreLastClosedTab() },
-  { id: 'split-default', name: '기본 분할 (오른쪽)', shortcut: 'Ctrl+\\', action: () => splitDefault() },
-  { id: 'split-horizontal', name: '아래로 분할', shortcut: 'Ctrl+Shift+D', action: () => splitHorizontal() },
-  { id: 'split-vertical', name: '오른쪽 분할', shortcut: 'Ctrl+Shift+E', action: () => splitVertical() },
-  { id: 'layout-preset-selector', name: '레이아웃 선택기 열기', shortcut: 'Ctrl+Shift+S', action: () => focusLayoutPresetSelector() },
-  { id: 'layout-gallery', name: '레이아웃 갤러리 열기', shortcut: 'Ctrl+Shift+L', action: () => openLayoutGalleryModal() },
-  { id: 'merge-pane', name: '활성 창 합치기', shortcut: 'Ctrl+Shift+J', action: () => mergePane() },
-  { id: 'toggle-maximize', name: '패널 최대화/복원', shortcut: 'Ctrl+Shift+M', action: () => toggleMaximize() },
-  { id: 'search-terminal', name: '터미널 검색', shortcut: 'Ctrl+F', action: () => showTerminalSearch() },
-  { id: 'search-tabs', name: '탭 검색', shortcut: 'Ctrl+Shift+F', action: () => showTabSearch() },
-  { id: 'settings', name: '설정 열기', shortcut: 'Ctrl+,', action: () => showSettingsModal() },
-  { id: 'add-project', name: '프로젝트 추가', shortcut: '', action: () => showAddProjectModal() },
-  { id: 'add-snippet', name: '스니펫 추가', shortcut: '', action: () => showAddSnippetModal() },
-  { id: 'toggle-recording', name: '녹화 시작/중지', shortcut: 'Ctrl+Shift+R', action: () => {
-    if (recordingManager.isRecording()) {
-      stopRecordingUI();
-    } else {
-      startRecordingUI();
-    }
-  }},
-  { id: 'clear-screen', name: '화면 지우기', shortcut: 'Ctrl+L', action: () => clearTerminalScreen() },
-  { id: 'clear-scrollback', name: '스크롤백 지우기', shortcut: 'Ctrl+K', action: () => clearTerminalScrollback() },
-  { id: 'fullscreen', name: '전체화면 전환', shortcut: 'F11', action: () => toggleFullscreen() },
-  { id: 'history', name: '명령어 히스토리', shortcut: 'Ctrl+R', action: () => showHistoryPanel(commandHistory, state, escapeHtml) },
-  { id: 'git-panel', name: 'Git 패널 토글', shortcut: 'Ctrl+G', action: () => toggleGitPanel() },
-  { id: 'next-tab', name: '다음 탭', shortcut: 'Ctrl+Tab', action: () => switchToNextTab() },
-  { id: 'prev-tab', name: '이전 탭', shortcut: 'Ctrl+Shift+Tab', action: () => switchToPreviousTab() },
-  { id: 'theme-dark', name: '테마: 다크', shortcut: '', action: () => changeTheme('dark') },
-  { id: 'theme-light', name: '테마: 라이트', shortcut: '', action: () => changeTheme('light') },
-  { id: 'theme-monokai', name: '테마: Monokai', shortcut: '', action: () => changeTheme('monokai') },
-  { id: 'theme-high-contrast', name: '테마: 고대비', shortcut: '', action: () => changeTheme('high-contrast') },
-];
-
-// 최근 사용 명령어 추적
-const recentCommands = [];
-const MAX_RECENT_COMMANDS = 5;
-
-// 커맨드 팔레트 상태
-let commandPaletteState = {
-  isVisible: false,
-  selectedIndex: 0,
-  filteredCommands: [...COMMANDS]
-};
-
-function showCommandPalette() {
-  commandPaletteState.isVisible = true;
-  commandPaletteState.selectedIndex = 0;
-
-  // 최근 명령어를 먼저 표시
-  const recentIds = new Set(recentCommands);
-  const recentCmds = COMMANDS.filter(cmd => recentIds.has(cmd.id));
-  const otherCmds = COMMANDS.filter(cmd => !recentIds.has(cmd.id));
-  commandPaletteState.filteredCommands = [...recentCmds, ...otherCmds];
-
-  renderCommandPalette();
-
-  // 입력 필드에 포커스
-  const input = document.querySelector('.command-palette__input');
-  if (input) {
-    input.focus();
-  }
-}
-
-function hideCommandPalette() {
-  commandPaletteState.isVisible = false;
-  const palette = document.querySelector('.command-palette');
-  if (palette) {
-    palette.remove();
-  }
-}
-
-function renderCommandPalette() {
-  // 기존 팔레트 제거
-  const existing = document.querySelector('.command-palette');
-  if (existing) {
-    existing.remove();
-  }
-
-  // 팔레트 생성
-  const palette = document.createElement('div');
-  palette.className = 'command-palette';
-  palette.innerHTML = `
-    <div class="command-palette__container">
-      <input type="text" class="command-palette__input" placeholder="명령어 검색..." />
-      <div class="command-palette__list" role="listbox"></div>
-    </div>
-  `;
-
-  document.body.appendChild(palette);
-
-  // 이벤트 리스너 설정
-  const input = palette.querySelector('.command-palette__input');
-
-  input.addEventListener('input', (e) => {
-    filterCommands(e.target.value);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    handleCommandPaletteKeydown(e);
-  });
-
-  // 오버레이 클릭시 닫기
-  palette.addEventListener('click', (e) => {
-    if (e.target === palette) {
-      hideCommandPalette();
-    }
-  });
-
-  // 명령어 목록 렌더링
-  renderCommandList();
-}
-
-function renderCommandList() {
-  const list = document.querySelector('.command-palette__list');
-  if (!list) return;
-
-  list.innerHTML = '';
-
-  commandPaletteState.filteredCommands.forEach((cmd, index) => {
-    const item = document.createElement('div');
-    item.className = 'command-palette__item';
-    if (index === commandPaletteState.selectedIndex) {
-      item.classList.add('command-palette__item--selected');
-    }
-
-    // 최근 사용 명령어 표시
-    const isRecent = recentCommands.includes(cmd.id);
-
-    item.innerHTML = `
-      <div class="command-palette__item-content">
-        ${isRecent ? '<span class="command-palette__recent-badge">최근</span>' : ''}
-        <span class="command-palette__item-name">${escapeHtml(cmd.name)}</span>
-      </div>
-      ${cmd.shortcut ? `<span class="command-palette__item-shortcut">${escapeHtml(cmd.shortcut)}</span>` : ''}
-    `;
-
-    item.addEventListener('click', () => {
-      executeCommand(cmd);
-    });
-
-    item.addEventListener('mouseenter', () => {
-      commandPaletteState.selectedIndex = index;
-      renderCommandList();
-    });
-
-    list.appendChild(item);
-  });
-
-  // 선택된 항목이 보이도록 스크롤
-  const selectedItem = list.querySelector('.command-palette__item--selected');
-  if (selectedItem) {
-    selectedItem.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-function filterCommands(query) {
-  if (!query.trim()) {
-    // 검색어가 없으면 최근 명령어를 먼저 표시
-    const recentIds = new Set(recentCommands);
-    const recentCmds = COMMANDS.filter(cmd => recentIds.has(cmd.id));
-    const otherCmds = COMMANDS.filter(cmd => !recentIds.has(cmd.id));
-    commandPaletteState.filteredCommands = [...recentCmds, ...otherCmds];
-  } else {
-    // Fuzzy match: 검색어의 각 문자가 순서대로 포함되어 있는지 확인
-    const lowerQuery = query.toLowerCase();
-    commandPaletteState.filteredCommands = COMMANDS.filter(cmd => {
-      const lowerName = cmd.name.toLowerCase();
-      let queryIndex = 0;
-
-      for (let i = 0; i < lowerName.length && queryIndex < lowerQuery.length; i++) {
-        if (lowerName[i] === lowerQuery[queryIndex]) {
-          queryIndex++;
-        }
-      }
-
-      return queryIndex === lowerQuery.length;
-    });
-  }
-
-  commandPaletteState.selectedIndex = 0;
-  renderCommandList();
-}
-
-function handleCommandPaletteKeydown(e) {
-  switch (e.key) {
-    case 'Escape':
-      e.preventDefault();
-      hideCommandPalette();
-      break;
-
-    case 'ArrowDown':
-      e.preventDefault();
-      commandPaletteState.selectedIndex =
-        (commandPaletteState.selectedIndex + 1) % commandPaletteState.filteredCommands.length;
-      renderCommandList();
-      break;
-
-    case 'ArrowUp':
-      e.preventDefault();
-      commandPaletteState.selectedIndex =
-        (commandPaletteState.selectedIndex - 1 + commandPaletteState.filteredCommands.length)
-        % commandPaletteState.filteredCommands.length;
-      renderCommandList();
-      break;
-
-    case 'Enter':
-      e.preventDefault();
-      {
-        const selectedCmd = commandPaletteState.filteredCommands[commandPaletteState.selectedIndex];
-        if (selectedCmd) {
-          executeCommand(selectedCmd);
-        }
-      }
-      break;
-  }
-}
-
-function executeCommand(cmd) {
-  try {
-    cmd.action();
-
-    // 최근 사용 명령어에 추가
-    const index = recentCommands.indexOf(cmd.id);
-    if (index > -1) {
-      recentCommands.splice(index, 1);
-    }
-    recentCommands.unshift(cmd.id);
-    if (recentCommands.length > MAX_RECENT_COMMANDS) {
-      recentCommands.pop();
-    }
-
-    hideCommandPalette();
-  } catch (error) {
-    debug('Command execution error:', error);
-    showToast(`명령 실행 실패: ${error.message}`, 'error');
-  }
-}
-
-function changeTheme(theme) {
-  // 테마 변경 함수
-  const root = document.documentElement;
-  root.className = `theme-${theme}`;
-
-  // 설정에 저장
-  if (typeof settingsTheme !== 'undefined' && settingsTheme) {
-    settingsTheme.value = theme;
-  }
-
-  showToast(`테마가 ${theme}로 변경되었습니다`, 'success');
-}
-
-function handleKeyboardShortcuts(e) {
-  // Ctrl+Shift+P - Command Palette
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyP') {
-    e.preventDefault();
-    showCommandPalette();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'f') {
-    e.preventDefault();
-    showTerminalSearch();
-    return;
-  }
-  if (e.ctrlKey && e.key === 't') {
-    e.preventDefault();
-    createSession();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'w') {
-    e.preventDefault();
-    if (state.activeSessionId) {
-      const session = state.sessions.get(state.activeSessionId);
-      // Phase 3: Don't close pinned tabs with Ctrl+W
-      if (session && !session.pinned) {
-        closeSession(state.activeSessionId);
-      }
-    }
-    return;
-  }
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyT') {
-    e.preventDefault();
-    // Phase 3: Restore last closed tab (Ctrl+Shift+T)
-    restoreLastClosedTab();
-    return;
-  }
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyF') {
-    e.preventDefault();
-    // Phase 3: Show tab search (Ctrl+Shift+F)
-    showTabSearch();
-    return;
-  }
-  // Ctrl+\ - Default split (right)
-  if (e.ctrlKey && !e.shiftKey && e.code === 'Backslash') {
-    e.preventDefault();
-    splitDefault();
-    return;
-  }
-  // Ctrl+Shift+S - Focus layout preset selector
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyS') {
-    e.preventDefault();
-    focusLayoutPresetSelector();
-    return;
-  }
-  // Ctrl+Shift+L - Open layout gallery
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyL') {
-    e.preventDefault();
-    const preset = document.getElementById('layoutPresetSelect')?.value || null;
-    openLayoutGalleryModal(preset);
-    return;
-  }
-  // Ctrl+Shift+D - Horizontal split
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
-    e.preventDefault();
-    splitHorizontal();
-    return;
-  }
-  // Ctrl+Shift+E - Vertical split
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyE') {
-    e.preventDefault();
-    splitVertical();
-    return;
-  }
-  // Ctrl+Shift+J - Merge active split pane
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyJ') {
-    e.preventDefault();
-    mergePane();
-    return;
-  }
-  // Ctrl+Shift+R - Toggle recording
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyR') {
-    e.preventDefault();
-    if (recordingManager.isRecording()) {
-      stopRecordingUI();
-    } else {
-      startRecordingUI();
-    }
-    return;
-  }
-  // Ctrl+Shift+M - Toggle maximize pane
-  if (e.ctrlKey && e.shiftKey && e.code === 'KeyM') {
-    e.preventDefault();
-    toggleMaximize();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
-    e.preventDefault();
-    switchToNextTab();
-    return;
-  }
-  if (e.ctrlKey && e.key === 'Tab' && e.shiftKey) {
-    e.preventDefault();
-    switchToPreviousTab();
-    return;
-  }
-  if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
-    e.preventDefault();
-    switchToTabByIndex(parseInt(e.key) - 1);
-    return;
-  }
-  if (e.ctrlKey && e.key === ',') {
-    e.preventDefault();
-    showSettingsModal();
-    return;
-  }
-
-  // Phase 7.4: Additional keyboard shortcuts
-
-  // Ctrl+L - Clear terminal screen
-  if (e.ctrlKey && e.key === 'l') {
-    e.preventDefault();
-    clearTerminalScreen();
-    return;
-  }
-
-  // Ctrl+K - Clear scrollback buffer
-  if (e.ctrlKey && e.key === 'k') {
-    e.preventDefault();
-    clearTerminalScrollback();
-    return;
-  }
-
-  // Ctrl+R - Show history panel
-  if (e.ctrlKey && e.key === 'r') {
-    e.preventDefault();
-    showHistoryPanel(commandHistory, state, escapeHtml);
-    return;
-  }
-
-  // Ctrl+G - Toggle Git panel
-  if (e.ctrlKey && e.key === 'g') {
-    e.preventDefault();
-    toggleGitPanel();
-    return;
-  }
-
-  // F11 - Toggle fullscreen
-  if (e.key === 'F11') {
-    e.preventDefault();
-    toggleFullscreen();
-    return;
-  }
-
-  // Ctrl+Alt+Arrow - Focus pane by direction
-  if (e.ctrlKey && e.altKey) {
-    switch (e.key) {
-      case 'ArrowLeft':
-        e.preventDefault();
-        focusPaneByDirection('left');
-        return;
-      case 'ArrowRight':
-        e.preventDefault();
-        focusPaneByDirection('right');
-        return;
-      case 'ArrowUp':
-        e.preventDefault();
-        focusPaneByDirection('up');
-        return;
-      case 'ArrowDown':
-        e.preventDefault();
-        focusPaneByDirection('down');
-        return;
-    }
-  }
 }
 
 // ===== Terminal Clear Functions =====
