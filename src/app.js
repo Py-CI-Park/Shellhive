@@ -310,6 +310,25 @@ const SESSION_STATUS_LABELS = Object.freeze({
   exited: '종료됨'
 });
 
+const SAFE_SESSION_STATUSES = new Set(Object.values(SESSION_STATUS));
+
+const ALLOWED_TAB_COLOR_VALUES = new Set(
+  TAB_COLORS
+    .map((color) => (typeof color.value === 'string' ? color.value.trim() : null))
+    .filter(Boolean)
+);
+
+function getSessionStatusClass(status) {
+  if (typeof status !== 'string') return SESSION_STATUS.EXITED;
+  return SAFE_SESSION_STATUSES.has(status) ? status : SESSION_STATUS.EXITED;
+}
+
+function getSafeTabColor(color) {
+  if (typeof color !== 'string') return null;
+  const normalized = color.trim();
+  return ALLOWED_TAB_COLOR_VALUES.has(normalized) ? normalized : null;
+}
+
 const LAYOUT_PRESET_TITLES = Object.freeze({
   'two-columns': '2열',
   'two-rows': '2행',
@@ -1812,10 +1831,10 @@ function renderSnippetList(snippets) {
   const snippetById = new Map(snippets.map((snippet) => [snippet.id, snippet]));
 
   snippetList.innerHTML = snippets.map(s => `
-    <li class="sidebar__item" data-snippet-id="${s.id}">
+    <li class="sidebar__item" data-snippet-id="${escapeDataAttr(s.id)}">
       <span class="sidebar__item-icon">></span>
       <span class="sidebar__item-name">${escapeHtml(s.name)}</span>
-      <button class="sidebar__item-delete" data-snippet-id="${s.id}" aria-label="스니펫 삭제">&times;</button>
+      <button class="sidebar__item-delete" data-snippet-id="${escapeDataAttr(s.id)}" aria-label="스니펫 삭제">&times;</button>
     </li>
   `).join('');
 
@@ -1848,6 +1867,10 @@ function escapeHtmlAttr(text) {
   return escapeHtml(text)
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function escapeDataAttr(value) {
+  return escapeHtmlAttr(String(value ?? ''));
 }
 
 function normalizeCategoryColor(color) {
@@ -1960,7 +1983,7 @@ function renderProjectList(projects) {
     const catProjects = categorized.get(cat.id);
     if (catProjects && catProjects.length > 0) {
       html += `
-        <li class="sidebar__category" data-category-id="${cat.id}">
+        <li class="sidebar__category" data-category-id="${escapeDataAttr(cat.id)}">
           <div class="sidebar__category-header" data-category-color="${escapeHtmlAttr(cat.color || '')}">
             <span class="sidebar__category-name">${escapeHtml(cat.name)}</span>
             <span class="sidebar__category-count">${catProjects.length}</span>
@@ -1991,13 +2014,13 @@ function renderProjectList(projects) {
 
 function renderProjectItems(projects) {
   return projects.map(p => `
-    <li class="sidebar__item sidebar__item--project" data-project-id="${p.id}">
+    <li class="sidebar__item sidebar__item--project" data-project-id="${escapeDataAttr(p.id)}">
       <span class="sidebar__item-icon">📁</span>
       <span class="sidebar__item-name">${escapeHtml(p.name)}</span>
-      <button class="sidebar__item-env" data-project-id="${p.id}" title="Environment Variables" aria-label="환경 변수 관리">⚙</button>
-      <button class="sidebar__item-filter" data-project-id="${p.id}" title="Filter tabs" aria-label="탭 필터">🔍</button>
-      <button class="sidebar__item-delete" data-project-id="${p.id}" aria-label="프로젝트 삭제">&times;</button>
-      <div class="sidebar__cmd-tree" data-project-cmd-tree="${p.id}"></div>
+      <button class="sidebar__item-env" data-project-id="${escapeDataAttr(p.id)}" title="Environment Variables" aria-label="환경 변수 관리">⚙</button>
+      <button class="sidebar__item-filter" data-project-id="${escapeDataAttr(p.id)}" title="Filter tabs" aria-label="탭 필터">🔍</button>
+      <button class="sidebar__item-delete" data-project-id="${escapeDataAttr(p.id)}" aria-label="프로젝트 삭제">&times;</button>
+      <div class="sidebar__cmd-tree" data-project-cmd-tree="${escapeDataAttr(p.id)}"></div>
     </li>
   `).join('');
 }
@@ -2607,9 +2630,10 @@ function createTab(session) {
   tab.dataset.sessionId = session.id;
   tab.draggable = true;
 
-  const statusIcon = getStatusIcon(session.status);
+  const statusClass = getSessionStatusClass(session.status);
+  const statusIcon = getStatusIcon(statusClass);
   tab.innerHTML = `
-    <span class="tab__status tab__status--${session.status}">${statusIcon}</span>
+    <span class="tab__status tab__status--${statusClass}">${statusIcon}</span>
     <span class="tab__title">${escapeHtml(session.name)}</span>
     <button class="tab__close">&times;</button>
   `;
@@ -2681,9 +2705,10 @@ function updateTabStatus(sessionId, status) {
   const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
   if (!tab) return;
   const statusElement = tab.querySelector('.tab__status');
+  const safeStatus = getSessionStatusClass(status);
   if (statusElement) {
-    statusElement.textContent = getStatusIcon(status);
-    statusElement.className = `tab__status tab__status--${status}`;
+    statusElement.textContent = getStatusIcon(safeStatus);
+    statusElement.className = `tab__status tab__status--${safeStatus}`;
   }
   if (state.splitMode) {
     const session = state.sessions.get(sessionId);
@@ -3084,13 +3109,14 @@ function setTabColor(sessionId, color) {
   const session = state.sessions.get(sessionId);
   if (!session) return;
 
-  session.color = color;
+  const safeColor = getSafeTabColor(color);
+  session.color = safeColor;
 
   // Update tab UI
   const tab = document.querySelector(`[data-session-id="${sessionId}"]`);
   if (tab) {
-    if (color) {
-      tab.style.borderTopColor = color;
+    if (safeColor) {
+      tab.style.borderTopColor = safeColor;
       tab.classList.add('tab--colored');
     } else {
       tab.style.borderTopColor = '';
@@ -3098,7 +3124,7 @@ function setTabColor(sessionId, color) {
     }
   }
 
-  debug('Tab color set:', sessionId, color);
+  debug('Tab color set:', sessionId, safeColor);
 }
 
 // Show color picker submenu in context menu
@@ -3262,14 +3288,18 @@ function filterTabsByQuery(query) {
     }
   });
 
-  resultsEl.innerHTML = matches.map(session => `
-    <div class="tab-search__result" data-session-id="${session.id}" tabindex="0">
-      <span class="tab-search__result-status tab__status--${session.status}">${getStatusIcon(session.status)}</span>
+  resultsEl.innerHTML = matches.map((session) => {
+    const statusClass = getSessionStatusClass(session.status);
+    const safeColor = getSafeTabColor(session.color);
+    return `
+    <div class="tab-search__result" data-session-id="${escapeDataAttr(session.id)}" tabindex="0">
+      <span class="tab-search__result-status tab__status--${statusClass}">${getStatusIcon(statusClass)}</span>
       <span class="tab-search__result-name">${escapeHtml(session.name)}</span>
       ${session.pinned ? '<span class="tab-search__result-pin">📌</span>' : ''}
-      ${session.color ? `<span class="tab-search__result-color" style="background-color: ${session.color}"></span>` : ''}
+      ${safeColor ? `<span class="tab-search__result-color" style="background-color: ${escapeHtmlAttr(safeColor)}"></span>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // Add click and keyboard handlers
   resultsEl.querySelectorAll('.tab-search__result').forEach((result) => {
@@ -3763,7 +3793,7 @@ function showAllSessionsResults(results, query) {
     const resultHtml = Object.keys(groupedResults).map(sessionId => {
       const group = groupedResults[sessionId];
       const matchesHtml = group.matches.slice(0, 10).map(match => `
-        <div class="search-results-panel__item" data-session-id="${match.sessionId}" data-line="${match.lineNumber}">
+        <div class="search-results-panel__item" data-session-id="${escapeDataAttr(match.sessionId)}" data-line="${match.lineNumber}">
           <span class="search-results-panel__line">Line ${match.lineNumber}</span>
           <span class="search-results-panel__text">${escapeHtml(match.lineText.substring(0, 100))}</span>
         </div>
@@ -3975,7 +4005,7 @@ function showRecordingsList() {
         ` : `
           <div class="recordings-list">
             ${recordings.map(r => `
-              <div class="recordings-list__item" data-recording-id="${r.id}">
+              <div class="recordings-list__item" data-recording-id="${escapeDataAttr(r.id)}">
                 <div class="recordings-list__info">
                   <span class="recordings-list__title">${escapeHtml(r.metadata?.title || 'Untitled')}</span>
                   <span class="recordings-list__meta">
@@ -3984,9 +4014,9 @@ function showRecordingsList() {
                   </span>
                 </div>
                 <div class="recordings-list__actions">
-                  <button class="btn btn--small btn--primary recordings-list__play" data-id="${r.id}">재생</button>
-                  <button class="btn btn--small btn--secondary recordings-list__export" data-id="${r.id}">내보내기</button>
-                  <button class="btn btn--small btn--danger recordings-list__delete" data-id="${r.id}">삭제</button>
+                  <button class="btn btn--small btn--primary recordings-list__play" data-id="${escapeDataAttr(r.id)}">재생</button>
+                  <button class="btn btn--small btn--secondary recordings-list__export" data-id="${escapeDataAttr(r.id)}">내보내기</button>
+                  <button class="btn btn--small btn--danger recordings-list__delete" data-id="${escapeDataAttr(r.id)}">삭제</button>
                 </div>
               </div>
             `).join('')}
@@ -4827,8 +4857,9 @@ function ensureSplitPaneHeader(session) {
   const subtitleEl = header.querySelector('.split-pane-header__subtitle');
 
   if (statusEl) {
-    statusEl.textContent = getStatusIcon(session.status);
-    statusEl.className = `split-pane-header__status split-pane-header__status--${session.status}`;
+    const statusClass = getSessionStatusClass(session.status);
+    statusEl.textContent = getStatusIcon(statusClass);
+    statusEl.className = `split-pane-header__status split-pane-header__status--${statusClass}`;
     statusEl.title = getStatusLabel(session.status);
   }
   if (titleEl) {
@@ -4859,8 +4890,9 @@ function buildSplitMinimapNode(node, depth = 0) {
     }
 
     const icon = document.createElement('span');
-    icon.className = `split-minimap__status split-minimap__status--${session?.status || SESSION_STATUS.EXITED}`;
-    icon.textContent = getStatusIcon(session?.status || SESSION_STATUS.EXITED);
+    const statusClass = getSessionStatusClass(session?.status || SESSION_STATUS.EXITED);
+    icon.className = `split-minimap__status split-minimap__status--${statusClass}`;
+    icon.textContent = getStatusIcon(statusClass);
 
     const title = document.createElement('span');
     title.className = 'split-minimap__leaf-title';
@@ -5326,14 +5358,16 @@ function createTabElement(session, isGrouped = false) {
   }
 
   // Phase 3: Add color indicator if session has color
-  if (session.color) {
-    tab.style.borderTopColor = session.color;
+  const safeColor = getSafeTabColor(session.color);
+  if (safeColor) {
+    tab.style.borderTopColor = safeColor;
     tab.classList.add('tab--colored');
   }
 
-  const statusIcon = getStatusIcon(session.status);
+  const statusClass = getSessionStatusClass(session.status);
+  const statusIcon = getStatusIcon(statusClass);
   tab.innerHTML = `
-    <span class="tab__status tab__status--${session.status}">${statusIcon}</span>
+    <span class="tab__status tab__status--${statusClass}">${statusIcon}</span>
     <span class="tab__title">${escapeHtml(session.name)}</span>
     <button class="tab__close">&times;</button>
   `;
@@ -5515,12 +5549,13 @@ function renderProjectCmdTrees() {
 
     const cmdItems = sessions.map((session) => {
       const activeClass = session.id === state.activeSessionId ? ' sidebar__cmd-item--active' : '';
-      const statusClass = `sidebar__cmd-status--${session.status}`;
+      const statusClass = `sidebar__cmd-status--${getSessionStatusClass(session.status)}`;
+      const sessionIdAttr = escapeDataAttr(session.id);
       return `
-        <div class="sidebar__cmd-item${activeClass}" data-session-id="${session.id}" title="${escapeHtmlAttr(session.name)}">
-          <span class="sidebar__cmd-status ${statusClass}">${getStatusIcon(session.status)}</span>
+        <div class="sidebar__cmd-item${activeClass}" data-session-id="${sessionIdAttr}" title="${escapeHtmlAttr(session.name)}">
+          <span class="sidebar__cmd-status ${statusClass}">${getStatusIcon(getSessionStatusClass(session.status))}</span>
           <span class="sidebar__cmd-name">${escapeHtml(session.name)}</span>
-          <button class="sidebar__cmd-close" data-session-id="${session.id}" aria-label="세션 닫기">&times;</button>
+          <button class="sidebar__cmd-close" data-session-id="${sessionIdAttr}" aria-label="세션 닫기">&times;</button>
         </div>
       `;
     }).join('');
@@ -7030,7 +7065,7 @@ function updateTabSharingIndicator(sessionId, isSharing) {
     if (!sharingIcon) {
       sharingIcon = document.createElement('span');
       sharingIcon.className = 'tab__sharing-icon';
-      sharingIcon.innerHTML = '🔗';
+      sharingIcon.textContent = '🔗';
       sharingIcon.title = '공유 중';
 
       const titleElement = tab.querySelector('.tab__title');
