@@ -216,6 +216,21 @@
 - `npm run build` ✅
 - `npm test` ✅ (22 passed)
 
+#### fix(security): 색상 메뉴/탭 그룹 렌더링 이스케이프 보강
+
+**커밋**: `e078108`
+
+##### 수정됨 (Fixed)
+
+- `src/app.js`
+  - 탭 색상 컨텍스트 메뉴 렌더링에서 색상명/색상값 출력 경로 이스케이프 적용
+  - 탭 그룹 헤더 색상 적용 시 허용 색상 검증(`getSafeTabColor`)을 통해 style 주입 경로 보호
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
