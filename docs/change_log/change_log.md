@@ -396,6 +396,34 @@
   - CSP/capability/IPC 정합성/모듈 분리 후 보안 회귀 점검 결과 정리
   - `npm run build`, `npm test -- --run` 기반 재검증 결과와 환경 제약(Rust `pkg-config` 부재) 명시
 
+#### refactor(phase4-3-b): 설정 모듈 분리 (`settings.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/settings.js` 신규 추가
+  - `createSettingsController()` 팩토리 도입으로 설정 로드/저장/미리보기/취소 로직 분리
+  - `applyTheme`, `updateTerminalSettings`, `applyAiFeatureVisibility`, block mode 반영 로직 모듈화
+- `src/app.js`
+  - 설정 함수 블록 제거 후 `createSettingsController` 주입 방식으로 연결
+  - settings DOM 의존성을 `getSettingsElements()` 경유로 캡슐화
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (8 files, 36 tests)
+
+#### test(phase5-3): settings 모듈 실코드 테스트 전환
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/__tests__/settings.test.js`
+  - 상수 존재 검증 중심 테스트를 `createSettingsController` 기반 실동작 테스트로 전환
+  - `loadSettings` 정규화/이벤트 emit, `saveSettings` payload 매핑, preview/cancel 롤백 시나리오 검증 추가
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
