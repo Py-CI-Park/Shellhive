@@ -641,7 +641,7 @@
 
 #### refactor(phase4-3-e): tab-manager 인터랙션 분리 2차
 
-**커밋**: `TBD`
+**커밋**: `abcf86f`
 
 ##### 변경됨 (Changed)
 
@@ -659,7 +659,7 @@
 
 #### test(phase5-3): tab-manager 테스트 확장
 
-**커밋**: `TBD`
+**커밋**: `abcf86f`
 
 ##### 변경됨 (Changed)
 
@@ -669,7 +669,7 @@
 
 #### refactor(phase4-3-f): split-pane 트리 헬퍼 분리 2차
 
-**커밋**: `TBD`
+**커밋**: `8db8df1`
 
 ##### 변경됨 (Changed)
 
@@ -685,7 +685,7 @@
 
 #### test(phase5-3): split-pane 테스트 확장
 
-**커밋**: `TBD`
+**커밋**: `8db8df1`
 
 ##### 변경됨 (Changed)
 
@@ -695,7 +695,7 @@
 
 #### refactor(phase4-4): 파일 드래그앤드롭 모듈 분리 2차 (`file-drag-drop.js`)
 
-**커밋**: `TBD`
+**커밋**: `53f8a3b`
 
 ##### 변경됨 (Changed)
 
@@ -711,7 +711,7 @@
 
 #### test(phase5-3): file-drag-drop 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `53f8a3b`
 
 ##### 추가됨 (Added)
 
@@ -720,7 +720,7 @@
 
 #### docs(plan): Phase 4 2차 분리 진행 현황 및 테스트 지표 동기화
 
-**커밋**: `TBD`
+**커밋**: `6c34a57`
 
 ##### 문서화됨 (Documentation)
 
