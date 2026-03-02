@@ -52,6 +52,26 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml test_validate_shell_allowed` ❌
   - 실행 환경에서 `pkg-config` 및 GTK 계열 시스템 라이브러리 부재로 Rust 빌드 단계 실패
 
+#### feat(security): PTY 작업 디렉토리 검증 강화
+
+**커밋**: `43f1d63`
+
+##### 변경됨 (Changed)
+
+- `src-tauri/src/pty.rs`
+  - `validate_working_directory()` 추가
+  - PTY 생성 시 작업 디렉토리를 정규화 후 검증하도록 변경
+  - 등록된 프로젝트 경로 또는 그 하위 경로만 허용
+  - 사용자 홈 디렉토리는 명시적 예외로 허용
+- `src-tauri/src/project.rs`
+  - `ensure_registered_project_path_or_subdir()` 추가
+  - 등록 프로젝트 루트뿐 아니라 하위 디렉토리 검증을 지원
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
