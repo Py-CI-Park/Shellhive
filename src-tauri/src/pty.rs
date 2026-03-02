@@ -2,9 +2,47 @@ use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::process::Command;
 use std::sync::Arc;
 use std::thread;
 use tauri::{AppHandle, Emitter};
+
+const ALLOWED_SHELLS: &[&str] = &["cmd.exe", "powershell.exe", "pwsh.exe"];
+
+pub(crate) fn validate_shell(shell: &str) -> Result<String, String> {
+    let trimmed = shell.trim();
+    if trimmed.is_empty() {
+        return Err("Shell cannot be empty".to_string());
+    }
+
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed.contains(':') {
+        return Err(format!("Shell path is not allowed: {}", shell));
+    }
+
+    let file_name = std::path::Path::new(trimmed)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid shell name: {}", shell))?;
+
+    let allowed_shell = ALLOWED_SHELLS
+        .iter()
+        .find(|allowed| file_name.eq_ignore_ascii_case(allowed))
+        .ok_or_else(|| format!("Shell not allowed: {}", shell))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        let status = Command::new("where")
+            .arg(allowed_shell)
+            .status()
+            .map_err(|e| format!("Failed to resolve shell '{}': {}", allowed_shell, e))?;
+
+        if !status.success() {
+            return Err(format!("Shell not found in PATH: {}", allowed_shell));
+        }
+    }
+
+    Ok((*allowed_shell).to_string())
+}
 
 // Store both the master PTY handle and the writer
 struct PtySessionData {
@@ -43,7 +81,8 @@ pub async fn create_pty(
     let id = uuid::Uuid::new_v4().to_string();
 
     // Use cmd.exe for Windows - most compatible
-    let shell_cmd = shell.unwrap_or_else(|| "cmd.exe".to_string());
+    let requested_shell = shell.unwrap_or_else(|| "cmd.exe".to_string());
+    let shell_cmd = validate_shell(&requested_shell)?;
 
     println!("[PTY] Creating session {} with shell: {}", id, shell_cmd);
     println!("[PTY] Working directory: {}", working_dir);
@@ -300,6 +339,27 @@ pub async fn kill_pty(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_validate_shell_allowed() {
+        assert_eq!(validate_shell("cmd.exe").unwrap(), "cmd.exe");
+        assert_eq!(validate_shell("powershell.exe").unwrap(), "powershell.exe");
+        assert_eq!(validate_shell("pwsh.exe").unwrap(), "pwsh.exe");
+        assert_eq!(validate_shell("CMD.EXE").unwrap(), "cmd.exe");
+    }
+
+    #[test]
+    fn test_validate_shell_rejected() {
+        assert!(validate_shell("calc.exe").is_err());
+        assert!(validate_shell("/bin/bash").is_err());
+        assert!(validate_shell("C:\\malware\\evil.exe").is_err());
+        assert!(validate_shell("cmd.exe && whoami").is_err());
+    }
+
+    #[test]
+    fn test_validate_shell_path_traversal() {
+        assert!(validate_shell("..\\..\\Windows\\System32\\cmd.exe").is_err());
+    }
 
     #[test]
     fn test_pty_manager_creation() {
