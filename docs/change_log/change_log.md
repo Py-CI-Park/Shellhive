@@ -530,6 +530,17 @@
 - `src/__tests__/split-pane.test.js`
   - SplitNode 분할, 직렬화/역직렬화, 세션 ID 매핑 업데이트, null 입력 처리 검증
 
+#### docs(plan): Phase 4/5 실행 현황 동기화
+
+**커밋**: `TBD`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - Phase 4 진행 현황에 PR #31/#32/#33/#34 반영
+  - 4-3-e/4-3-f를 1차 분리 완료(상태/검색/전환, split tree 유틸)로 명시
+  - Phase 5-3 테스트 확장 수치를 52개 기준으로 갱신
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
