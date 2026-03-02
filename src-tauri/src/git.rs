@@ -1,5 +1,6 @@
 use crate::project::ensure_registered_project_path;
 use serde::{Deserialize, Serialize};
+use std::path::Component;
 use std::path::Path;
 use std::process::Command;
 
@@ -86,6 +87,61 @@ fn validate_branch_name(path: &str, branch: &str) -> Result<String, String> {
         .map_err(|_| format!("Invalid branch name: {}", branch))?;
 
     Ok(trimmed.to_string())
+}
+
+fn validate_git_file_path(repo_path: &str, file: &str) -> Result<String, String> {
+    let trimmed = file.trim();
+    if trimmed.is_empty() {
+        return Err("File path cannot be empty".to_string());
+    }
+    if trimmed.contains('\0') || trimmed.contains('\n') || trimmed.contains('\r') {
+        return Err(format!("Invalid file path: {}", file));
+    }
+    if trimmed.starts_with('-') {
+        return Err(format!("File path cannot start with '-': {}", file));
+    }
+
+    let path = Path::new(trimmed);
+    if path.is_absolute() {
+        return Err(format!("Absolute paths are not allowed: {}", file));
+    }
+
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir | Component::RootDir))
+    {
+        return Err(format!("Path traversal is not allowed: {}", file));
+    }
+
+    let repo_canonical = std::fs::canonicalize(repo_path).map_err(|e| {
+        format!(
+            "Failed to canonicalize repository path '{}': {}",
+            repo_path, e
+        )
+    })?;
+    let candidate = repo_canonical.join(path);
+
+    if candidate.exists() {
+        let file_canonical = std::fs::canonicalize(&candidate).map_err(|e| {
+            format!(
+                "Failed to canonicalize file path '{}': {}",
+                candidate.display(),
+                e
+            )
+        })?;
+        if !file_canonical.starts_with(&repo_canonical) {
+            return Err(format!("File path is outside repository root: {}", file));
+        }
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn validate_git_file_paths(repo_path: &str, files: &[String]) -> Result<Vec<String>, String> {
+    files
+        .iter()
+        .map(|file| validate_git_file_path(repo_path, file))
+        .collect()
 }
 
 #[tauri::command]
@@ -240,8 +296,10 @@ pub fn git_stage(path: String, files: Vec<String>) -> Result<(), String> {
         return Ok(());
     }
 
+    let validated_files = validate_git_file_paths(&validated_path, &files)?;
+
     let mut args = vec!["add", "--"];
-    let file_refs: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
+    let file_refs: Vec<&str> = validated_files.iter().map(|s| s.as_str()).collect();
     args.extend(file_refs);
 
     run_git_command(&validated_path, &args)?;
@@ -256,8 +314,10 @@ pub fn git_unstage(path: String, files: Vec<String>) -> Result<(), String> {
         return Ok(());
     }
 
+    let validated_files = validate_git_file_paths(&validated_path, &files)?;
+
     let mut args = vec!["reset", "HEAD", "--"];
-    let file_refs: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
+    let file_refs: Vec<&str> = validated_files.iter().map(|s| s.as_str()).collect();
     args.extend(file_refs);
 
     run_git_command(&validated_path, &args)?;
@@ -309,10 +369,82 @@ pub fn git_discard(path: String, files: Vec<String>) -> Result<(), String> {
         return Ok(());
     }
 
+    let validated_files = validate_git_file_paths(&validated_path, &files)?;
+
     let mut args = vec!["checkout", "--"];
-    let file_refs: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
+    let file_refs: Vec<&str> = validated_files.iter().map(|s| s.as_str()).collect();
     args.extend(file_refs);
 
     run_git_command(&validated_path, &args)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn create_temp_dir(prefix: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("{}_{}", prefix, uuid::Uuid::new_v4()));
+        fs::create_dir_all(&dir).expect("failed to create temp directory");
+        dir
+    }
+
+    #[test]
+    fn test_validate_git_file_path_allowed() {
+        let repo = create_temp_dir("shellhive_git_repo");
+        let file = repo.join("src").join("main.rs");
+        fs::create_dir_all(file.parent().expect("parent should exist"))
+            .expect("failed to create parent directory");
+        fs::write(&file, "fn main() {}").expect("failed to write test file");
+
+        let result = validate_git_file_path(
+            repo.to_str().expect("repo path should be valid UTF-8"),
+            "src/main.rs",
+        );
+        assert_eq!(result.unwrap(), "src/main.rs");
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn test_validate_git_file_path_rejects_absolute_path() {
+        let repo = create_temp_dir("shellhive_git_repo_abs");
+        let absolute = std::env::temp_dir()
+            .join("outside.txt")
+            .to_string_lossy()
+            .to_string();
+
+        let result = validate_git_file_path(
+            repo.to_str().expect("repo path should be valid UTF-8"),
+            &absolute,
+        );
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn test_validate_git_file_path_rejects_traversal() {
+        let repo = create_temp_dir("shellhive_git_repo_traversal");
+        let result = validate_git_file_path(
+            repo.to_str().expect("repo path should be valid UTF-8"),
+            "../outside.txt",
+        );
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn test_validate_git_file_path_rejects_option_like_input() {
+        let repo = create_temp_dir("shellhive_git_repo_option");
+        let result = validate_git_file_path(
+            repo.to_str().expect("repo path should be valid UTF-8"),
+            "--all",
+        );
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(repo);
+    }
 }
