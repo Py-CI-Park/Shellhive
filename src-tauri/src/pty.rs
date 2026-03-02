@@ -44,6 +44,26 @@ pub(crate) fn validate_shell(shell: &str) -> Result<String, String> {
     Ok((*allowed_shell).to_string())
 }
 
+fn validate_working_directory(working_dir: &str) -> Result<std::path::PathBuf, String> {
+    let canonical_dir = std::fs::canonicalize(working_dir).map_err(|e| {
+        format!(
+            "Failed to canonicalize working directory '{}': {}",
+            working_dir, e
+        )
+    })?;
+
+    if let Some(home_dir) = dirs::home_dir() {
+        let canonical_home = std::fs::canonicalize(home_dir)
+            .map_err(|e| format!("Failed to canonicalize home directory: {}", e))?;
+
+        if canonical_dir == canonical_home {
+            return Ok(canonical_dir);
+        }
+    }
+
+    crate::project::ensure_registered_project_path_or_subdir(working_dir)
+}
+
 // Store both the master PTY handle and the writer
 struct PtySessionData {
     #[allow(dead_code)]
@@ -83,6 +103,7 @@ pub async fn create_pty(
     // Use cmd.exe for Windows - most compatible
     let requested_shell = shell.unwrap_or_else(|| "cmd.exe".to_string());
     let shell_cmd = validate_shell(&requested_shell)?;
+    let validated_working_dir = validate_working_directory(&working_dir)?;
 
     println!("[PTY] Creating session {} with shell: {}", id, shell_cmd);
     println!("[PTY] Working directory: {}", working_dir);
@@ -107,7 +128,7 @@ pub async fn create_pty(
 
     // Create command
     let mut cmd = CommandBuilder::new(&shell_cmd);
-    cmd.cwd(&working_dir);
+    cmd.cwd(&validated_working_dir);
 
     // Add environment variables if provided
     if let Some(vars) = env_vars {
@@ -359,6 +380,13 @@ mod tests {
     #[test]
     fn test_validate_shell_path_traversal() {
         assert!(validate_shell("..\\..\\Windows\\System32\\cmd.exe").is_err());
+    }
+
+    #[test]
+    fn test_validate_working_directory_home_allowed() {
+        let home_dir = dirs::home_dir().expect("home directory should exist");
+        let home_str = home_dir.to_str().expect("home path should be valid UTF-8");
+        assert!(validate_working_directory(home_str).is_ok());
     }
 
     #[test]

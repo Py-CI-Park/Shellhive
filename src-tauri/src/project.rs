@@ -140,6 +140,34 @@ pub(crate) fn ensure_registered_project_path(path: &str) -> Result<PathBuf, Stri
     Ok(canonical_target)
 }
 
+pub(crate) fn ensure_registered_project_path_or_subdir(path: &str) -> Result<PathBuf, String> {
+    let canonical_target = canonicalize_project_path(path)?;
+    let projects = load_projects()?;
+
+    let is_registered = projects.iter().any(|project| {
+        let project_path = PathBuf::from(&project.path);
+        if !project_path.exists() || !project_path.is_dir() {
+            return false;
+        }
+
+        fs::canonicalize(project_path)
+            .map(|canonical_project_path| {
+                canonical_target == canonical_project_path
+                    || canonical_target.starts_with(&canonical_project_path)
+            })
+            .unwrap_or(false)
+    });
+
+    if !is_registered {
+        return Err(format!(
+            "Project path is not registered (or subdirectory): {}",
+            path
+        ));
+    }
+
+    Ok(canonical_target)
+}
+
 #[tauri::command]
 pub async fn list_projects() -> Result<Vec<Project>, String> {
     load_projects()
