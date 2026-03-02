@@ -327,7 +327,7 @@
 
 #### refactor(phase4-3-d): Git 패널 모듈 분리 (`git-panel.js`)
 
-**커밋**: `TBD`
+**커밋**: `1ea8ccc`
 
 ##### 변경됨 (Changed)
 
@@ -345,7 +345,7 @@
 
 #### test(phase5): Git 패널/IPC 등록 회귀 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `1ea8ccc`
 
 ##### 추가됨 (Added)
 
@@ -361,7 +361,7 @@
 
 #### refactor(phase4-3-h): 에러 설명 모듈 분리 (`error-explanations.js`)
 
-**커밋**: `TBD`
+**커밋**: `dcb9a66`
 
 ##### 변경됨 (Changed)
 
@@ -379,7 +379,7 @@
 
 #### test(phase5-3): 에러 설명 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `dcb9a66`
 
 ##### 추가됨 (Added)
 
