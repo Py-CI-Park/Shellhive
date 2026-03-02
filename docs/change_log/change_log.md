@@ -603,6 +603,32 @@
   - PR #36(terminal/session 1차), PR #37(app-entrypoint 1차) 진행 현황 반영
   - Phase 5-3 테스트 확장 수치를 58개 기준으로 갱신
 
+#### refactor(phase4-3-g): 터미널 유틸 모듈 분리 2차 (`terminal-manager.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/terminal-manager.js` 신규 추가
+  - 터미널 화면/스크롤백 정리, 전체화면 토글, 분할 포커스 이동 로직 분리
+- `src/app.js`
+  - `clearTerminalScreen`, `clearTerminalScrollback`, `toggleFullscreen`, `focusPaneByDirection` 인라인 구현 제거
+  - `createTerminalManagerController()` 주입 방식으로 전환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (15 files, 63 tests)
+
+#### test(phase5-3): terminal-manager 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/terminal-manager.test.js`
+  - 화면/스크롤백 정리, split 포커스 이동, fullscreen 토글 진입/해제 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성

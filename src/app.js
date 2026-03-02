@@ -19,6 +19,7 @@ import { createSessionManagerController } from './session-manager.js';
 import { SplitNode, serializeSplitTree, deserializeSplitTree, updateSessionIdsInTree } from './split-pane.js';
 import { createTabManagerController } from './tab-manager.js';
 import { initializeDomElementsRegistry } from './dom-elements.js';
+import { createTerminalManagerController } from './terminal-manager.js';
 import {
   state,
   elements,
@@ -1057,6 +1058,19 @@ const {
 const { logSessionOutput, disposeSessionLogBuffer } = createSessionManagerController({
   invoke,
   debug
+});
+
+const {
+  clearTerminalScreen,
+  clearTerminalScrollback,
+  toggleFullscreen,
+  focusPaneByDirection
+} = createTerminalManagerController({
+  state,
+  debug,
+  showToast,
+  getAllLeafNodes,
+  activateSession
 });
 
 // ===== Session State Persistence =====
@@ -4813,38 +4827,6 @@ function renderProjectCmdTrees() {
   });
 }
 
-// ===== Terminal Clear Functions =====
-
-function clearTerminalScreen() {
-  const session = state.sessions.get(state.activeSessionId);
-  if (!session) return;
-
-  // Send clear screen escape sequence (like running 'clear' or 'cls')
-  session.terminal.write('\x1b[2J\x1b[H');
-  debug('Terminal screen cleared');
-}
-
-function clearTerminalScrollback() {
-  const session = state.sessions.get(state.activeSessionId);
-  if (!session) return;
-
-  // Clear the scrollback buffer
-  session.terminal.clear();
-  debug('Terminal scrollback cleared');
-}
-
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(err => {
-      debug('Fullscreen error:', err);
-      showToast('전체화면 전환에 실패했습니다', 'error');
-    });
-  } else {
-    document.exitFullscreen();
-  }
-}
-
-// Focus pane by direction (for split mode navigation)
 // ===== Claude Code Integration =====
 
 // Claude Code 상태
@@ -4983,27 +4965,6 @@ function onClaudeSessionClose(sessionId) {
     updateClaudeButton();
     debug('Claude session closed:', sessionId);
   }
-}
-
-// ===== Terminal Clear Functions =====
-
-function focusPaneByDirection(direction) {
-  if (!state.splitMode || !state.splitRoot) return;
-
-  const leaves = getAllLeafNodes(state.splitRoot);
-  if (leaves.length <= 1) return;
-
-  const currentIndex = leaves.findIndex(n => n.sessionId === state.activeSessionId);
-  if (currentIndex === -1) return;
-
-  let nextIndex;
-  if (direction === 'right' || direction === 'down') {
-    nextIndex = (currentIndex + 1) % leaves.length;
-  } else {
-    nextIndex = (currentIndex - 1 + leaves.length) % leaves.length;
-  }
-
-  activateSession(leaves[nextIndex].sessionId, { preserveSplitLayout: true });
 }
 
 // ===== File Drag and Drop Functions =====
