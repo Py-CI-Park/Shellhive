@@ -29,6 +29,24 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
 4. **Git 명령 5개 미사용**: `git_branches`, `git_log`, `git_checkout`, `git_discard`, `get_snippet` — 백엔드 등록됐으나 프론트엔드 UI 없음
 5. **CSP 취약**: `tauri.conf.json`에 `'unsafe-inline'` + `'unsafe-eval'` → XSS 방어 무력화
 
+### 실행 현황 (2026-03-02)
+
+- ✅ **Phase 1 완료**
+  - PR #6 `security/merge-pr4-hardening` → `feature/next-improvements` 병합
+- ✅ **Phase 2 진행 중**
+  - 2-1 PR #7 `security/pty-shell-allowlist`
+  - 2-2 PR #8 `security/pty-workdir-validation`
+  - 2-3 PR #9 `security/git-filepath-validation`
+  - 2-4 PR #10 `security/csp-hardening`
+  - 2-5 PR #11 `security/git-css-allowlist`
+  - 2-9 PR #12 `security/env-var-validation`
+  - 2-10 PR #13 `security/claude-path-injection`
+  - 2-6(세션 ID 검증)는 PR #4 통합분에 포함되어 코드상 반영됨
+- ⚠️ **잔여 Phase 2 항목**
+  - 2-7 `security/innerhtml-audit`
+  - 2-8 `security/tauri-capabilities`
+- ⏳ **Phase 3~5 미착수**
+
 ---
 
 ## 2. 브랜치 전략
