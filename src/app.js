@@ -15,6 +15,7 @@ import { createErrorExplanationController } from './error-explanations.js';
 import { createModalController } from './modals.js';
 import { createSettingsController } from './settings.js';
 import { createShortcutsController } from './shortcuts.js';
+import { createSessionManagerController } from './session-manager.js';
 import { SplitNode, serializeSplitTree, deserializeSplitTree, updateSessionIdsInTree } from './split-pane.js';
 import { createTabManagerController } from './tab-manager.js';
 import {
@@ -1052,6 +1053,11 @@ const {
   debug
 });
 
+const { logSessionOutput, disposeSessionLogBuffer } = createSessionManagerController({
+  invoke,
+  debug
+});
+
 // ===== Session State Persistence =====
 
 async function saveSessionState() {
@@ -1996,39 +2002,6 @@ async function createSession(name = null, workingDir = null, projectId = null, o
   return session;
 }
 
-let logBuffer = {};
-let logTimeouts = {};
-
-// Limit log buffer size per session
-const MAX_LOG_BUFFER_SIZE = 10000; // characters
-
-function logSessionOutput(sessionId, data) {
-  if (!logBuffer[sessionId]) {
-    logBuffer[sessionId] = '';
-  }
-
-  logBuffer[sessionId] += data;
-
-  // Truncate if too large
-  if (logBuffer[sessionId].length > MAX_LOG_BUFFER_SIZE) {
-    logBuffer[sessionId] = logBuffer[sessionId].slice(-MAX_LOG_BUFFER_SIZE);
-  }
-
-  if (logTimeouts[sessionId]) {
-    clearTimeout(logTimeouts[sessionId]);
-  }
-
-  logTimeouts[sessionId] = setTimeout(async () => {
-    const buffer = logBuffer[sessionId];
-    logBuffer[sessionId] = '';
-    try {
-      await invoke('log_session_output', { sessionId, data: buffer });
-    } catch (error) {
-      debug('Failed to log session output:', error);
-    }
-  }, 500);
-}
-
 function createTab(session) {
   const tab = document.createElement('div');
   tab.className = 'tab';
@@ -2165,6 +2138,7 @@ async function closeSession(id) {
 
   session.terminal.dispose();
   session.wrapper.remove();
+  disposeSessionLogBuffer(id);
 
   const tab = document.querySelector(`[data-session-id="${id}"]`);
   if (tab) tab.remove();
