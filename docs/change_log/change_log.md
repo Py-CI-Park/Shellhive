@@ -593,6 +593,16 @@
 - `src/__tests__/dom-elements.test.js`
   - DOM 참조 등록 및 누락 요소 null 처리 검증
 
+#### docs(plan): Phase 4-3-g/4-4 및 테스트 지표 동기화
+
+**커밋**: `TBD`
+
+##### 문서화됨 (Documentation)
+
+- `docs/plans/project-improvement-plan.md`
+  - PR #36(terminal/session 1차), PR #37(app-entrypoint 1차) 진행 현황 반영
+  - Phase 5-3 테스트 확장 수치를 58개 기준으로 갱신
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
