@@ -568,6 +568,31 @@
 - `src/__tests__/session-manager.test.js`
   - flush 타이밍, 다중 write 배치, 버퍼 truncation, dispose 취소 동작 검증
 
+#### refactor(phase4-4): DOM 초기화 엔트리 분리 1차 (`dom-elements.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/dom-elements.js` 신규 추가
+  - `initializeDomElementsRegistry()`로 DOM 참조 수집/`elements` 동기화 로직 분리
+- `src/app.js`
+  - `initializeDOMElements` 함수가 dom-elements 모듈을 호출하도록 전환
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (14 files, 58 tests)
+
+#### test(phase5-3): dom-elements 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/dom-elements.test.js`
+  - DOM 참조 등록 및 누락 요소 null 처리 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
