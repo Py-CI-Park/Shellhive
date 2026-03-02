@@ -605,7 +605,7 @@
 
 #### refactor(phase4-3-g): 터미널 유틸 모듈 분리 2차 (`terminal-manager.js`)
 
-**커밋**: `TBD`
+**커밋**: `fe50e8c`
 
 ##### 변경됨 (Changed)
 
@@ -622,7 +622,7 @@
 
 #### test(phase5-3): terminal-manager 모듈 단위 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `fe50e8c`
 
 ##### 추가됨 (Added)
 
@@ -631,7 +631,7 @@
 
 #### docs(plan): Phase 4-3-g 2차 및 테스트 지표 동기화
 
-**커밋**: `TBD`
+**커밋**: `1de540c`
 
 ##### 문서화됨 (Documentation)
 
