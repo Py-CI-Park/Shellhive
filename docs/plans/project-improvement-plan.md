@@ -45,13 +45,15 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
   - 2-9 PR #12 `security/env-var-validation`
   - 2-10 PR #13 `security/claude-path-injection`
   - 후속 보강 PR #18 `fix(security color rendering)`
-- ✅ **Phase 3 진행 중**
+- ✅ **Phase 3 완료**
   - 3-1 PR #19 `cleanup/dead-ipc-commands`
   - 3-2 PR #20 `cleanup/unused-files`
-  - 3-3 `cleanup/docs-sync` 진행 중 (AGENTS/문서 동기화)
-- 🔄 **Phase 4 착수**
-  - 4-1 `feat/module-design` 진행 중 (모듈 경계 설계 문서 작성)
-- ⏳ **Phase 5 미착수**
+  - 3-3 PR #21 `cleanup/docs-sync`
+- 🔄 **Phase 4 진행 중**
+  - 4-1 PR #22 `feat/module-design` 완료
+  - 4-2 `feat/state-eventbus` 진행 중
+- 🔄 **Phase 5 착수**
+  - 5-1 Git 패널 UI 확장(브랜치/로그/discard) 구현 진행 중
 
 ---
 
