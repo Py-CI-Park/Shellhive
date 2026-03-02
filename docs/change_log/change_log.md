@@ -478,6 +478,33 @@
 - `src/__tests__/modals.test.js`
   - confirm/escape/overlay 닫기 동작 및 공통 close helper 검증
 
+#### refactor(phase4-3-e): 탭 상태/검색/전환 모듈 분리 (`tab-manager.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/tab-manager.js` 신규 추가
+  - 탭 상태 표시 유틸(`getStatusIcon/Label`, compact path, split subtitle) 분리
+  - `updateTabStatus` 및 탭 검색(show/hide/filter), 탭 전환(next/prev/index) 로직 분리
+- `src/app.js`
+  - 해당 함수 블록 제거 후 `createTabManagerController()` 주입 방식으로 연결
+  - shortcuts 모듈이 tab-manager의 전환/검색 API를 사용하도록 경로 정리
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅ (11 files, 48 tests)
+
+#### test(phase5-3): tab-manager 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/tab-manager.test.js`
+  - 상태 아이콘/라벨, 탭 상태 업데이트, 탭 검색 필터/클릭 활성화, 탭 전환(next/prev/index) 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
