@@ -197,6 +197,25 @@
   - 실행 현황 섹션에 Phase 2-8(PR #15) 완료 반영
   - 잔여 Phase 2 항목을 2-7로 축소 표시
 
+#### feat(security): innerHTML 감사 후 데이터/상태/색상 주입 경로 보호
+
+**커밋**: `335155f`
+
+##### 변경됨 (Changed)
+
+- `src/app.js`
+  - `escapeDataAttr()` 추가 및 `data-*` 속성 주입 경로 이스케이프 적용
+  - `getSessionStatusClass()` 추가로 세션 상태 클래스 화이트리스트 적용
+  - `getSafeTabColor()` 추가로 탭 색상값 화이트리스트 적용
+  - 공유 아이콘 렌더링을 `innerHTML`에서 `textContent`로 전환
+- `docs/security/innerhtml-audit.md`
+  - `innerHTML` 사용 지점 전수 점검 결과 및 분류(안전/보호됨/위험) 기록
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test` ✅ (22 passed)
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
