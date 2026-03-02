@@ -33,19 +33,23 @@ Shellhive 프로젝트의 완성도 분석(56%) 및 PR #4 머지 검토 결과�
 
 - ✅ **Phase 1 완료**
   - PR #6 `security/merge-pr4-hardening` → `feature/next-improvements` 병합
-- ✅ **Phase 2 진행 중**
+- ✅ **Phase 2 완료**
   - 2-1 PR #7 `security/pty-shell-allowlist`
   - 2-2 PR #8 `security/pty-workdir-validation`
   - 2-3 PR #9 `security/git-filepath-validation`
   - 2-4 PR #10 `security/csp-hardening`
   - 2-5 PR #11 `security/git-css-allowlist`
+  - 2-6 `session-id-validation`은 PR #4 통합분에 포함
+  - 2-7 PR #17 `security/innerhtml-audit`
   - 2-8 PR #15 `security/tauri-capabilities`
   - 2-9 PR #12 `security/env-var-validation`
   - 2-10 PR #13 `security/claude-path-injection`
-  - 2-6(세션 ID 검증)는 PR #4 통합분에 포함되어 코드상 반영됨
-- ⚠️ **잔여 Phase 2 항목**
-  - 2-7 `security/innerhtml-audit`
-- ⏳ **Phase 3~5 미착수**
+  - 후속 보강 PR #18 `fix(security color rendering)`
+- ✅ **Phase 3 진행 중**
+  - 3-1 PR #19 `cleanup/dead-ipc-commands`
+  - 3-2 PR #20 `cleanup/unused-files`
+  - 3-3 `cleanup/docs-sync` 진행 중 (AGENTS/문서 동기화)
+- ⏳ **Phase 4~5 미착수**
 
 ---
 

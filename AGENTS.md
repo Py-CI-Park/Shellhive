@@ -1,95 +1,98 @@
 # AGENTS.md - Shellhive AI 개발 가이드
 
-> 이 문서는 AI 에이전트가 Shellhive 프로젝트를 이해하고 효과적으로 개발을 지원하기 위한 가이드입니다.
+> 이 문서는 Shellhive 저장소에서 작업하는 AI 에이전트를 위한 최신 개발 지침입니다.
 
 ---
 
 ## 프로젝트 개요
 
-**Shellhive**는 여러 AI CLI 도구(Claude Code 등)를 하나의 통합 인터페이스에서 관리하는 Tauri 기반 데스크톱 애플리케이션입니다.
+**Shellhive**는 여러 AI CLI 도구(Claude Code 등)를 하나의 Tauri 데스크톱 앱에서 관리하는 통합 터미널 워크스페이스입니다.
 
 ### 핵심 목표
 
 1. **통합 관리**: 여러 프로젝트의 AI CLI 세션을 단일 앱에서 관리
-2. **완벽한 터미널 호환**: PTY를 통한 100% cmd/powershell 동작 지원
-3. **경량화**: 10~15MB 크기의 가벼운 데스크톱 앱
+2. **터미널 호환성**: PTY 기반으로 cmd/powershell 동작을 최대한 그대로 제공
+3. **경량 데스크톱 앱**: 유지보수 가능한 구조와 작은 배포 크기 지향
 
 ### 기술 스택
 
-| 영역 | 기술 | 버전 |
+| 영역 | 기술 | 비고 |
 |------|------|------|
 | 프레임워크 | Tauri | v2 |
-| 프론트엔드 | Vanilla JS + xterm.js | - |
-| 백엔드 | Rust | 1.83+ |
-| 터미널 | portable-pty + xterm.js | - |
-| 데이터 | JSON 파일 기반 | - |
+| 프론트엔드 | Vanilla JS + xterm.js | Vite 번들 |
+| 백엔드 | Rust | Tauri command 기반 IPC |
+| 터미널 | portable-pty + xterm.js | PTY 세션 관리 |
+| 데이터 | JSON 파일 기반 | 설정/프로젝트/스니펫/로그 |
 
 ---
 
-## 아키텍처 구조
+## 현재 아키텍처 (2026-03-02 기준)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Shellhive Application                     │
-├─────────────────────────────────────────────────────────────┤
-│  Frontend (WebView)                                          │
-│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
-│  │   UI 컴포넌트  │  │  xterm.js    │  │  Tauri IPC Client   │ │
-│  │  - 사이드바   │  │  - 터미널 렌더 │  │  - invoke()         │ │
-│  │  - 탭바      │  │  - 입력 처리   │  │  - listen()         │ │
-│  │  - 설정      │  │  - ANSI 해석   │  │                     │ │
-│  └─────────────┘  └──────────────┘  └─────────────────────┘ │
-├─────────────────────────────────────────────────────────────┤
-│  Backend (Rust + Tauri)                                      │
-│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
-│  │  PTY Manager │  │  Project Mgr  │  │  Tauri Commands     │ │
-│  │  - 생성/삭제  │  │  - CRUD       │  │  - pty_create       │ │
-│  │  - 입출력 처리│  │  - JSON 저장  │  │  - pty_write        │ │
-│  │  - 세션 관리  │  │  - 경로 검증   │  │  - project_list     │ │
-│  └─────────────┘  └──────────────┘  └─────────────────────┘ │
-├─────────────────────────────────────────────────────────────┤
-│  System Layer                                                │
-│  ┌─────────────┐  ┌──────────────┐                          │
-│  │  ConPTY     │  │  File System  │                          │
-│  │  (Windows)  │  │  (JSON 설정)   │                          │
-│  └─────────────┘  └──────────────┘                          │
-└─────────────────────────────────────────────────────────────┘
+Shellhive
+├─ Frontend (WebView)
+│  ├─ src/app.js (대형 엔트리 파일, 점진 모듈화 진행 중)
+│  ├─ src/history-panel.js
+│  ├─ src/i18n/index.js
+│  ├─ src/ui-constants.js
+│  └─ src/style.css
+├─ Backend (Rust + Tauri)
+│  ├─ pty.rs
+│  ├─ project.rs
+│  ├─ settings.rs
+│  ├─ snippet.rs
+│  ├─ git.rs
+│  ├─ sharing.rs
+│  ├─ claude.rs
+│  └─ ai.rs
+└─ IPC
+   └─ main.rs invoke_handler 등록 커맨드 52개
 ```
 
 ---
 
-## 디렉토리 구조 및 파일 역할
+## 디렉토리 구조 (실제 반영)
 
 ```
 shellhive/
-├── src-tauri/                      # [Rust 백엔드]
+├── src-tauri/
 │   ├── src/
-│   │   ├── main.rs                 # Tauri 앱 초기화, 커맨드 등록
-│   │   ├── pty.rs                  # PTY 생성/관리, 입출력 처리
-│   │   ├── project.rs              # 프로젝트 CRUD, JSON 직렬화
-│   │   └── lib.rs                  # 모듈 익스포트
-│   ├── Cargo.toml                  # Rust 의존성 정의
-│   └── tauri.conf.json             # Tauri 앱 설정 (창, 권한, 번들)
+│   │   ├── main.rs
+│   │   ├── pty.rs
+│   │   ├── project.rs
+│   │   ├── settings.rs
+│   │   ├── snippet.rs
+│   │   ├── git.rs
+│   │   ├── sharing.rs
+│   │   ├── claude.rs
+│   │   └── ai.rs
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   └── capabilities/default.json
 │
-├── src/                            # [웹 프론트엔드]
-│   ├── index.html                  # 메인 HTML (레이아웃 구조)
-│   ├── app.js                      # 앱 로직, xterm.js 관리
-│   ├── components/                 # UI 컴포넌트
-│   │   ├── sidebar.js              # 프로젝트 목록 사이드바
-│   │   ├── tabs.js                 # 탭 바 관리
-│   │   └── terminal.js             # xterm.js 래퍼
-│   ├── style.css                   # 메인 스타일시트
-│   └── assets/                     # 정적 리소스
-│       └── icons/                  # 앱 아이콘
+├── src/
+│   ├── app.js
+│   ├── history-panel.js
+│   ├── i18n/index.js
+│   ├── ui-constants.js
+│   ├── style.css
+│   ├── sharing-styles.css
+│   └── __tests__/
 │
-├── docs/                           # [문서]
-│   └── dev-guide.md                # 상세 개발 가이드
+├── docs/
+│   ├── plans/
+│   ├── security/
+│   ├── guides/
+│   └── change_log/change_log.md
 │
-├── package.json                    # Node.js 의존성
-├── AGENTS.md                       # AI 에이전트 개발 가이드 (이 파일)
-├── CLAUDE.md                       # Claude Code 설정
-└── README.md                       # 프로젝트 소개
+├── index.html
+├── package.json
+├── AGENTS.md
+├── CLAUDE.md
+└── README.md
 ```
+
+> 주의: `src/components/`, `src-tauri/src/lib.rs`는 현재 저장소에 없습니다.
 
 ---
 
@@ -99,194 +102,120 @@ shellhive/
 
 | 영역 | 규칙 |
 |------|------|
-| **Rust** | `rustfmt` 기본 설정, `clippy` 경고 0 유지 |
-| **JavaScript** | ES6+, 세미콜론 사용, 2스페이스 들여쓰기 |
-| **CSS** | BEM 명명 규칙 권장 |
-| **커밋** | 한글 커밋 메시지 사용 |
+| Rust | `rustfmt` 기본 설정, 가능 시 `clippy` 경고 0 유지 |
+| JavaScript | ES6+, 세미콜론 사용, 2스페이스 들여쓰기 |
+| CSS | BEM 계열 네이밍 권장 |
+| 커밋 메시지 | 한글 권장 |
 
-### 파일 명명 규칙
-
-- Rust: `snake_case.rs`
-- JavaScript: `kebab-case.js` 또는 `camelCase.js`
-- 컴포넌트: `ComponentName.js`
-
-### Git 브랜치 전략
+### 브랜치 전략
 
 | 브랜치 | 용도 |
 |--------|------|
-| `main` | 안정화된 릴리즈 버전 |
-| `develop` | 개발 통합 브랜치 |
-| `feature/*` | 기능 개발 |
-| `bugfix/*` | 버그 수정 |
+| `main` | 안정화 릴리즈 |
+| `feature/next-improvements` | 현재 통합 개발 라인 |
+| `security/*` | 보안 하드닝 |
+| `cleanup/*` | 정리/문서/불필요 코드 제거 |
+| `feat/*` | 기능 확장/리팩터링 |
 | `docs/*` | 문서 작업 |
 
-### 변경 로그 작성 가이드
+### 변경 로그 규칙
 
-모든 커밋은 [변경 로그](docs/change_log/change_log.md)에 기록되어야 합니다.
+모든 커밋은 `docs/change_log/change_log.md`에 기록합니다.
 
-**작성 규칙:**
-
-1. 커밋 후 `docs/change_log/change_log.md` 파일 업데이트
-2. 날짜별로 그룹화하여 기록
+1. 커밋 후 변경 로그 업데이트
+2. 날짜별 그룹화
 3. 커밋 해시 포함
-4. 카테고리 분류: Added, Changed, Fixed, Documentation, Security
-
-**예시:**
-```markdown
-#### fix: 버그 수정 설명
-
-**커밋**: `abc1234`
-
-##### 수정됨 (Fixed)
-
-- 문제 설명 및 해결 내용
-```
+4. 카테고리(Added/Changed/Fixed/Documentation/Security) 명시
 
 ---
 
-## 핵심 모듈 가이드
+## 백엔드 핵심 모듈
 
-### 1. PTY 모듈 (`src-tauri/src/pty.rs`)
+### 1) `pty.rs`
+- PTY 생성/입출력/리사이즈/종료
+- 셸 허용 목록, 작업 경로 검증, 환경변수 검증 적용됨
 
-**역할**: Windows ConPTY를 통한 터미널 프로세스 관리
+### 2) `project.rs`
+- 프로젝트 CRUD, 카테고리, 프로젝트별 env 관리
+- 등록 프로젝트 경로 검증 및 하위 경로 검증 유틸 제공
 
-**주요 기능**:
-- `create_pty(working_dir, shell)`: 새 PTY 세션 생성
-- `write_pty(session_id, data)`: PTY에 입력 전송
-- `resize_pty(session_id, cols, rows)`: 터미널 크기 조정
-- `kill_pty(session_id)`: PTY 세션 종료
+### 3) `settings.rs`
+- 앱 설정 저장/로드
+- 세션 로그 저장/조회/삭제, 세션 상태 저장/복원
 
-**사용 크레이트**: `portable-pty`
+### 4) `snippet.rs`
+- 스니펫 CRUD
 
-### 2. 프로젝트 관리자 (`src-tauri/src/project.rs`)
+### 5) `git.rs`
+- 상태/브랜치/로그/스테이지/언스테이지/커밋/푸시/풀/체크아웃/디스카드
+- 파일 경로 검증, 브랜치명 검증 적용
 
-**역할**: 사용자 프로젝트 설정 CRUD
+### 6) `sharing.rs`
+- 세션 공유 시작/종료/조회/검색/목록
 
-**데이터 구조**:
-```rust
-struct Project {
-    id: String,
-    name: String,
-    path: PathBuf,
-    shell: Option<String>,  // 기본값: cmd.exe
-    created_at: DateTime,
-}
-```
+### 7) `claude.rs`
+- Claude 설치 여부 확인
+- Claude 시작 명령 생성(경로 검증 포함)
 
-**저장 위치**: `%APPDATA%/shellhive/projects.json`
-
-### 3. 터미널 컴포넌트 (`src/components/terminal.js`)
-
-**역할**: xterm.js 인스턴스 관리 및 Tauri IPC 연동
-
-**주요 기능**:
-- 터미널 생성 및 DOM 마운트
-- 입력 이벤트 → Tauri 커맨드 전송
-- Tauri 이벤트 수신 → 터미널 출력
+### 8) `ai.rs`
+- 자연어 명령 변환
+- AI 패턴 조회
 
 ---
 
-## 개발 단계별 가이드
+## IPC 커맨드 현황 (`main.rs`)
 
-### Phase 1: 기본 구조
+`invoke_handler` 등록 커맨드: **52개**
 
-**목표**: Tauri + xterm.js 기본 통합
-
-**작업 내용**:
-1. `npm create tauri-app@latest` 프로젝트 생성
-2. xterm.js 설치 및 기본 터미널 렌더링
-3. Tauri 윈도우 설정 (크기, 제목)
-
-**완료 기준**:
-- 앱 실행 시 빈 터미널 창 표시
-- 입력 시 xterm에 에코
-
-### Phase 2: PTY 연동
-
-**목표**: Rust PTY ↔ xterm.js 양방향 연결
-
-**작업 내용**:
-1. `portable-pty` 크레이트 추가
-2. PTY 생성 Tauri 커맨드 구현
-3. 비동기 출력 스트림 → Tauri 이벤트 전송
-4. xterm 입력 → PTY 입력 파이프라인
-
-**완료 기준**:
-- 터미널에서 `dir`, `cd` 등 cmd 명령 실행 가능
-- `claude` 명령 실행 시 정상 동작
-
-### Phase 3: 프로젝트 관리
-
-**목표**: 프로젝트 등록/실행 기능
-
-**작업 내용**:
-1. 프로젝트 데이터 모델 정의
-2. JSON 저장/로드 로직
-3. 사이드바 UI 구현
-4. 프로젝트 클릭 → 해당 경로에서 터미널 실행
-
-**완료 기준**:
-- 프로젝트 추가/삭제/수정 가능
-- 프로젝트 클릭 시 해당 폴더에서 터미널 시작
-
-### Phase 4: 멀티 세션
-
-**목표**: 탭 기반 다중 터미널
-
-**작업 내용**:
-1. 탭 UI 컴포넌트 구현
-2. 세션별 PTY 인스턴스 관리
-3. 탭 전환 시 터미널 컨텍스트 스위칭
-4. 세션 상태 표시 (아이콘/색상)
-
-**완료 기준**:
-- 여러 탭에서 독립적인 터미널 세션 운영
-- 탭 간 빠른 전환
-
-### Phase 5: 고급 기능
-
-**목표**: 사용성 개선
-
-**작업 내용**:
-1. 글로벌 단축키 (앱 토글)
-2. 명령어 스니펫 저장
-3. 세션 로그 자동 저장
-4. 테마 커스터마이징
+- 공통: `get_home_dir`, `get_file_metadata`
+- PTY(4): `create_pty`, `write_pty`, `resize_pty`, `kill_pty`
+- Project(13): `list_projects`, `add_project`, `remove_project`, `update_project`, `list_categories`, `add_category`, `remove_category`, `update_category`, `set_project_category`, `load_project_env`, `save_project_env`, `get_project_env_vars`, `update_project_env_vars`
+- Snippet(5): `list_snippets`, `add_snippet`, `remove_snippet`, `get_snippet`, `update_snippet`
+- Settings/Logs(9): `get_settings`, `save_settings`, `log_session_output`, `get_session_log`, `list_session_logs`, `delete_session_log`, `clear_all_logs`, `save_session_state`, `load_session_state`
+- Git(10): `git_status`, `git_branches`, `git_log`, `git_stage`, `git_unstage`, `git_commit`, `git_push`, `git_pull`, `git_checkout`, `git_discard`
+- Sharing(5): `start_session_sharing`, `stop_session_sharing`, `get_sharing_status`, `find_shared_session`, `list_shared_sessions`
+- Claude/AI(4): `check_claude_installed`, `get_claude_start_command`, `translate_natural_language`, `get_ai_patterns`
 
 ---
 
-## 주의사항
+## 프론트엔드 현황
+
+- `src/app.js`가 주요 기능 대부분을 포함하는 모놀리스 구조
+- 주요 기능:
+  - 탭/세션/터미널 관리
+  - 분할 패널(break/join/move, overlay, sync, layout preset)
+  - Git 패널(상태/스테이징/커밋)
+  - 설정/스니펫/프로젝트/공유/AI 보조 기능
+- 개선 계획(`docs/plans/project-improvement-plan.md`)에 따라 단계적 모듈화 진행
+
+---
+
+## 개선 계획 진행 상태 (요약)
+
+- Phase 1: ✅ 완료
+- Phase 2: ✅ 완료 (2-1~2-10)
+- Phase 3: ✅ 3-1, 3-2 완료 / 🔄 3-3 문서 동기화 진행
+- Phase 4: ⏳ 모듈 설계/추출 예정
+- Phase 5: ⏳ 기능 완성/검증 예정
+
+---
+
+## 개발 시 주의사항
 
 ### Windows 특이사항
+1. ConPTY: Windows 10 1809 이상 필요
+2. 인코딩: UTF-8 (`chcp 65001`) 고려
+3. 경로: 백슬래시/슬래시 혼용 처리 주의
 
-1. **ConPTY 필수**: Windows 10 1809 이상 필요
-2. **인코딩**: UTF-8 설정 필요 (`chcp 65001`)
-3. **경로**: 백슬래시(`\`) 처리 주의
-
-### 성능 최적화
-
-1. **터미널 버퍼**: xterm.js 스크롤백 제한 권장 (5000줄)
-2. **이벤트 배칭**: PTY 출력을 배칭하여 렌더링 최적화
-3. **메모리 관리**: 종료된 세션의 PTY 핸들 즉시 해제
+### 성능
+1. xterm 스크롤백 제한 권장
+2. PTY 출력 배칭/디바운싱 고려
+3. 종료 세션 자원 즉시 해제
 
 ### 보안
-
-1. 사용자 입력 경로 검증 필수
-2. 셸 명령 인젝션 방지
-3. 설정 파일 권한 확인
-
----
-
-## 자주 묻는 질문 (FAQ)
-
-**Q: PTY가 연결되지 않습니다**
-A: Windows 버전 확인 (1809+), Visual Studio Build Tools 설치 확인
-
-**Q: 한글이 깨집니다**
-A: `chcp 65001` 실행 또는 터미널 폰트 확인
-
-**Q: xterm 크기가 맞지 않습니다**
-A: `FitAddon` 적용 및 윈도우 resize 이벤트 핸들링 확인
+1. 사용자 경로 입력은 항상 정규화/검증
+2. 셸/환경변수/Git 인자 화이트리스트 기반 검증
+3. DOM 렌더링 시 `innerHTML` 사용 최소화 + 이스케이프 적용
 
 ---
 
@@ -299,4 +228,4 @@ A: `FitAddon` 적용 및 윈도우 resize 이벤트 핸들링 확인
 
 ---
 
-*이 문서는 개발 진행에 따라 지속적으로 업데이트됩니다.*
+*이 문서는 프로젝트 상태 변화에 따라 지속 업데이트됩니다.*
