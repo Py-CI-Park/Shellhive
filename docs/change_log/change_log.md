@@ -295,7 +295,7 @@
 
 #### feat(frontend): state/eventbus 추출 및 Git 패널 확장 착수
 
-**커밋**: `TBD`
+**커밋**: `dd91800`
 
 ##### 변경됨 (Changed)
 
@@ -315,7 +315,7 @@
 
 #### test(frontend): 상태 모듈 실커버리지 테스트 추가
 
-**커밋**: `TBD`
+**커밋**: `dd91800`
 
 ##### 추가됨 (Added)
 
