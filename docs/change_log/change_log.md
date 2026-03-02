@@ -359,6 +359,33 @@
 - `src/__tests__/setup.js`
   - Claude/AI 관련 invoke mock 기본 응답 보강
 
+#### refactor(phase4-3-h): 에러 설명 모듈 분리 (`error-explanations.js`)
+
+**커밋**: `TBD`
+
+##### 변경됨 (Changed)
+
+- `src/error-explanations.js` 신규 추가
+  - 에러 패턴 매칭/쿨다운/해결 패널 렌더링 로직 분리
+  - `createErrorExplanationController()` 팩토리로 의존성 주입 구조화
+- `src/app.js`
+  - 에러 설명 데이터/함수 블록 제거
+  - 컨트롤러 기반 `showErrorExplanation`, `detectErrorPattern` 연결
+
+##### 테스트 (Verification)
+
+- `npm run build` ✅
+- `npm test -- --run` ✅
+
+#### test(phase5-3): 에러 설명 모듈 단위 테스트 추가
+
+**커밋**: `TBD`
+
+##### 추가됨 (Added)
+
+- `src/__tests__/error-explanations.test.js`
+  - 패턴 감지, 패널 렌더링, 추천 명령 실행(write_pty) 동작 검증
+
 ### 2026-03-01
 
 #### docs: 프로젝트 개선 계획 v3 작성
